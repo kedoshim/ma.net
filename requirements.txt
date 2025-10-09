@@ -1,0 +1,4 @@
+vgamepad
+aiohttp 
+qrcode
+psutil
