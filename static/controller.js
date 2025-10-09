@@ -113,6 +113,7 @@ wireBtn('btnB', 'B');       // XInput B
 wireBtn('btnX', 'X');       // XInput B
 wireBtn('btnY', 'Y');       // XInput B
 wireBtn('btnStart', 'START'); // XInput Start
+wireBtn('btnSelect', 'SELECT'); // XInput Start
 
 // ==========================
 // D-Pad (XInput)
