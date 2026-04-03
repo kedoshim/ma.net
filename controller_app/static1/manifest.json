@@ -1,0 +1,9 @@
+{
+  "name": "Virtual Controller",
+  "short_name": "Controller",
+  "display": "standalone",
+  "background_color": "#f3e5c8",
+  "theme_color": "#f3e5c8",
+  "start_url": "/",
+  "orientation": "landscape"
+}
