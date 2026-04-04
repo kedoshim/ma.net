@@ -5,6 +5,8 @@ class OptionsPopup extends StatefulWidget {
   final ValueChanged<bool> onDpadModeChanged;
   final Map<String, bool> buttonVisibility;
   final ValueChanged<String> onButtonVisibilityChanged;
+  final bool editMode;
+  final ValueChanged<bool> onEditModeChanged;
 
   const OptionsPopup({
     super.key,
@@ -12,6 +14,8 @@ class OptionsPopup extends StatefulWidget {
     required this.onDpadModeChanged,
     required this.buttonVisibility,
     required this.onButtonVisibilityChanged,
+    required this.editMode,
+    required this.onEditModeChanged,
   });
 
   @override
@@ -19,6 +23,16 @@ class OptionsPopup extends StatefulWidget {
 }
 
 class _OptionsPopupState extends State<OptionsPopup> {
+  late bool _dpadMode;
+  late bool _editMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _dpadMode = widget.dpadMode;
+    _editMode = widget.editMode;
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -38,10 +52,29 @@ class _OptionsPopupState extends State<OptionsPopup> {
                 'D-Pad Mode',
                 style: TextStyle(fontFamily: 'pico'),
               ),
-              value: widget.dpadMode,
+              value: _dpadMode,
               onChanged: (value) {
+                setState(() => _dpadMode = value);
                 widget.onDpadModeChanged(value);
-                setState(() {});
+              },
+              activeThumbColor: const Color.fromARGB(139, 187, 206, 255),
+              activeTrackColor: Colors.lightBlue.shade100,
+            ),
+            const Divider(),
+            // Edit Mode Toggle
+            SwitchListTile(
+              title: const Text(
+                'Edit Mode',
+                style: TextStyle(fontFamily: 'pico'),
+              ),
+              subtitle: const Text(
+                'Reorder buttons by dragging',
+                style: TextStyle(fontFamily: 'pico', fontSize: 12),
+              ),
+              value: _editMode,
+              onChanged: (value) {
+                setState(() => _editMode = value);
+                widget.onEditModeChanged(value);
               },
               activeThumbColor: const Color.fromARGB(139, 187, 206, 255),
               activeTrackColor: Colors.lightBlue.shade100,

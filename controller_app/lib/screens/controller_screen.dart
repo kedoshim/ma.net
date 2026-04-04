@@ -17,15 +17,16 @@ class ControllerScreen extends StatefulWidget {
 class _ControllerScreenState extends State<ControllerScreen> {
   late WebSocketService ws;
   String status = 'Conectando...';
-  String playerLabel = '';
+  int playerIndex = 0;
   bool dpadMode = false;
+  bool editMode = false;
 
   final Map<String, bool> visibleButtons = {
     'btnA': true,
-    'btnB': false,
+    'btnB': true,
     'btnX': true,
     'btnY': true,
-    'btnRB': true,
+    'btnRB': false,
     'btnRT': false,
     'btnRS': false,
     'btnLB': false,
@@ -60,9 +61,8 @@ class _ControllerScreenState extends State<ControllerScreen> {
         final dynamic data = jsonDecode(message);
         if (data is Map<String, dynamic>) {
           if (data['type'] == 'assigned' && data['slot'] != null) {
-            final roman = _toRoman((data['slot'] as num).toInt() + 1);
             setState(() {
-              playerLabel = 'Player $roman';
+              playerIndex = (data['slot'] as num).toInt() + 1;
               status = 'Conectado';
             });
           }
@@ -80,27 +80,43 @@ class _ControllerScreenState extends State<ControllerScreen> {
     }
   }
 
-  String _toRoman(int num) {
-    const romans = [
-      '',
-      'I',
-      'II',
-      'III',
-      'IV',
-      'V',
-      'VI',
-      'VII',
-      'VIII',
-      'IX',
-      'X',
-      'XI',
-      'XII',
-      'XIII',
-      'XIV',
-      'XV',
-    ];
-    if (num > 0 && num < romans.length) return romans[num];
-    return num.toString();
+  Widget _buildPlayerIndicator() {
+    final selectedIndex = playerIndex - 1;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildIndicatorRow(selectedIndex, 0),
+        const SizedBox(height: 6),
+        _buildIndicatorRow(selectedIndex, 4),
+      ],
+    );
+  }
+
+  Widget _buildIndicatorRow(int selectedIndex, int offset) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(4, (index) {
+        final position = offset + index;
+        final isActive = selectedIndex == position;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? const Color.fromRGBO(34, 34, 34, 1)
+                  : Colors.transparent,
+              border: Border.all(
+                color: const Color.fromRGBO(34, 34, 34, 1),
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }),
+    );
   }
 
   void _onStickChanged(double x, double y) {
@@ -124,6 +140,8 @@ class _ControllerScreenState extends State<ControllerScreen> {
           onDpadModeChanged: (value) => setState(() => dpadMode = value),
           buttonVisibility: visibleButtons,
           onButtonVisibilityChanged: _toggleButtonVisibility,
+          editMode: editMode,
+          onEditModeChanged: (value) => setState(() => editMode = value),
         );
       },
     );
@@ -212,14 +230,32 @@ class _ControllerScreenState extends State<ControllerScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       Text(
-                        ' ',
+                        'ma•net',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.normal,
-                          color: Color.fromARGB(34, 34, 34, 255),
+                          color: Color.fromRGBO(34, 34, 34, 1),
                           fontFamily: 'pico',
                         ),
+                      ),
+                      const SizedBox(height: 10),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            status,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.normal,
+                              color: Color.fromRGBO(34, 34, 34, 1),
+                              fontFamily: 'pico',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildPlayerIndicator(),
+                        ],
                       ),
                       const SizedBox(height: 10),
                       IconButton(
@@ -242,6 +278,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                         child: ActionButtons(
                           visibleButtons: visibleButtons,
                           onButtonStateChanged: _sendButton,
+                          editMode: editMode,
                         ),
                       ),
                     ],

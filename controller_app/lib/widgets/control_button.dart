@@ -23,7 +23,7 @@ class _ControlButtonState extends State<ControlButton> {
   @override
   Widget build(BuildContext context) {
     final background = (_hovered || _pressed)
-        ? const Color.fromRGBO(173, 216, 230, 0.25)
+        ? const Color.fromARGB(255, 131, 194, 215)
         : Colors.transparent;
 
     // Don't show text for directional buttons and select/start

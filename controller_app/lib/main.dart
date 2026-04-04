@@ -12,7 +12,7 @@ class ControllerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Game Controller',
+      title: 'ma•net',
       home: const ControllerScreen(),
     );
   }
