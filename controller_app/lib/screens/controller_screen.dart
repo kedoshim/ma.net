@@ -6,6 +6,8 @@ import '../widgets/joystick.dart';
 import '../widgets/action_buttons.dart';
 import '../widgets/control_button.dart';
 import '../widgets/options_popup.dart';
+import '../theme/app_colors.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ControllerScreen extends StatefulWidget {
   const ControllerScreen({super.key});
@@ -37,6 +39,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
   @override
   void initState() {
     super.initState();
+    _loadInitialTheme();
     ws = WebSocketService('192.168.100.80');
     ws.channel.stream.listen(
       _handleWebSocketMessage,
@@ -104,12 +107,10 @@ class _ControllerScreenState extends State<ControllerScreen> {
             width: 22,
             height: 22,
             decoration: BoxDecoration(
-              color: isActive
-                  ? const Color.fromRGBO(34, 34, 34, 1)
-                  : Colors.transparent,
+              color: isActive ? AppColors.textPrimary : Colors.transparent,
               border: Border.all(
-                color: const Color.fromRGBO(34, 34, 34, 1),
-                width: 2,
+                color: AppColors.textPrimary,
+                width: AppColors.borderThickness,
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -142,6 +143,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
           onButtonVisibilityChanged: _toggleButtonVisibility,
           editMode: editMode,
           onEditModeChanged: (value) => setState(() => editMode = value),
+          onThemeChanged: _onThemeChanged,
         );
       },
     );
@@ -151,6 +153,22 @@ class _ControllerScreenState extends State<ControllerScreen> {
     setState(() {
       visibleButtons[buttonKey] = !(visibleButtons[buttonKey] ?? true);
     });
+  }
+
+  Future<void> _loadInitialTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeIndex = prefs.getInt('selectedTheme') ?? 0;
+      final theme = ColorTheme.values[themeIndex];
+      AppColors.setTheme(theme);
+      setState(() {});
+    } catch (e) {
+      AppColors.setTheme(ColorTheme.blue);
+    }
+  }
+
+  void _onThemeChanged(ColorTheme theme) {
+    setState(() {});
   }
 
   Widget _buildDpad() {
@@ -203,7 +221,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        color: const Color(0xFFF3E5C8),
+        color: AppColors.screenBackground,
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -235,7 +253,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.normal,
-                          color: Color.fromRGBO(34, 34, 34, 1),
+                          color: AppColors.textPrimary,
                           fontFamily: 'pico',
                         ),
                       ),
@@ -249,7 +267,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.normal,
-                              color: Color.fromRGBO(34, 34, 34, 1),
+                              color: AppColors.textPrimary,
                               fontFamily: 'pico',
                             ),
                           ),

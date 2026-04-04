@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_colors.dart';
 
 class OptionsPopup extends StatefulWidget {
   final bool dpadMode;
@@ -7,6 +9,7 @@ class OptionsPopup extends StatefulWidget {
   final ValueChanged<String> onButtonVisibilityChanged;
   final bool editMode;
   final ValueChanged<bool> onEditModeChanged;
+  final ValueChanged<ColorTheme> onThemeChanged;
 
   const OptionsPopup({
     super.key,
@@ -16,6 +19,7 @@ class OptionsPopup extends StatefulWidget {
     required this.onButtonVisibilityChanged,
     required this.editMode,
     required this.onEditModeChanged,
+    required this.onThemeChanged,
   });
 
   @override
@@ -25,18 +29,50 @@ class OptionsPopup extends StatefulWidget {
 class _OptionsPopupState extends State<OptionsPopup> {
   late bool _dpadMode;
   late bool _editMode;
+  ColorTheme _selectedTheme = ColorTheme.blue;
 
   @override
   void initState() {
     super.initState();
     _dpadMode = widget.dpadMode;
     _editMode = widget.editMode;
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeIndex = prefs.getInt('selectedTheme') ?? 0;
+      setState(() {
+        _selectedTheme = ColorTheme.values[themeIndex];
+      });
+    } catch (e) {
+      setState(() {
+        _selectedTheme = ColorTheme.blue;
+      });
+    }
+  }
+
+  Future<void> _saveTheme(ColorTheme theme) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('selectedTheme', theme.index);
+    } catch (e) {
+      debugPrint('Error saving theme: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFFF3E5C8),
+      backgroundColor: AppColors.screenBackground,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: AppColors.textPrimary,
+          width: AppColors.borderThickness,
+        ),
+      ),
       title: const Text(
         'Options',
         style: TextStyle(fontFamily: 'pico', fontWeight: FontWeight.bold),
@@ -57,8 +93,8 @@ class _OptionsPopupState extends State<OptionsPopup> {
                 setState(() => _dpadMode = value);
                 widget.onDpadModeChanged(value);
               },
-              activeThumbColor: const Color.fromARGB(139, 187, 206, 255),
-              activeTrackColor: Colors.lightBlue.shade100,
+              activeThumbColor: AppColors.switchActiveThumb,
+              activeTrackColor: AppColors.highlightColor,
             ),
             const Divider(),
             // Edit Mode Toggle
@@ -76,9 +112,20 @@ class _OptionsPopupState extends State<OptionsPopup> {
                 setState(() => _editMode = value);
                 widget.onEditModeChanged(value);
               },
-              activeThumbColor: const Color.fromARGB(139, 187, 206, 255),
-              activeTrackColor: Colors.lightBlue.shade100,
+              activeThumbColor: AppColors.switchActiveThumb,
+              activeTrackColor: AppColors.highlightColor,
             ),
+            const Divider(),
+            const Text(
+              'Color Theme',
+              style: TextStyle(
+                fontFamily: 'pico',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildThemeSelector(),
             const Divider(),
             const Text(
               'Action Buttons',
@@ -116,9 +163,56 @@ class _OptionsPopupState extends State<OptionsPopup> {
           setState(() {});
         },
         dense: true,
-        activeThumbColor: const Color.fromARGB(139, 187, 206, 255),
-        activeTrackColor: Colors.lightBlue.shade100,
+        activeThumbColor: AppColors.switchActiveThumb,
+        activeTrackColor: AppColors.highlightColor,
       );
     }).toList();
+  }
+
+  Widget _buildThemeSelector() {
+    final themes = ColorTheme.values;
+    final themeNames = ['Blue', 'Red', 'Green', 'Yellow'];
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: List.generate(themes.length, (index) {
+        final theme = themes[index];
+        final themeColor = AppColors.getTheme(theme);
+        final isSelected = _selectedTheme == theme;
+
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedTheme = theme;
+            });
+            AppColors.setTheme(theme);
+            _saveTheme(theme);
+            widget.onThemeChanged(theme);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: themeColor.background,
+                  border: Border.all(
+                    color: AppColors.textPrimary,
+                    width: isSelected ? 3 : AppColors.borderThickness,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                themeNames[index],
+                style: const TextStyle(fontFamily: 'pico', fontSize: 12),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
   }
 }

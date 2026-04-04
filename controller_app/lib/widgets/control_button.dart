@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
 typedef ButtonStateCallback = void Function(String state);
 
@@ -23,8 +24,8 @@ class _ControlButtonState extends State<ControlButton> {
   @override
   Widget build(BuildContext context) {
     final background = (_hovered || _pressed)
-        ? const Color.fromARGB(255, 131, 194, 215)
-        : Colors.transparent;
+        ? AppColors.highlightColor
+        : AppColors.backgroundColor;
 
     // Don't show text for directional buttons and select/start
     final showText = ![
@@ -66,7 +67,10 @@ class _ControlButtonState extends State<ControlButton> {
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.black, width: 2),
+            border: Border.all(
+              color: AppColors.textPrimary,
+              width: AppColors.borderThickness,
+            ),
           ),
           child: showText
               ? Text(
@@ -74,7 +78,7 @@ class _ControlButtonState extends State<ControlButton> {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                     fontFamily: 'pico',
                   ),
                 )

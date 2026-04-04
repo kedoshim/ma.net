@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 
 typedef StickCallback = void Function(double x, double y);
 
@@ -69,9 +70,12 @@ class _JoystickState extends State<Joystick> {
               width: widget.size,
               height: widget.size,
               decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(widget.size / 2),
-                border: Border.all(color: Colors.black, width: 2),
+                color: AppColors.backgroundColor,
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(
+                  color: AppColors.textPrimary,
+                  width: AppColors.borderThickness,
+                ),
               ),
             ),
             Transform.translate(
@@ -80,9 +84,12 @@ class _JoystickState extends State<Joystick> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.black,
+                  color: AppColors.textPrimary,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(
+                    color: AppColors.lightColor,
+                    width: AppColors.borderThickness,
+                  ),
                 ),
               ),
             ),

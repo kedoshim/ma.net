@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_colors.dart';
 
 typedef ButtonStateCallback = void Function(String xinputId, String state);
 
@@ -163,9 +164,12 @@ class _ActionButtonsState extends State<ActionButtons> {
                 opacity: 0.7,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(173, 216, 230, 1),
+                    color: AppColors.highlightColor,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black, width: 2),
+                    border: Border.all(
+                      color: AppColors.textPrimary,
+                      width: AppColors.borderThickness,
+                    ),
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -173,7 +177,7 @@ class _ActionButtonsState extends State<ActionButtons> {
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                       fontFamily: 'pico',
                     ),
                   ),
@@ -204,12 +208,12 @@ class _ActionButtonsState extends State<ActionButtons> {
           child: Container(
             decoration: BoxDecoration(
               color: isDragTarget
-                  ? const Color.fromRGBO(144, 238, 144, 1)
-                  : Colors.transparent,
+                  ? AppColors.dragTargetGreen
+                  : AppColors.backgroundColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isDragTarget ? Colors.green : Colors.black,
-                width: isDragTarget ? 3 : 2,
+                color: isDragTarget ? Colors.green : AppColors.textPrimary,
+                width: isDragTarget ? 3 : AppColors.borderThickness,
               ),
             ),
             alignment: Alignment.center,
@@ -218,7 +222,7 @@ class _ActionButtonsState extends State<ActionButtons> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
+                color: AppColors.textPrimary,
                 fontFamily: 'pico',
               ),
             ),
@@ -260,10 +264,10 @@ class _ActionButtonsState extends State<ActionButtons> {
       return Center(
         child: Text(
           widget.editMode ? 'No buttons visible' : 'Enable buttons in options',
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'pico',
             fontSize: 14,
-            color: Colors.black54,
+            color: AppColors.textPrimary.withOpacity(0.54),
           ),
         ),
       );
@@ -314,8 +318,8 @@ class _GameButtonState extends State<_GameButton> {
   @override
   Widget build(BuildContext context) {
     final background = (_hovered || _pressed)
-        ? const Color.fromARGB(255, 131, 194, 215)
-        : Colors.transparent;
+        ? AppColors.highlightColor
+        : AppColors.backgroundColor;
 
     return MouseRegion(
       onEnter: (_) => _setHovered(true),
@@ -341,14 +345,17 @@ class _GameButtonState extends State<_GameButton> {
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.black, width: 2),
+            border: Border.all(
+              color: AppColors.textPrimary,
+              width: AppColors.borderThickness,
+            ),
           ),
           child: Text(
             widget.label,
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.black,
+              color: AppColors.textPrimary,
               fontFamily: 'pico',
             ),
           ),
