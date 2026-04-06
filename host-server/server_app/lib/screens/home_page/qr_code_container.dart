@@ -1,11 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:server_app/theme/app_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 Expanded connectionMethodsContainer(
   String connectionUrl, {
   required String qrCodeUrl,
 }) {
+  Future<void> openLink() async {
+    final safeUrl = connectionUrl.startsWith('http')
+    ? connectionUrl
+    : 'http://$connectionUrl';
+
+    final uri = Uri.parse(safeUrl);
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  }
+
   return Expanded(
     flex: 15,
     child: LayoutBuilder(
@@ -29,13 +46,14 @@ Expanded connectionMethodsContainer(
                     child: Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
+                        // color: Colors.white,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: AppTheme.primaryText,
                           width: 3,
                         ),
                       ),
-                      child:  ClipRRect(
+                      child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
                           qrCodeUrl,
@@ -50,12 +68,16 @@ Expanded connectionMethodsContainer(
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          'link: $connectionUrl',
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTheme.bodyMedium.copyWith(
-                            fontFamily: 'pico',
-                            fontSize: 18,
+                        child: InkWell(
+                          onTap: openLink,
+                          child: Text(
+                            'link: $connectionUrl',
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTheme.bodyMedium.copyWith(
+                              fontFamily: 'pico',
+                              fontSize: 18,
+                              decoration: TextDecoration.underline,
+                            ),
                           ),
                         ),
                       ),
@@ -64,7 +86,17 @@ Expanded connectionMethodsContainer(
                           FontAwesomeIcons.copy,
                           color: AppTheme.primaryText,
                         ),
-                        onPressed: () {},
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: connectionUrl),
+                          );
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Link copied'),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

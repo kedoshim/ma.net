@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  static const Color primaryBackground = Colors.white;
+  static const Color primaryBackground = Color.fromARGB(255, 255, 212, 212);
   static const Color primaryText = Colors.black;
   static const Color secondaryText = Colors.grey;
   static const Color info = Colors.blue; // Assuming info is blue

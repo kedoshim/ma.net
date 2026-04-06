@@ -1,11 +1,11 @@
 import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/screens/home_page/gamepad_handler_widget.dart';
 import 'package:server_app/screens/home_page/qr_code_container.dart';
-import 'package:styled_divider/styled_divider.dart';
-import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+
 import '../../theme/app_theme.dart';
 import '../../services/host_api_service.dart';
 
@@ -22,11 +22,35 @@ List<Widget> divideList(List<Widget> items, Widget divider) {
   return result;
 }
 
-class HomePageWidget extends StatefulWidget {
-  const HomePageWidget({super.key});
+class HomePageScreen extends StatelessWidget {
+  final String host;
+  final int port;
 
-  static String routeName = 'HomePage';
-  static String routePath = '/homePage';
+  const HomePageScreen({
+    super.key,
+    required this.host,
+    required this.port,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final api = HostApiService(host: host, port: port);
+
+    return ChangeNotifierProvider(
+      create: (_) => GamepadState(api)..initialize(),
+      child: HomePageWidget(
+        host: host,
+        port: port,
+      ),
+    );
+  }
+}
+
+class HomePageWidget extends StatefulWidget {
+  final String host;
+  final int port;
+
+  const HomePageWidget({super.key, required this.host, required this.port});
 
   @override
   State<HomePageWidget> createState() => _HomePageWidgetState();
@@ -35,7 +59,7 @@ class HomePageWidget extends StatefulWidget {
 class _HomePageWidgetState extends State<HomePageWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
-  final HostApiService _api = HostApiService();
+  late final HostApiService _api;
 
   ConnectionInfo? connectionInfo;
   bool isLoadingConnection = true;
@@ -43,29 +67,31 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   @override
   void initState() {
     super.initState();
+    _api = HostApiService(
+      host: widget.host,
+      port: widget.port,
+    );
     loadConnectionInfo();
   }
 
   Future<void> loadConnectionInfo() async {
-  try {
-    final info = await _api.fetchConnectionInfo();
+    try {
+      final info = await _api.fetchConnectionInfo();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      connectionInfo = info;
-      isLoadingConnection = false;
-    });
-  } catch (e) {
-    if (!mounted) return;
+      setState(() {
+        connectionInfo = info;
+        isLoadingConnection = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
 
-    setState(() {
-      isLoadingConnection = false;
-    });
+      setState(() {
+        isLoadingConnection = false;
+      });
+    }
   }
-}
-
-
 
   @override
   void dispose() {
@@ -159,11 +185,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               const SizedBox(width: 25),
                               // RIGHT SIDE
                               isLoadingConnection
-                              ? const CircularProgressIndicator()
-                              : connectionMethodsContainer(
-                                  connectionInfo?.url ?? "Unavailable",
-                                  qrCodeUrl: _api.getQrCodeUrl(),
-                                )
+                                  ? const CircularProgressIndicator()
+                                  : connectionMethodsContainer(
+                                      connectionInfo?.url ?? "Unavailable",
+                                      qrCodeUrl: _api.getQrCodeUrl(),
+                                    ),
                             ],
                           ),
                         ),

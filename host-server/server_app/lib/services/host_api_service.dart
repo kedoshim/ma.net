@@ -62,7 +62,12 @@ class ConnectionInfo {
 }
 
 class HostApiService {
-  final String baseUrl = 'http://127.0.0.1:8000';
+  final String baseUrl;
+
+  HostApiService({
+    required String host,
+    required int port,
+  }) : baseUrl = 'http://$host:$port';
 
   Future<SlotState> fetchSlots() async {
     final response = await http.get(Uri.parse('$baseUrl/api/slots'));

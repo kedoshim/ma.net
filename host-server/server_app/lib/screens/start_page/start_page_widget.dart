@@ -1,9 +1,30 @@
+import 'dart:io';
 import 'dart:ui';
+import 'package:server_app/screens/home_page/home_page_widget.dart';
+import 'package:server_app/services/server_process_service.dart';
 import 'package:styled_divider/styled_divider.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'start_page_model.dart';
 export 'start_page_model.dart';
+
+Future<void> waitUntilServerReady(int port) async {
+  final client = HttpClient();
+
+  for (int i = 0; i < 10; i++) {
+    try {
+      final request = await client.getUrl(
+        Uri.parse('http://127.0.0.1:$port/api/server/status'),
+      );
+
+      final response = await request.close();
+
+      if (response.statusCode == 200) return;
+    } catch (_) {}
+
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+}
 
 class StartPageWidget extends StatefulWidget {
   const StartPageWidget({super.key});
@@ -18,7 +39,12 @@ class StartPageWidget extends StatefulWidget {
 class _StartPageWidgetState extends State<StartPageWidget> {
   late StartPageModel _model;
 
+  final TextEditingController _portController =
+    TextEditingController(text: '8765');
+
   final scaffoldKey = GlobalKey<ScaffoldState>();
+
+  final _serverService = ServerProcessService();
 
   @override
   void initState() {
@@ -28,8 +54,8 @@ class _StartPageWidgetState extends State<StartPageWidget> {
 
   @override
   void dispose() {
+    _portController.dispose();
     _model.dispose();
-
     super.dispose();
   }
 
@@ -55,8 +81,48 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ElevatedButton(
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/homePage');
+                    onPressed: () async {
+                      final slots = int.parse(_model.dropDownValue1 ?? '1');
+                      final fixed = _model.checkboxValue ?? false;
+
+                      final modeMap = {
+                        'modo padrao': 'mixed',
+                        'd•input': 'ds4',
+                        'only x•input': 'x360',
+                      };
+
+                      final mode = modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
+
+                      final port = int.tryParse(_portController.text) ?? 8765;
+
+                      if (port < 1024 || port > 65535) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Porta inválida'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      await _serverService.startServer(
+                        port: port,
+                        slots: slots,
+                        fixed: fixed,
+                        controllerMode: mode,
+                      );
+                      await waitUntilServerReady(port);
+
+                      if (!mounted) return;
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const HomePageScreen(
+                            host: '127.0.0.1',
+                            port: 8765,
+                          ),
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryBackground,
@@ -187,6 +253,17 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                       style: AppTheme.bodyMedium.copyWith(
                                         fontFamily: 'pico',
                                         letterSpacing: 0.0,
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 0,
+                                      child: TextFormField(
+                                        controller: _portController,
+                                        keyboardType: TextInputType.number,
+                                        style: AppTheme.bodyMedium.copyWith(
+                                          fontFamily: 'pico',
+                                          letterSpacing: 0.0,
+                                        ),
                                       ),
                                     ),
                                   ]
