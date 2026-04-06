@@ -8,6 +8,7 @@ import '../widgets/control_button.dart';
 import '../widgets/options_popup.dart';
 import '../theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 class ControllerScreen extends StatefulWidget {
   const ControllerScreen({super.key});
@@ -43,7 +44,27 @@ class _ControllerScreenState extends State<ControllerScreen> {
   };
 
   Future<void> _connectWebSocket() async {
-    ws = await WebSocketService.connect('192.168.100.80');
+    final prefs = await SharedPreferences.getInstance();
+
+    String? deviceId = prefs.getString('device_id');
+
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await prefs.setString('device_id', deviceId);
+    }
+
+    print(Uri.base.host);
+    print(Uri.base.port);
+
+    final wsUri = Uri(
+      scheme: Uri.base.scheme == 'https' ? 'wss' : 'ws',
+      host: prefs.getString('server_host') ?? Uri.base.host,
+      port: prefs.getInt('server_port') ?? Uri.base.port,
+      path: '/ws',
+      queryParameters: {'deviceId': deviceId},
+    );
+
+    ws = await WebSocketService.connectUri(wsUri);
 
     ws!.channel.stream.listen(
       _handleWebSocketMessage,
@@ -94,16 +115,10 @@ class _ControllerScreenState extends State<ControllerScreen> {
         final dynamic data = jsonDecode(message);
         if (data is Map<String, dynamic>) {
           if (data['type'] == 'assigned' && data['slot'] != null) {
-            _updatePlayerSlot(
-              data['slot'],
-              colorHex: data['color'],
-            );
+            _updatePlayerSlot(data['slot'], colorHex: data['color']);
           }
           if (data['type'] == 'slot_changed' && data['slot'] != null) {
-            _updatePlayerSlot(
-              data['slot'],
-              colorHex: data['color'],
-            );
+            _updatePlayerSlot(data['slot'], colorHex: data['color']);
           }
           if (data['type'] == 'toggle_btn' && data['btn'] != null) {
             final id = 'btn${(data['btn'] as String).toUpperCase()}';
@@ -149,7 +164,9 @@ class _ControllerScreenState extends State<ControllerScreen> {
             height: squareSize,
             child: Container(
               decoration: BoxDecoration(
-                color: (isActive && status == 'Conectado') ? AppColors.textPrimary : Colors.transparent,
+                color: (isActive && status == 'Conectado')
+                    ? AppColors.textPrimary
+                    : Colors.transparent,
                 border: Border.all(
                   color: AppColors.textPrimary,
                   width: AppColors.borderThickness,
@@ -326,7 +343,8 @@ class _ControllerScreenState extends State<ControllerScreen> {
                           children: [
                             Row(
                               children: [
-                                if (playerColor != null && status == 'Conectado')
+                                if (playerColor != null &&
+                                    status == 'Conectado')
                                   Container(
                                     width: 16,
                                     height: 16,
@@ -335,7 +353,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
                                       color: playerColor,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                ),
+                                  ),
                                 Text(
                                   status,
                                   textAlign: TextAlign.center,
