@@ -175,7 +175,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                               width: 40,
                                               decoration: BoxDecoration(),
                                               child: DropdownButtonFormField<String>(
-                                                initialValue: _model.dropDownValue1 ?? '1',
+                                                initialValue: _model.dropDownValue1 ?? '4',
                                                 items: ['1', '2', '3', '4', '5', '6', '7', '8']
                                                     .map((e) => DropdownMenuItem(
                                                           value: e,
