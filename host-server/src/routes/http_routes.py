@@ -41,7 +41,7 @@ class HTTPRoutes:
 
 
     async def connection_info_handler(self, request):
-        url = get_best_access_url()
+        url = get_best_access_url(self.port)
 
         return web.json_response({
             "success": True,
@@ -52,7 +52,7 @@ class HTTPRoutes:
 
     async def qr_code_handler(self, request):
 
-        url = get_best_access_url()
+        url = get_best_access_url(self.port)
 
         try:
             img = generate_qr_code_image(url)
@@ -83,7 +83,7 @@ class HTTPRoutes:
 
 
     async def assign_handler(self, request):
-        data = await self, request.json()
+        data = await request.json()
         device_id = data['deviceId']
         slot_index = data['slotIndex']
         slot = self.manager.assign_to_slot(device_id, slot_index)
@@ -107,7 +107,7 @@ class HTTPRoutes:
 
 
     async def swap_handler(self, request):
-        data = await self, request.json()
+        data = await request.json()
         slot_a = data['slotA']
         slot_b = data['slotB']
         device_a = self.manager.slots[slot_a].assigned_device_id
@@ -122,7 +122,7 @@ class HTTPRoutes:
 
 
     async def unassign_handler(self, request):
-        data = await self, request.json()
+        data = await request.json()
         slot_index = data['slotIndex']
         self.manager.unassign_slot(slot_index)
         self.admin_panel.broadcast_update()
