@@ -1,84 +1,70 @@
-import asyncio
-import logging
-import os
-import threading
-from aiohttp import web
-import vgamepad as vg
-import aiohttp_cors
- 
-from routes.websocket_routes import WebSocketRoutes
-from routes.http_routes import HTTPRoutes
-from src.lifecycle.app_lifecycle import register_lifecycle
-from src.routes.register_routes import register_all_routes
-from bootstrap.dependencies import build_dependencies
+import argparse
+from pathlib import Path
 
 from src.app.config import ServerConfig
+from src.app.server import run_server
 
 
-logging.basicConfig(level=logging.INFO)
-LOG = logging.getLogger("piko-proto")
-
-logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
-logging.getLogger("aiohttp.server").setLevel(logging.WARNING)
-
-MAIN_LOOP = None
-
-SERVER_CONFIG = ServerConfig()
-
-manager, admin_panel, debug_cli = build_dependencies(SERVER_CONFIG)
-manager.initialize_slots()
-
-
-async def index(request):
-    return web.FileResponse(
-        os.path.join(ServerConfig.web_page_static_path, "index.html")
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Piko Host Server"
     )
 
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="HTTP server port"
+    )
 
-def create_app():
-    app = web.Application()
+    parser.add_argument(
+        "--slots",
+        type=int,
+        default=4,
+        help="Initial number of slots"
+    )
 
-    cors = aiohttp_cors.setup(app, defaults={
-        "*": aiohttp_cors.ResourceOptions(
-            allow_credentials=True,
-            expose_headers="*",
-            allow_headers="*",
-        )
-    })
+    parser.add_argument(
+        "--max-slots",
+        type=int,
+        default=8,
+        help="Maximum slots"
+    )
 
-    http_routes = HTTPRoutes(manager, admin_panel, SERVER_CONFIG.http_port, SERVER_CONFIG.ws_endpoint)
-    websocket_services = WebSocketRoutes(manager, admin_panel)
+    parser.add_argument(
+        "--controller-type",
+        choices=["x360", "ds4", "mixed"],
+        default="mixed"
+    )
 
-    register_all_routes(app, http_routes, websocket_services)
+    parser.add_argument(
+        "--auto-expand",
+        action="store_true"
+    )
 
-    for route in list(app.router.routes()):
-        cors.add(route)
+    parser.add_argument(
+        "--static-path",
+        type=Path,
+        default=Path("../controller_app/build/web")
+    )
 
-    return app
+    return parser.parse_args()
+
 
 def main():
-    try:
-        app = create_app()
+    args = parse_args()
 
-        threading.Thread(
-            target=debug_cli.start,
-            daemon=True
-        ).start()
+    config = ServerConfig(
+        web_page_static_path=args.static_path,
+        http_port=args.port,
+        initial_slots=args.slots,
+        max_slots=args.max_slots,
+        controller_type=args.controller_type,
+        auto_expand_slots=args.auto_expand
+    )
 
-        register_lifecycle(app)
+    run_server(config)
 
-        loop = asyncio.get_event_loop()
-
-        manager.set_main_loop(loop) 
-
-        web.run_app(
-            app,
-            host="0.0.0.0",
-            port=SERVER_CONFIG.http_port
-        )
-
-    finally:
-        manager.cleanup_gamepads()
 
 if __name__ == "__main__":
     main()

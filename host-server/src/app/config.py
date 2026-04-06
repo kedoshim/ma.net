@@ -28,8 +28,3 @@ class ServerConfig:
         "#EC4899",  # rosa
         "#06B6D4",  # ciano
     ]
-
-    WEB_PAGE_STATIC_PATH = os.path.join(
-        os.path.dirname(__file__),
-        "../../controller_app/build/web"
-)
