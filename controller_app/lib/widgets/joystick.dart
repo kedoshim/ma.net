@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
@@ -23,12 +24,40 @@ class _JoystickState extends State<Joystick> {
   Offset _stickOffset = Offset.zero;
   bool _active = false;
 
+  double _currentX = 0;
+  double _currentY = 0;
+
+  Timer? _heartbeatTimer;
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+
+    _heartbeatTimer = Timer.periodic(
+      const Duration(milliseconds: 33),
+      (_) {
+        if (!_active) return;
+
+        widget.onChanged(_currentX, _currentY);
+      },
+    );
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
   void _updateStick(Offset localPosition) {
     final center = Offset(widget.size / 2, widget.size / 2);
+
     final dx = (localPosition.dx - center.dx) / (widget.size / 2);
     final dy = (localPosition.dy - center.dy) / (widget.size / 2);
+
     final clampedX = dx.clamp(-1.0, 1.0);
     final clampedY = dy.clamp(-1.0, 1.0);
+
+    _currentX = clampedX;
+    _currentY = -clampedY;
 
     setState(() {
       _stickOffset = Offset(
@@ -37,15 +66,26 @@ class _JoystickState extends State<Joystick> {
       );
     });
 
-    widget.onChanged(clampedX, -clampedY);
+    widget.onChanged(_currentX, _currentY);
   }
 
   void _resetStick() {
+    _stopHeartbeat();
+
     setState(() {
       _stickOffset = Offset.zero;
       _active = false;
+      _currentX = 0;
+      _currentY = 0;
     });
+
     widget.onReleased();
+  }
+
+  @override
+  void dispose() {
+    _stopHeartbeat();
+    super.dispose();
   }
 
   @override
@@ -54,12 +94,16 @@ class _JoystickState extends State<Joystick> {
       width: widget.size,
       height: widget.size,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onPanStart: (details) {
           _active = true;
           _updateStick(details.localPosition);
+          _startHeartbeat();
         },
         onPanUpdate: (details) {
-          if (_active) _updateStick(details.localPosition);
+          if (_active) {
+            _updateStick(details.localPosition);
+          }
         },
         onPanEnd: (_) => _resetStick(),
         onPanCancel: _resetStick,

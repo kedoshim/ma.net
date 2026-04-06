@@ -38,7 +38,7 @@ class _ControlButtonState extends State<ControlButton> {
     ].contains(widget.label);
 
     // Make SELECT and START shorter
-    final height = ['SELECT', 'START'].contains(widget.label) ? 40.0 : 70.0;
+    final height = ['SELECT', 'START'].contains(widget.label) ? 40.0 : 80.0;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -60,10 +60,10 @@ class _ControlButtonState extends State<ControlButton> {
           widget.onStateChange('up');
         },
         child: Container(
-          width: 70,
+          width: 80,
           height: height,
           alignment: Alignment.center,
-          margin: const EdgeInsets.all(8),
+          // margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(16),

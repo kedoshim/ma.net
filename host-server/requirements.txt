@@ -2,3 +2,6 @@ vgamepad
 aiohttp 
 qrcode
 psutil
+aiohttp_cors
+Pillow
+dotenv

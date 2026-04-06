@@ -1,4 +1,4 @@
-name: ma_net
+name: controller_app
 description: "uma manete."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   web_socket_channel: ^2.2.0
   shared_preferences: ^2.2.2
+  uuid: ^4.5.3
 
 dev_dependencies:
   flutter_test:

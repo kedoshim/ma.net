@@ -17,11 +17,17 @@ class ControllerScreen extends StatefulWidget {
 }
 
 class _ControllerScreenState extends State<ControllerScreen> {
-  late WebSocketService ws;
+  WebSocketService? ws;
   String status = 'Conectando...';
   int playerIndex = 0;
   bool dpadMode = false;
   bool editMode = false;
+  Color? playerColor;
+
+  Color colorFromHex(String hex) {
+    final cleaned = hex.replaceAll('#', '');
+    return Color(int.parse('FF$cleaned', radix: 16));
+  }
 
   final Map<String, bool> visibleButtons = {
     'btnA': true,
@@ -36,26 +42,50 @@ class _ControllerScreenState extends State<ControllerScreen> {
     'btnLS': false,
   };
 
-  @override
-  void initState() {
-    super.initState();
-    _loadInitialTheme();
-    ws = WebSocketService('192.168.100.80');
-    ws.channel.stream.listen(
+  Future<void> _connectWebSocket() async {
+    ws = await WebSocketService.connect('192.168.100.80');
+
+    ws!.channel.stream.listen(
       _handleWebSocketMessage,
-      onDone: () => setState(() => status = 'Desconectado'),
-      onError: (error) => setState(() => status = 'Error'),
+      onDone: () {
+        if (mounted) {
+          setState(() => status = 'Desconectado');
+        }
+      },
+      onError: (_) {
+        if (mounted) {
+          setState(() => status = 'Erro');
+        }
+      },
     );
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadInitialTheme();
+    _connectWebSocket();
+  }
+
+  @override
   void dispose() {
-    ws.dispose();
+    ws?.dispose();
     super.dispose();
   }
 
+  void _updatePlayerSlot(dynamic slotValue, {String? colorHex}) {
+    setState(() {
+      playerIndex = (slotValue as num).toInt() + 1;
+      status = 'Conectado';
+
+      if (colorHex != null) {
+        playerColor = colorFromHex(colorHex);
+      }
+    });
+  }
+
   void _send(Map<String, dynamic> obj) {
-    ws.send(obj);
+    ws?.send(obj);
   }
 
   void _handleWebSocketMessage(dynamic message) {
@@ -64,10 +94,16 @@ class _ControllerScreenState extends State<ControllerScreen> {
         final dynamic data = jsonDecode(message);
         if (data is Map<String, dynamic>) {
           if (data['type'] == 'assigned' && data['slot'] != null) {
-            setState(() {
-              playerIndex = (data['slot'] as num).toInt() + 1;
-              status = 'Conectado';
-            });
+            _updatePlayerSlot(
+              data['slot'],
+              colorHex: data['color'],
+            );
+          }
+          if (data['type'] == 'slot_changed' && data['slot'] != null) {
+            _updatePlayerSlot(
+              data['slot'],
+              colorHex: data['color'],
+            );
           }
           if (data['type'] == 'toggle_btn' && data['btn'] != null) {
             final id = 'btn${(data['btn'] as String).toUpperCase()}';
@@ -85,17 +121,22 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
   Widget _buildPlayerIndicator() {
     final selectedIndex = playerIndex - 1;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildIndicatorRow(selectedIndex, 0),
-        const SizedBox(height: 6),
-        _buildIndicatorRow(selectedIndex, 4),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final squareSize = ((constraints.maxWidth - 32) / 4).clamp(12.0, 22.0);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildIndicatorRow(selectedIndex, 0, squareSize),
+            const SizedBox(height: 6),
+            _buildIndicatorRow(selectedIndex, 4, squareSize),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildIndicatorRow(int selectedIndex, int offset) {
+  Widget _buildIndicatorRow(int selectedIndex, int offset, double squareSize) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(4, (index) {
@@ -103,16 +144,18 @@ class _ControllerScreenState extends State<ControllerScreen> {
         final isActive = selectedIndex == position;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: isActive ? AppColors.textPrimary : Colors.transparent,
-              border: Border.all(
-                color: AppColors.textPrimary,
-                width: AppColors.borderThickness,
+          child: SizedBox(
+            width: squareSize,
+            height: squareSize,
+            child: Container(
+              decoration: BoxDecoration(
+                color: (isActive && status == 'Conectado') ? AppColors.textPrimary : Colors.transparent,
+                border: Border.all(
+                  color: AppColors.textPrimary,
+                  width: AppColors.borderThickness,
+                ),
+                borderRadius: BorderRadius.circular(8),
               ),
-              borderRadius: BorderRadius.circular(8),
             ),
           ),
         );
@@ -126,6 +169,14 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
   void _onStickRelease() {
     _send({'type': 'stick', 'x': 0, 'y': 0});
+
+    Future.delayed(const Duration(milliseconds: 40), () {
+      _send({'type': 'stick', 'x': 0, 'y': 0});
+    });
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _send({'type': 'stick', 'x': 0, 'y': 0});
+    });
   }
 
   void _sendButton(String xinputId, String state) {
@@ -183,7 +234,6 @@ class _ControllerScreenState extends State<ControllerScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _gridButton('left', 'LEFT'),
-              const SizedBox(width: 24),
               _gridButton('right', 'RIGHT'),
             ],
           ),
@@ -201,19 +251,30 @@ class _ControllerScreenState extends State<ControllerScreen> {
   }
 
   Widget _buildCenterAction() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ControlButton(
-          label: '',
-          onStateChange: (state) => _sendButton('SELECT', state),
-        ),
-        const SizedBox(height: 12),
-        ControlButton(
-          label: '',
-          onStateChange: (state) => _sendButton('START', state),
-        ),
-      ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: ControlButton(
+              label: '',
+              onStateChange: (state) => _sendButton('SELECT', state),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: ControlButton(
+              label: '',
+              onStateChange: (state) => _sendButton('START', state),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -258,22 +319,41 @@ class _ControllerScreenState extends State<ControllerScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            status,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.normal,
-                              color: AppColors.textPrimary,
-                              fontFamily: 'pico',
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                if (playerColor != null && status == 'Conectado')
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    margin: const EdgeInsets.only(right: 8),
+                                    decoration: BoxDecoration(
+                                      color: playerColor,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                ),
+                                Text(
+                                  status,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.normal,
+                                    color: AppColors.textPrimary,
+                                    fontFamily: 'pico',
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildPlayerIndicator(),
-                        ],
+                            const SizedBox(height: 8),
+                            _buildPlayerIndicator(),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 10),
                       IconButton(

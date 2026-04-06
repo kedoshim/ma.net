@@ -29,6 +29,7 @@ class OptionsPopup extends StatefulWidget {
 class _OptionsPopupState extends State<OptionsPopup> {
   late bool _dpadMode;
   late bool _editMode;
+  late bool _isHovering = false;
   ColorTheme _selectedTheme = ColorTheme.blue;
 
   @override
@@ -73,9 +74,40 @@ class _OptionsPopupState extends State<OptionsPopup> {
           width: AppColors.borderThickness,
         ),
       ),
-      title: const Text(
-        'Options',
-        style: TextStyle(fontFamily: 'pico', fontWeight: FontWeight.bold),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Options',
+            style: TextStyle(
+              fontFamily: 'pico',
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(40, 40),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'X',
+              style: TextStyle(
+                fontFamily: 'pico',
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -141,12 +173,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close', style: TextStyle(fontFamily: 'pico')),
-        ),
-      ],
     );
   }
 
