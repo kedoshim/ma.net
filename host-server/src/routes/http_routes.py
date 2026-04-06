@@ -95,7 +95,7 @@ class HTTPRoutes:
 
 
     async def move_handler(self, request):
-        data = await self, request.json()
+        data = await request.json()
         from_slot = data['fromSlot']
         to_slot = data['toSlot']
         old_device = self.manager.slots[from_slot].assigned_device_id

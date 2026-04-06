@@ -88,7 +88,7 @@ def create_gamepad(config_type: str, existing_x360_count: int, main_loop):
         total_xinput = count_xinput_connected() + existing_x360_count
 
         if total_xinput >= 4:
-            LOG.warning("XInput limit reached. Falling back to DS4.")
+            LOG.debug("XInput limit reached. Falling back to DS4.")
             gamepad_type = "ds4"
         else:
             gamepad_type = "x360"
