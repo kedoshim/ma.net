@@ -65,12 +65,13 @@ def create_app(config):
 def run_server(config):
     app, manager = create_app(config)
 
-    debug_cli = DebugCLI(manager, config.http_port)
+    if config.debug:
+        debug_cli = DebugCLI(manager, config.http_port)
 
-    threading.Thread(
-        target=debug_cli.start,
-        daemon=True
-    ).start()
+        threading.Thread(
+            target=debug_cli.start,
+            daemon=True
+        ).start()
 
     try:
         web.run_app(

@@ -10,6 +10,7 @@ ControllerType = Literal["x360", "ds4", "mixed"]
 @dataclass
 class ServerConfig:
     web_page_static_path: Path 
+    debug: bool = False
     http_port: int = 8000
     ws_endpoint: str = "/ws"
     initial_slots: int = 4

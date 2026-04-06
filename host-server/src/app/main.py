@@ -48,6 +48,11 @@ def parse_args():
         default=Path("../controller_app/build/web")
     )
 
+    parser.add_argument(
+        "--debug",
+        action="store_true"
+    )
+
     return parser.parse_args()
 
 
@@ -60,7 +65,8 @@ def main():
         initial_slots=args.slots,
         max_slots=args.max_slots,
         controller_type=args.controller_type,
-        auto_expand_slots=args.auto_expand
+        auto_expand_slots=args.auto_expand,
+        debug=args.debug
     )
 
     run_server(config)
