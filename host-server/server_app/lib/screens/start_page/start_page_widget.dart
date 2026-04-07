@@ -44,7 +44,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
-  final _serverService = ServerProcessService();
+  final _serverService = ServerProcessService.instance;
 
   @override
   void initState() {
@@ -82,7 +82,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                 children: [
                   ElevatedButton(
                     onPressed: () async {
-                      final slots = int.parse(_model.dropDownValue1 ?? '1');
+                      final slots = int.parse(_model.dropDownValue1 ?? '4');
                       final fixed = _model.checkboxValue ?? false;
 
                       final modeMap = {

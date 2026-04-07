@@ -7,8 +7,6 @@ class ServerProcessService {
   static final ServerProcessService instance =
       ServerProcessService._internal();
 
-  factory ServerProcessService() => instance;
-
   Process? _process;
 
   String _resolvePythonPath() {
@@ -28,13 +26,21 @@ class ServerProcessService {
     required bool fixed,
     required String controllerMode,
   }) async {
+    if (_process != null) {
+      print('Server already running');
+      return;
+    }
+
     final pythonPath = _resolvePythonPath();
 
     if (!File(pythonPath).existsSync()) {
       throw Exception('Python not found at: $pythonPath');
     }
 
-    print('Starting server with Python at: $pythonPath with port: $port, slots: $slots, fixed: $fixed, controllerMode: $controllerMode');
+    print(
+      'Starting server with Python at: $pythonPath '
+      'port=$port slots=$slots fixed=$fixed mode=$controllerMode',
+    );
 
     _process = await Process.start(
       pythonPath,
@@ -45,7 +51,7 @@ class ServerProcessService {
         port.toString(),
         '--slots',
         slots.toString(),
-        if (!fixed)'--auto-expand',
+        if (!fixed) '--auto-expand',
         '--controller-type',
         controllerMode,
       ],
@@ -63,7 +69,9 @@ class ServerProcessService {
   }
 
   Future<void> stopServer() async {
-    if (_process != null) {
+    if (_process == null) return;
+
+    try {
       await Process.run('taskkill', [
         '/PID',
         _process!.pid.toString(),
@@ -71,7 +79,11 @@ class ServerProcessService {
         '/F',
       ]);
 
-      _process = null;
+      print('Python server killed: ${_process!.pid}');
+    } catch (e) {
+      print('Failed to kill server: $e');
     }
+
+    _process = null;
   }
 }

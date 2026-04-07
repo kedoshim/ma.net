@@ -10,6 +10,12 @@ class GamepadState extends ChangeNotifier {
 
   GamepadState(this._api);
 
+  void _log(String action) {
+    debugPrint(
+      '[GAMEPAD STATE] $action | pool=${pool.length} slots=${slots.length}',
+    );
+  }
+
   void initialize() {
     fetchSlots();
     _subscription = _api.connectAdminSocket().listen((state) {
@@ -25,9 +31,9 @@ class GamepadState extends ChangeNotifier {
       pool = state.pool;
       slots = state.slots;
       notifyListeners();
-      await fetchSlots();
-    } catch (e) {
-      // handle error
+    } catch (e, stack) {
+      debugPrint('fetchSlots error: $e');
+      debugPrintStack(stackTrace: stack);
     }
   }
 
@@ -39,7 +45,7 @@ class GamepadState extends ChangeNotifier {
 
     try {
       await _api.assignDevice(device.id, slotIndex);
-      await fetchSlots();
+      // await fetchSlots();
     } catch (e) {
       // revert
       pool.add(device);
@@ -57,7 +63,7 @@ class GamepadState extends ChangeNotifier {
 
       try {
         await _api.moveDevice(fromIndex, toIndex);
-        await fetchSlots();
+        // await fetchSlots();
       } catch (e) {
         slots[fromIndex] = device;
         slots[toIndex] = null;
@@ -76,7 +82,7 @@ class GamepadState extends ChangeNotifier {
 
     try {
       await _api.swapDevices(a, b);
-      await fetchSlots();
+      // await fetchSlots();
     } catch (e) {
       slots[a] = deviceA;
       slots[b] = deviceB;
@@ -93,7 +99,7 @@ class GamepadState extends ChangeNotifier {
 
       try {
         await _api.unassignDevice(slotIndex);
-        await fetchSlots();
+        // await fetchSlots();
       } catch (e) {
         pool.remove(device);
         slots[slotIndex] = device;

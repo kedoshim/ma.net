@@ -9,6 +9,9 @@ import 'package:server_app/screens/home_page/qr_code_container.dart';
 import '../../theme/app_theme.dart';
 import '../../services/host_api_service.dart';
 
+import '../../services/server_process_service.dart';
+import '../start_page/start_page_widget.dart';
+
 // Helper function to insert dividers between list items
 List<Widget> divideList(List<Widget> items, Widget divider) {
   if (items.isEmpty) return items;
@@ -126,7 +129,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.max,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Padding(
                           padding: EdgeInsetsDirectional.fromSTEB(
@@ -145,13 +148,24 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                           ),
                         ),
                         IconButton(
-                          iconSize: 35.0,
+                          iconSize: 30.0,
                           icon: Icon(
                             Icons.power_settings_new_rounded,
                             color: AppTheme.primaryText,
                           ),
-                          onPressed: () {
-                            print('IconButton pressed ...');
+                          onPressed: () async {
+                            print('Turning off ...');
+
+                            await ServerProcessService.instance.stopServer();
+
+                            if (!mounted) return;
+
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (_) => const StartPageWidget(),
+                              ),
+                              (route) => false,
+                            );
                           },
                         ),
                       ],

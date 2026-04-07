@@ -8,6 +8,17 @@ void main() async {
 
   await windowManager.ensureInitialized();
 
+  const options = WindowOptions(
+    center: true,
+    title: 'ma.net',
+  );
+
+  windowManager.waitUntilReadyToShow(options, () async {
+    await windowManager.setPreventClose(true);
+    await windowManager.show();
+    await windowManager.focus();
+  });
+
   runApp(const MyApp());
 }
 
@@ -19,7 +30,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WindowListener {
-  final ServerProcessService _serverService = ServerProcessService();
+  bool _isClosing = false;
 
   @override
   void initState() {
@@ -30,13 +41,19 @@ class _MyAppState extends State<MyApp> with WindowListener {
   @override
   void dispose() {
     windowManager.removeListener(this);
-    ServerProcessService().stopServer();
     super.dispose();
   }
 
   @override
   void onWindowClose() async {
-    await _serverService.stopServer();
+    if (_isClosing) return;
+
+    _isClosing = true;
+
+    debugPrint('Closing app...');
+    await ServerProcessService.instance.stopServer();
+
+    await windowManager.destroy();
   }
 
   @override
