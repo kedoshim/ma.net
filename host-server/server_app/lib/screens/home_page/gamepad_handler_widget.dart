@@ -126,118 +126,120 @@ Expanded gamepadHandlerWidget(BuildContext context) {
             ),
           ),
           // Controller Slots Area
-          Container(
-            width: MediaQuery.sizeOf(context).width * 1.0,
-            height: MediaQuery.sizeOf(context).height * 0.45,
-            decoration: BoxDecoration(),
-            child: GridView.builder(
-              padding: EdgeInsets.zero,
-              scrollDirection: Axis.vertical,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 15.0,
-                mainAxisSpacing: 15.0,
-                childAspectRatio: 1.0,
-              ),
-              itemCount: state.slots.length,
-              itemBuilder: (context, index) {
-                return DragTarget<DragData>(
-                  onAcceptWithDetails: (details) {
-                    final data = details.data;
-                    if (data.source == DragSource.pool) {
-                      if (state.slots[index] == null) {
-                        state.assignDevice(data.device, index);
-                      } else {
-                        state.replaceSlotDevice(data.device, index);
-                      }
-                    } else if (data.source == DragSource.slot) {
-                      if (data.slotIndex == index) return; // same slot
-                      if (state.slots[index] == null) {
-                        state.moveDevice(data.slotIndex!, index);
-                      } else {
-                        state.swapDevices(data.slotIndex!, index);
-                      }
-                    }
-                  },
-                  builder: (context, candidateData, rejectedData) {
-                    return Container(
-                      width: 200.0,
-                      height: 200.0,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryBackground,
-                        borderRadius: BorderRadius.circular(16.0),
-                        border: Border.all(
-                          color: candidateData.isNotEmpty
-                              ? Colors.green
-                              : AppTheme.primaryText,
-                          width: candidateData.isNotEmpty ? 7.0 : 5.0,
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          if (state.slots[index] != null)
-                            Draggable<DragData>(
-                              data: DragData(
-                                device: state.slots[index]!,
-                                source: DragSource.slot,
-                                slotIndex: index,
-                              ),
-                              feedback: _buildDeviceWidget(
-                                state.slots[index]!,
-                                isDragging: true,
-                              ),
-                              childWhenDragging:
-                                  Container(), // empty when dragging
-                              child: Center(
-                                child: _buildDeviceWidget(
-                                  state.slots[index]!,
-                                  isOnPool: true,
-                                ),
-                              ),
-                            ),
-                          Align(
-                            alignment: AlignmentDirectional(1.0, -1.0),
-                            child: Padding(
-                              padding: EdgeInsetsDirectional.fromSTEB(
-                                0.0,
-                                5.0,
-                                10.0,
-                                0.0,
-                              ),
-                              child: Text(
-                                'x360',
-                                style: AppTheme.bodyMedium.copyWith(
-                                  fontFamily: 'pico',
-                                  fontSize: 12.0,
-                                  letterSpacing: 0.0,
-                                ),
-                              ),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const int columns = 4;
+                final int itemCount = state.slots.length;
+
+                final int rows = (itemCount / columns).ceil();
+
+                final double totalSpacingX = (columns - 1) * 15.0;
+                final double totalSpacingY = (rows - 1) * 15.0;
+
+                final double cellWidth =
+                    (constraints.maxWidth - totalSpacingX) / columns;
+
+                final double cellHeight =
+                    (constraints.maxHeight - totalSpacingY) / rows;
+
+                return GridView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  itemCount: itemCount,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: 15.0,
+                    mainAxisSpacing: 15.0,
+                    childAspectRatio: cellWidth / cellHeight > 0 ? cellWidth / cellHeight
+                        : 1.0,
+                  ),
+                  itemBuilder: (context, index) {
+                    return DragTarget<DragData>(
+                      onAcceptWithDetails: (details) {
+                        final data = details.data;
+
+                        if (data.source == DragSource.pool) {
+                          if (state.slots[index] == null) {
+                            state.assignDevice(data.device, index);
+                          } else {
+                            state.replaceSlotDevice(data.device, index);
+                          }
+                        } else if (data.source == DragSource.slot) {
+                          if (data.slotIndex == index) return;
+
+                          if (state.slots[index] == null) {
+                            state.moveDevice(data.slotIndex!, index);
+                          } else {
+                            state.swapDevices(data.slotIndex!, index);
+                          }
+                        }
+                      },
+                      builder: (context, candidateData, rejectedData) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryBackground,
+                            borderRadius: BorderRadius.circular(16.0),
+                            border: Border.all(
+                              color: candidateData.isNotEmpty
+                                  ? Colors.green
+                                  : AppTheme.primaryText,
+                              width: candidateData.isNotEmpty ? 7.0 : 5.0,
                             ),
                           ),
-                          Padding(
-                            padding: EdgeInsetsDirectional.fromSTEB(
-                              10.0,
-                              0.0,
-                              0.0,
-                              0.0,
-                            ),
-                            child: Text(
-                              'p${index + 1}',
-                              style: AppTheme.bodyMedium.copyWith(
-                                fontFamily: 'pico',
-                                fontSize: 20.0,
-                                letterSpacing: 0.0,
+                          child: Stack(
+                            children: [
+                              if (state.slots[index] != null)
+                                Draggable<DragData>(
+                                  data: DragData(
+                                    device: state.slots[index]!,
+                                    source: DragSource.slot,
+                                    slotIndex: index,
+                                  ),
+                                  feedback: _buildDeviceWidget(
+                                    state.slots[index]!,
+                                    isDragging: true,
+                                  ),
+                                  childWhenDragging: Container(),
+                                  child: Center(
+                                    child: _buildDeviceWidget(
+                                      state.slots[index]!,
+                                      isOnPool: true,
+                                    ),
+                                  ),
+                                ),
+                              Positioned(
+                                top: 5,
+                                right: 10,
+                                child: Text(
+                                  state.slots[index]?.type ?? 'xx360',
+                                  style: AppTheme.bodyMedium.copyWith(
+                                    fontFamily: 'pico',
+                                    fontSize: 12.0,
+                                  ),
+                                ),
                               ),
-                            ),
+                              Positioned(
+                                top: 0,
+                                left: 10,
+                                child: Text(
+                                  'p${index + 1}',
+                                  style: AppTheme.bodyMedium.copyWith(
+                                    fontFamily: 'pico',
+                                    fontSize: 20.0,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 );
               },
             ),
-          ),
+          )
         ],
       ),
     ),

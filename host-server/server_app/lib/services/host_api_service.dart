@@ -13,14 +13,16 @@ class DeviceModel {
   final String id;
   final String name;
   final Color color;
+  final String? type;
 
-  DeviceModel({required this.id, required this.name, required this.color});
+  DeviceModel({required this.id, required this.name, required this.color, this.type});
 
   factory DeviceModel.fromJson(Map<String, dynamic> json) {
     return DeviceModel(
       id: json['deviceId'],
       name: json['name'] ?? json['deviceId'],
       color: json['color'] != null ? colorFromHex(json['color']) : AppTheme.primaryText,
+      type: json['type'],
     );
   }
 }
@@ -72,6 +74,7 @@ class HostApiService {
   Future<SlotState> fetchSlots() async {
     final response = await http.get(Uri.parse('$baseUrl/api/slots'));
     if (response.statusCode == 200) {
+      print("Response: ${response.body}");
       return SlotState.fromJson(json.decode(response.body));
     } else {
       throw Exception('Failed to fetch slots');

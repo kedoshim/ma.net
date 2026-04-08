@@ -5,14 +5,14 @@ LOG = logging.getLogger("slot_manager")
 
 async def notify_device_slot(manager, device_id):
     slot = manager.get_slot_by_device(device_id)
-
     color = manager.get_device_color(device_id)
+    ws = manager.get_ws_by_device(device_id)
 
-    if not slot or not slot.ws:
+    if not slot or not ws:
         return
 
     try:
-        await slot.ws.send_json({
+        await ws.send_json({
             "type": "slot_changed",
             "slot": slot.slot_id,
             "color": color

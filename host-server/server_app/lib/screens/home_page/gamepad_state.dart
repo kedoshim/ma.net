@@ -30,6 +30,10 @@ class GamepadState extends ChangeNotifier {
       final state = await _api.fetchSlots();
       pool = state.pool;
       slots = state.slots;
+      for (int i = 0; i < slots.length; i++) {
+        final slot = slots[i];
+        print('Slot ${slot?.id} - ${slot?.type}');
+      } 
       notifyListeners();
     } catch (e, stack) {
       debugPrint('fetchSlots error: $e');

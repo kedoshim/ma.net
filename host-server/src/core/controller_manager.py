@@ -10,6 +10,7 @@ class ControllerManager:
         self.device_map: dict[str, int] = {}
         self.connected_devices: dict[str, dict] = {}
         self.device_colors: dict[str, str] = {}
+        self.device_ws_map: dict[str, any] = {}
         self.main_loop = None
 
     def set_main_loop(self, loop):
@@ -18,6 +19,17 @@ class ControllerManager:
     def initialize_slots(self):
         for i in range(self.config.initial_slots):
             self._create_empty_slot(i)
+
+    def register_device_ws(self, device_id, ws):
+        self.device_ws_map[device_id] = ws
+
+
+    def unregister_device_ws(self, device_id):
+        self.device_ws_map.pop(device_id, None)
+
+
+    def get_ws_by_device(self, device_id):
+        return self.device_ws_map.get(device_id)
 
     def cleanup_gamepads(self):
         for slot in self.slots:
@@ -51,9 +63,10 @@ class ControllerManager:
 
     def _create_empty_slot(self, index):
         gamepad, gp_type = create_gamepad(
+            self,
             self.config.controller_type,
             self._existing_x360_count(),
-            self.main_loop
+            self.main_loop,
         )
 
         slot = PlayerSlot(
@@ -106,7 +119,8 @@ class ControllerManager:
     def disconnect_slot(self, slot_id):
         slot = self.slots[slot_id]
         slot.connected = False
-        slot.ws = None
+        if slot.assigned_device_id:
+            self.unregister_device_ws(slot.assigned_device_id)
         slot.reserved_until = (
             time.time() +
             self.config.slot_reservation_timeout
@@ -178,14 +192,12 @@ class ControllerManager:
         to_slot.assigned_device_id = from_slot.assigned_device_id
         to_slot.player_name = from_slot.player_name
         to_slot.connected = from_slot.connected
-        to_slot.ws = from_slot.ws
 
         self.device_map[to_slot.assigned_device_id] = to_index
 
         from_slot.assigned_device_id = None
         from_slot.player_name = None
         from_slot.connected = False
-        from_slot.ws = None
 
     def get_connected_devices(self):
         return [
@@ -218,8 +230,9 @@ class ControllerManager:
                 'device': {
                     'deviceId': slot.assigned_device_id,
                     'name': slot.player_name or slot.assigned_device_id,
-                    'color': self.get_device_color(slot.assigned_device_id)
-                } if slot.connected and slot.assigned_device_id else None
+                    'color': self.get_device_color(slot.assigned_device_id),
+                } if slot.connected and slot.assigned_device_id else None,
+                'type': slot.controller_type
             }
             for i, slot in enumerate(self.slots)
         ]

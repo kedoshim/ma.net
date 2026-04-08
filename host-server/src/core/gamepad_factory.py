@@ -50,12 +50,19 @@ def count_xinput_connected():
 
     return connected
 
-async def notify_rumble(slot, large, small):
-    if not slot.ws:
+async def notify_rumble(manager, slot, large, small):
+    device_id = slot.assigned_device_id
+
+    if not device_id:
+        return
+
+    ws = manager.get_ws_by_device(device_id)
+
+    if not ws:
         return
 
     try:
-        await slot.ws.send_json({
+        await ws.send_json({
             "type": "rumble",
             "large": large,
             "small": small
@@ -64,7 +71,7 @@ async def notify_rumble(slot, large, small):
         LOG.error("Failed rumble notify: %s", e)
 
 
-def create_gamepad(config_type: str, existing_x360_count: int, main_loop):
+def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loop):
     if main_loop is None:
         raise RuntimeError("Main loop not initialized")
 
@@ -76,7 +83,7 @@ def create_gamepad(config_type: str, existing_x360_count: int, main_loop):
 
         try:
             asyncio.run_coroutine_threadsafe(
-                notify_rumble(slot, large_motor, small_motor),
+                notify_rumble(manager, slot, large_motor, small_motor),
                 main_loop
             )
         except Exception as e:

@@ -47,7 +47,7 @@ class WebSocketRoutes:
             await ws.close()
             return ws
 
-        slot.ws = ws
+        self.manager.register_device_ws(device_id, ws)
         slot.connected = True
 
         print(f"Player {slot.slot_id + 1} connected ({player_name or device_id})")
