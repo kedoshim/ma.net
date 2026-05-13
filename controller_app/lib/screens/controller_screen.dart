@@ -58,6 +58,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   bool dpadMode = false;
   bool editMode = false;
   Color? playerColor;
+  int totalSlots = 4;
 
   bool _listenerAttached = false;
 
@@ -83,7 +84,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     if (ws != null) return;
 
     if (_listenerAttached) return;
-    
+
     _listenerAttached = true;
 
     ws = await ConnectionManager.instance.getConnection();
@@ -139,6 +140,12 @@ class _ControllerScreenState extends State<ControllerScreen>
         final dynamic data = jsonDecode(message);
 
         if (data is Map<String, dynamic>) {
+          if (data.containsKey('total_slots')) {
+            setState(() {
+              totalSlots = data['total_slots'];
+            });
+          }
+
           if (data['type'] == 'assigned') {
             _updatePlayerSlot(data['slot'], colorHex: data['color']);
           }
@@ -168,7 +175,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     debugPrint('Player unassigned');
     setState(() {
       playerIndex = null;
-      status = 'Aguardando slot';
+      status = 'Em espera';
     });
   }
 
@@ -176,23 +183,46 @@ class _ControllerScreenState extends State<ControllerScreen>
     final selectedIndex = playerIndex != null ? playerIndex! - 1 : null;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final squareSize = ((constraints.maxWidth - 32) / 4).clamp(12.0, 22.0);
+        final int columns = totalSlots <= 4
+            ? (totalSlots > 0 ? totalSlots : 1)
+            : 4;
+        final int rows = (totalSlots / columns).ceil();
+        final double squareSize =
+            ((constraints.maxWidth - (columns * 8)) / columns).clamp(
+              12.0,
+              22.0,
+            );
+
         return Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildIndicatorRow(selectedIndex, 0, squareSize),
-            const SizedBox(height: 6),
-            _buildIndicatorRow(selectedIndex, 4, squareSize),
-          ],
+          children: List.generate(rows, (rowIndex) {
+            int rowItemCount = (rowIndex == rows - 1)
+                ? totalSlots - (rowIndex * columns)
+                : columns;
+            return Padding(
+              padding: EdgeInsets.only(bottom: rowIndex < rows - 1 ? 6.0 : 0),
+              child: _buildIndicatorRow(
+                selectedIndex,
+                rowIndex * columns,
+                rowItemCount,
+                squareSize,
+              ),
+            );
+          }),
         );
       },
     );
   }
 
-  Widget _buildIndicatorRow(int? selectedIndex, int offset, double squareSize) {
+  Widget _buildIndicatorRow(
+    int? selectedIndex,
+    int offset,
+    int count,
+    double squareSize,
+  ) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(4, (index) {
+      children: List.generate(count, (index) {
         final position = offset + index;
         final isActive = selectedIndex == position;
         return Padding(
@@ -336,7 +366,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     return Scaffold(
       body: Container(
         color: AppColors.screenBackground,

@@ -37,31 +37,32 @@ class WebSocketRoutes:
             return ws
 
         self.manager.register_device(device_id, player_name)
+        self.manager.register_device_ws(device_id, ws)
         slot = self.manager.assign_slot(device_id, player_name)
 
         if slot is None:
             await ws.send_json({
-                "type": "error",
-                "msg": "server_full"
+                "type": "unassigned",
+                "total_slots": len(self.manager.slots),
+                "color": self.manager.get_device_color(device_id)
             })
-            await ws.close()
-            return ws
+            LOG.info("Device %s connected but unassigned (pool)", device_id)
+        else:
+            slot.connected = True
 
-        self.manager.register_device_ws(device_id, ws)
-        slot.connected = True
+            print(f"Player {slot.slot_id + 1} connected ({player_name or device_id})")
+            LOG.info(
+                "Assigned slot %s to %s",
+                slot.slot_id,
+                peer
+            )
 
-        print(f"Player {slot.slot_id + 1} connected ({player_name or device_id})")
-        LOG.info(
-            "Assigned slot %s to %s",
-            slot.slot_id,
-            peer
-        )
-
-        await ws.send_json({
-            "type": "assigned",
-            "slot": slot.slot_id,
-            "color": self.manager.get_device_color(device_id)
-        })
+            await ws.send_json({
+                "type": "assigned",
+                "slot": slot.slot_id,
+                "color": self.manager.get_device_color(device_id),
+                "total_slots": len(self.manager.slots)
+            })
 
         self.admin_panel.broadcast_update()
 
@@ -136,13 +137,19 @@ class WebSocketRoutes:
             LOG.debug("Websocket cancelled")
 
         finally:
-            print(f"Player {slot.slot_id + 1} disconnected")
-            slot.last_stick_x = 0
-            slot.last_stick_y = 0
-            slot.last_input_at = time.time()
-            reset_slot_gamepad(slot)
+            current_slot = self.manager.get_slot_by_device(device_id)
+            if current_slot:
+                print(f"Player {current_slot.slot_id + 1} disconnected")
+                current_slot.last_stick_x = 0
+                current_slot.last_stick_y = 0
+                current_slot.last_input_at = time.time()
+                reset_slot_gamepad(current_slot)
+                self.manager.disconnect_slot(current_slot.slot_id)
+            else:
+                print(f"Unassigned device disconnected")
+
             self.manager.unregister_device(device_id)
-            self.manager.disconnect_slot(slot.slot_id)
+            self.manager.unregister_device_ws(device_id)
             self.admin_panel.broadcast_update()
 
             try:

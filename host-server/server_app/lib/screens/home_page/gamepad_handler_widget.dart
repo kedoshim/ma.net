@@ -109,6 +109,11 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                                           padding: EdgeInsets.zero,
                                           scrollDirection: Axis.horizontal,
                                           children: state.pool.map((device) {
+                                            final inputState =
+                                                state.getInputState(
+                                                  device.id,
+                                                ) ??
+                                                DeviceInputState.idle();
                                             return Draggable<DragData>(
                                               dragAnchorStrategy:
                                                   pointerDragAnchorStrategy,
@@ -124,18 +129,43 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                                                 child: SizedBox(
                                                   width: 100,
                                                   height: double.infinity,
-                                                  child: _buildDeviceWidget(
-                                                    device,
-                                                    isOnPool: true,
+                                                  child: LayoutBuilder(
+                                                    builder:
+                                                        (context, constraints) {
+                                                          final minDimension =
+                                                              math.min(
+                                                                constraints
+                                                                    .maxWidth,
+                                                                constraints
+                                                                    .maxHeight,
+                                                              );
+                                                          return DeviceInputIndicator(
+                                                            device: device,
+                                                            input: inputState,
+                                                            size: minDimension,
+                                                            isOnPool: true,
+                                                          );
+                                                        },
                                                   ),
                                                 ),
                                               ),
                                               child: SizedBox(
                                                 width: 100,
                                                 height: double.infinity,
-                                                child: _buildDeviceWidget(
-                                                  device,
-                                                  isOnPool: true,
+                                                child: LayoutBuilder(
+                                                  builder: (context, constraints) {
+                                                    final minDimension = math
+                                                        .min(
+                                                          constraints.maxWidth,
+                                                          constraints.maxHeight,
+                                                        );
+                                                    return DeviceInputIndicator(
+                                                      device: device,
+                                                      input: inputState,
+                                                      size: minDimension,
+                                                      isOnPool: true,
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                             );
@@ -296,34 +326,6 @@ Expanded gamepadHandlerWidget(BuildContext context) {
   );
 }
 
-Widget _buildDeviceWidget(DeviceModel? device, {isOnPool = true}) {
-  if (device == null) {
-    return const SizedBox.shrink();
-  }
-
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      final minDimension = math.min(
-        constraints.maxWidth,
-        constraints.maxHeight,
-      );
-
-      final circleSize = isOnPool ? minDimension * 0.9 : minDimension * 0.4;
-
-      return Center(
-        child: Container(
-          width: circleSize,
-          height: circleSize,
-          decoration: BoxDecoration(
-            color: device.color,
-            shape: BoxShape.circle,
-          ),
-        ),
-      );
-    },
-  );
-}
-
 Widget _buildDragFeedback(DeviceModel device) {
   return Material(
     color: Colors.transparent,
@@ -348,19 +350,23 @@ class DeviceInputIndicator extends StatelessWidget {
   final DeviceModel device;
   final DeviceInputState input;
   final double size;
+  final bool isOnPool;
 
   const DeviceInputIndicator({
     super.key,
     required this.device,
     required this.input,
     required this.size,
+    this.isOnPool = false,
   });
 
   @override
   Widget build(BuildContext context) {
     // AnimatedSlide uses fractional offsets relative to the child's size.
     // Moving up to 40% of its size keeps it well contained within the indicator area.
-    final stickOffset = Offset(input.stickX * 0.4, input.stickY * 0.4);
+    final stickOffset = isOnPool
+        ? Offset.zero
+        : Offset(input.stickX * 0.4, input.stickY * 0.4);
 
     return Center(
       child: SizedBox(
@@ -373,8 +379,12 @@ class DeviceInputIndicator extends StatelessWidget {
             AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
-              width: input.buttonPressed ? size * 0.9 : size * 0.5,
-              height: input.buttonPressed ? size * 0.9 : size * 0.5,
+              width: input.buttonPressed
+                  ? size * 0.9
+                  : size * (isOnPool ? 0.8 : 0.5),
+              height: input.buttonPressed
+                  ? size * 0.9
+                  : size * (isOnPool ? 0.8 : 0.5),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
@@ -393,8 +403,8 @@ class DeviceInputIndicator extends StatelessWidget {
               curve: Curves.easeOutQuad,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 100),
-                width: size * 0.5,
-                height: size * 0.5,
+                width: size * (isOnPool ? 0.8 : 0.5),
+                height: size * (isOnPool ? 0.8 : 0.5),
                 decoration: BoxDecoration(
                   color: device.color,
                   shape: BoxShape.circle,

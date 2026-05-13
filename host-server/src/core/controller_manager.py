@@ -31,6 +31,16 @@ class ControllerManager:
     def get_ws_by_device(self, device_id):
         return self.device_ws_map.get(device_id)
 
+    def notify_device(self, device_id, payload):
+        ws = self.get_ws_by_device(device_id)
+        if ws:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(ws.send_json(payload))
+            except Exception:
+                pass
+
     def cleanup_gamepads(self):
         for slot in self.slots:
             try:
@@ -143,9 +153,21 @@ class ControllerManager:
 
         if a.assigned_device_id:
             self.device_map[a.assigned_device_id] = slot_a
+            self.notify_device(a.assigned_device_id, {
+                "type": "slot_changed",
+                "slot": slot_a,
+                "color": self.get_device_color(a.assigned_device_id),
+                "total_slots": len(self.slots)
+            })
 
         if b.assigned_device_id:
             self.device_map[b.assigned_device_id] = slot_b
+            self.notify_device(b.assigned_device_id, {
+                "type": "slot_changed",
+                "slot": slot_b,
+                "color": self.get_device_color(b.assigned_device_id),
+                "total_slots": len(self.slots)
+            })
 
     def assign_to_slot(self, device_id, slot_index, player_name=None):
         if slot_index >= len(self.slots):
@@ -157,6 +179,12 @@ class ControllerManager:
         slot.player_name = player_name or device_id
         slot.connected = True
         self.device_map[device_id] = slot_index
+        self.notify_device(device_id, {
+            "type": "assigned",
+            "slot": slot_index,
+            "color": self.get_device_color(device_id),
+            "total_slots": len(self.slots)
+        })
         return slot
 
     def unassign_slot(self, slot_index):
@@ -170,6 +198,10 @@ class ControllerManager:
             slot.player_name = None
             if device_id in self.device_map:
                 del self.device_map[device_id]
+            self.notify_device(device_id, {
+                "type": "unassigned",
+                "total_slots": len(self.slots)
+            })
 
     def get_slot_by_device(self, device_id):
         slot_index = self.device_map.get(device_id)
@@ -199,6 +231,13 @@ class ControllerManager:
         from_slot.assigned_device_id = None
         from_slot.player_name = None
         from_slot.connected = False
+        
+        self.notify_device(to_slot.assigned_device_id, {
+            "type": "slot_changed",
+            "slot": to_index,
+            "color": self.get_device_color(to_slot.assigned_device_id),
+            "total_slots": len(self.slots)
+        })
 
     def get_connected_devices(self):
         return [
