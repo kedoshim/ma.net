@@ -83,15 +83,28 @@ class WebSocketRoutes:
 
                 current_slot = self.manager.get_slot_by_device(device_id)
                 if msg_type == "stick":
-                    if current_slot:
-                        x = float(data.get("x", 0))
-                        y = float(data.get("y", 0))
+                    x = float(data.get("x", 0))
+                    y = float(data.get("y", 0))
 
+                    if current_slot:
                         current_slot.last_input_at = time.time()
                         current_slot.last_stick_x = x
                         current_slot.last_stick_y = y
 
                         apply_stick(current_slot, x, y)
+
+                    input_msg = {
+                        "type": "input_event",
+                        "deviceId": device_id,
+                        "event": "stick",
+                        "x": x,
+                        "y": y
+                    }
+                    for client in list(self.admin_panel.admin_clients):
+                        try:
+                            await client.send_json(input_msg)
+                        except Exception:
+                            pass
 
                 elif msg_type == "button":
                     if current_slot:
@@ -100,6 +113,18 @@ class WebSocketRoutes:
                             data.get("id"),
                             data.get("state"),
                         )
+                    
+                    input_msg = {
+                        "type": "input_event",
+                        "deviceId": device_id,
+                        "event": "button",
+                        "state": data.get("state")
+                    }
+                    for client in list(self.admin_panel.admin_clients):
+                        try:
+                            await client.send_json(input_msg)
+                        except Exception:
+                            pass
 
                 elif msg_type == "keepalive":
                     pass

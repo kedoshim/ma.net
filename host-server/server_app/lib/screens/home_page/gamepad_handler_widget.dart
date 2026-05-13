@@ -18,8 +18,6 @@ class DragData {
   DragData({required this.device, required this.source, this.slotIndex});
 }
 
-
-
 Expanded gamepadHandlerWidget(BuildContext context) {
   final state = Provider.of<GamepadState>(context);
 
@@ -96,7 +94,10 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(16.0),
                                     border: candidateData.isNotEmpty
-                                        ? Border.all(color: Colors.green, width: 2)
+                                        ? Border.all(
+                                            color: Colors.green,
+                                            width: 2,
+                                          )
                                         : Border.all(
                                             color: Colors.transparent,
                                             width: 2,
@@ -109,24 +110,33 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                                           scrollDirection: Axis.horizontal,
                                           children: state.pool.map((device) {
                                             return Draggable<DragData>(
-                                              dragAnchorStrategy: pointerDragAnchorStrategy,
+                                              dragAnchorStrategy:
+                                                  pointerDragAnchorStrategy,
                                               data: DragData(
                                                 device: device,
                                                 source: DragSource.pool,
                                               ),
-                                              feedback: _buildDragFeedback(device),
+                                              feedback: _buildDragFeedback(
+                                                device,
+                                              ),
                                               childWhenDragging: Opacity(
                                                 opacity: 0.5,
                                                 child: SizedBox(
                                                   width: 100,
                                                   height: double.infinity,
-                                                  child: _buildDeviceWidget(device, isOnPool: true),
+                                                  child: _buildDeviceWidget(
+                                                    device,
+                                                    isOnPool: true,
+                                                  ),
                                                 ),
                                               ),
                                               child: SizedBox(
                                                 width: 100,
                                                 height: double.infinity,
-                                                child: _buildDeviceWidget(device, isOnPool: true),
+                                                child: _buildDeviceWidget(
+                                                  device,
+                                                  isOnPool: true,
+                                                ),
                                               ),
                                             );
                                           }).toList(),
@@ -228,9 +238,23 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                                   ),
                                   childWhenDragging: const SizedBox.expand(),
                                   child: Center(
-                                    child: _buildDeviceWidget(
-                                      state.slots[index].device,
-                                      isOnPool: false,
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final minDimension = math.min(
+                                          constraints.maxWidth,
+                                          constraints.maxHeight,
+                                        );
+                                        final inputState =
+                                            state.getInputState(
+                                              state.slots[index].device!.id,
+                                            ) ??
+                                            DeviceInputState.idle();
+                                        return DeviceInputIndicator(
+                                          device: state.slots[index].device!,
+                                          input: inputState,
+                                          size: minDimension,
+                                        );
+                                      },
                                     ),
                                   ),
                                 ),
@@ -272,10 +296,7 @@ Expanded gamepadHandlerWidget(BuildContext context) {
   );
 }
 
-Widget _buildDeviceWidget(
-  DeviceModel? device,{
-  isOnPool = true,
-}) {
+Widget _buildDeviceWidget(DeviceModel? device, {isOnPool = true}) {
   if (device == null) {
     return const SizedBox.shrink();
   }
@@ -287,7 +308,7 @@ Widget _buildDeviceWidget(
         constraints.maxHeight,
       );
 
-      final circleSize = isOnPool ? minDimension* 0.9 : minDimension * 0.4;
+      final circleSize = isOnPool ? minDimension * 0.9 : minDimension * 0.4;
 
       return Center(
         child: Container(
@@ -337,10 +358,9 @@ class DeviceInputIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stickOffset = Offset(
-      input.x * size * 0.12,
-      input.y * size * 0.12,
-    );
+    // AnimatedSlide uses fractional offsets relative to the child's size.
+    // Moving up to 40% of its size keeps it well contained within the indicator area.
+    final stickOffset = Offset(input.stickX * 0.4, input.stickY * 0.4);
 
     return Center(
       child: SizedBox(
@@ -349,42 +369,45 @@ class DeviceInputIndicator extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
+            // Outer glow / ripple effect for button presses
             AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              width: input.isButtonPressed ? size * 1.18 : size,
-              height: input.isButtonPressed ? size * 1.18 : size,
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              width: input.buttonPressed ? size * 0.9 : size * 0.5,
+              height: input.buttonPressed ? size * 0.9 : size * 0.5,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: device.color.withValues(
-                    alpha: input.isButtonPressed ? 0.7 : 0.25,
+                    alpha: input.buttonPressed ? 0.5 : 0.0,
                   ),
-                  width: 4,
+                  width: input.buttonPressed ? 6 : 0,
                 ),
               ),
             ),
 
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 70),
-              transform: Matrix4.translationValues(
-                stickOffset.dx,
-                stickOffset.dy,
-                0,
-              ),
-              width: size * 0.72,
-              height: size * 0.72,
-              decoration: BoxDecoration(
-                color: device.color,
-                shape: BoxShape.circle,
-                boxShadow: input.isButtonPressed
-                    ? [
-                        BoxShadow(
-                          blurRadius: 16,
-                          spreadRadius: 3,
-                          color: device.color.withOpacity(0.4),
-                        ),
-                      ]
-                    : null,
+            // Inner joystick visualizer
+            AnimatedSlide(
+              offset: stickOffset,
+              duration: const Duration(milliseconds: 100),
+              curve: Curves.easeOutQuad,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 100),
+                width: size * 0.5,
+                height: size * 0.5,
+                decoration: BoxDecoration(
+                  color: device.color,
+                  shape: BoxShape.circle,
+                  boxShadow: input.buttonPressed
+                      ? [
+                          BoxShadow(
+                            color: device.color.withValues(alpha: 0.6),
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                          ),
+                        ]
+                      : [],
+                ),
               ),
             ),
           ],

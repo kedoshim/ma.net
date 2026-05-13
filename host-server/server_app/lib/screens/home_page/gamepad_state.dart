@@ -3,17 +3,33 @@ import 'package:flutter/material.dart';
 import '../../services/host_api_service.dart';
 
 class DeviceInputState {
-  final double x;
-  final double y;
-  final bool isButtonPressed;
+  final double stickX;
+  final double stickY;
+  final bool buttonPressed;
   final DateTime? lastActivity;
 
   const DeviceInputState({
-    this.x = 0,
-    this.y = 0,
-    this.isButtonPressed = false,
+    this.stickX = 0.0,
+    this.stickY = 0.0,
+    this.buttonPressed = false,
     this.lastActivity,
   });
+
+  factory DeviceInputState.idle() => const DeviceInputState();
+
+  DeviceInputState copyWith({
+    double? stickX,
+    double? stickY,
+    bool? buttonPressed,
+    DateTime? lastActivity,
+  }) {
+    return DeviceInputState(
+      stickX: stickX ?? this.stickX,
+      stickY: stickY ?? this.stickY,
+      buttonPressed: buttonPressed ?? this.buttonPressed,
+      lastActivity: lastActivity ?? this.lastActivity,
+    );
+  }
 }
 
 class GamepadState extends ChangeNotifier {
@@ -21,7 +37,7 @@ class GamepadState extends ChangeNotifier {
   List<DeviceModel> pool = [];
   List<SlotModel> slots = [];
   StreamSubscription? _subscription;
-  final Map<int, DeviceInputState> slotInputs = {};
+  final Map<String, DeviceInputState> _inputStates = {};
 
   GamepadState(this._api);
 
@@ -33,10 +49,24 @@ class GamepadState extends ChangeNotifier {
 
   void initialize() {
     fetchSlots();
-    _subscription = _api.connectAdminSocket().listen((state) {
-      pool = state.pool;
-      slots = state.slots;
-      notifyListeners();
+    _subscription = _api.connectAdminSocket().listen((data) {
+      if (data['type'] == 'slot_update') {
+        final state = AssignementStat.fromJson(data['data']);
+        pool = state.pool;
+        slots = state.slots;
+        notifyListeners();
+      } else if (data['type'] == 'input_event') {
+        final deviceId = data['deviceId'];
+        if (data['event'] == 'stick') {
+          updateJoystick(
+            deviceId,
+            (data['x'] as num).toDouble(),
+            (data['y'] as num).toDouble(),
+          );
+        } else if (data['event'] == 'button') {
+          updateButton(deviceId, data['state'] == 'down');
+        }
+      }
     });
   }
 
@@ -150,14 +180,26 @@ class GamepadState extends ChangeNotifier {
     }
   }
 
-  void updateSlotInput(int slot, double x, double y, bool pressed) {
-    slotInputs[slot] = DeviceInputState(
-      x: x,
-      y: y,
-      isButtonPressed: pressed,
+  DeviceInputState? getInputState(String deviceId) {
+    return _inputStates[deviceId];
+  }
+
+  void updateJoystick(String deviceId, double x, double y) {
+    final current = _inputStates[deviceId] ?? DeviceInputState.idle();
+    _inputStates[deviceId] = current.copyWith(
+      stickX: x,
+      stickY: -y,
       lastActivity: DateTime.now(),
     );
+    notifyListeners();
+  }
 
+  void updateButton(String deviceId, bool isPressed) {
+    final current = _inputStates[deviceId] ?? DeviceInputState.idle();
+    _inputStates[deviceId] = current.copyWith(
+      buttonPressed: isPressed,
+      lastActivity: DateTime.now(),
+    );
     notifyListeners();
   }
 

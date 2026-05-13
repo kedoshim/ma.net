@@ -44,7 +44,9 @@ class SlotModel {
   factory SlotModel.fromJson(Map<String, dynamic> json) {
     return SlotModel(
       slot: json['slot'],
-      device: json['device'] != null ? DeviceModel.fromJson(json['device']) : null,
+      device: json['device'] != null
+          ? DeviceModel.fromJson(json['device'])
+          : null,
       type: json['type'],
     );
   }
@@ -61,9 +63,7 @@ class AssignementStat {
         .map((d) => DeviceModel.fromJson(d))
         .toList();
     List<SlotModel> slots = (json['slots'] as List<dynamic>? ?? [])
-        .map(
-          (s) => SlotModel.fromJson(s),
-        )
+        .map((s) => SlotModel.fromJson(s))
         .toList();
     return AssignementStat(pool: pool, slots: slots);
   }
@@ -148,7 +148,7 @@ class HostApiService {
     }
   }
 
-  Stream<AssignementStat> connectAdminSocket() {
+  Stream<Map<String, dynamic>> connectAdminSocket() {
     final httpUri = Uri.parse(baseUrl);
 
     final wsUri = httpUri.replace(
@@ -159,13 +159,7 @@ class HostApiService {
     final channel = WebSocketChannel.connect(wsUri);
 
     return channel.stream.map((message) {
-      final data = json.decode(message);
-
-      if (data['type'] == 'slot_update') {
-        return AssignementStat.fromJson(data['data']);
-      }
-
-      throw Exception('Unknown message type');
+      return json.decode(message) as Map<String, dynamic>;
     });
   }
 
