@@ -91,8 +91,8 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
 
     gamepad_type = config_type
 
-    if config_type not in ("ds4", "x360"):
-        total_xinput = count_xinput_connected() + existing_x360_count
+    if gamepad_type not in ("ds4", "x360"):
+        total_xinput = count_xinput_connected()
 
         if total_xinput >= 4:
             LOG.debug("XInput limit reached. Falling back to DS4.")
@@ -101,9 +101,17 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
             gamepad_type = "x360"
 
     if gamepad_type == "ds4":
-        gamepad = vg.VDS4Gamepad()
+        try:
+            gamepad = vg.VDS4Gamepad()
+        except Exception as e:
+            LOG.error("Failed to create DS4 gamepad: %s", e)
+            raise
     else:
-        gamepad = vg.VX360Gamepad()
+        try:
+            gamepad = vg.VX360Gamepad()
+        except Exception as e:
+            LOG.error("Failed to create X360 gamepad: %s", e)
+            raise
 
     gamepad.register_notification(
         callback_function=rumble_callback

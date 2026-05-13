@@ -8,6 +8,7 @@ void main() async {
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
+    DeviceOrientation.portraitUp,
   ]);
 
   runApp(const ControllerApp());
@@ -18,36 +19,10 @@ class ControllerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ma•net',
-      home: const OrientationWrapper(),
+      home: ControllerScreen(),
     );
-  }
-}
-
-class OrientationWrapper extends StatelessWidget {
-  const OrientationWrapper({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
-    if (size.height > size.width) {
-      final aspectHeight = size.width * 9 / 16;
-
-      return Scaffold(
-        body: Align(
-          alignment: Alignment.bottomCenter,
-          child: SizedBox(
-            width: size.width,
-            height: aspectHeight,
-            child: const ControllerScreen(),
-          ),
-        ),
-      );
-    }
-
-    return const ControllerScreen();
   }
 }

@@ -20,6 +20,23 @@ async def notify_device_slot(manager, device_id):
     except Exception as e:
         LOG.error("Failed to notify device: %s", e)
 
+async def notify_device_unassigned(manager, device_id):
+    ws = manager.get_ws_by_device(device_id)
+
+    if not ws:
+        return
+
+    try:
+        await ws.send_json({
+            "type": "unassigned"
+        })
+        LOG.info(
+            "Unassigned device %s",
+            device_id
+        )
+    except Exception as e:
+        LOG.error("Failed to notify device unassigned: %s", e)
+
 def reset_slot_gamepad(slot):
     try:
         slot.gamepad.reset()

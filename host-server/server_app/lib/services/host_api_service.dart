@@ -5,9 +5,9 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/material.dart';
 
 Color colorFromHex(String hex) {
-    final cleaned = hex.replaceAll('#', '');
-    return Color(int.parse('FF$cleaned', radix: 16));
-  }
+  final cleaned = hex.replaceAll('#', '');
+  return Color(int.parse('FF$cleaned', radix: 16));
+}
 
 class DeviceModel {
   final String id;
@@ -15,34 +15,57 @@ class DeviceModel {
   final Color color;
   final String? type;
 
-  DeviceModel({required this.id, required this.name, required this.color, this.type});
+  DeviceModel({
+    required this.id,
+    required this.name,
+    required this.color,
+    this.type,
+  });
 
   factory DeviceModel.fromJson(Map<String, dynamic> json) {
     return DeviceModel(
       id: json['deviceId'],
       name: json['name'] ?? json['deviceId'],
-      color: json['color'] != null ? colorFromHex(json['color']) : AppTheme.primaryText,
+      color: json['color'] != null
+          ? colorFromHex(json['color'])
+          : AppTheme.primaryText,
       type: json['type'],
     );
   }
 }
 
-class SlotState {
+class SlotModel {
+  final int slot;
+  DeviceModel? device;
+  final String? type;
+
+  SlotModel({required this.slot, this.device, this.type});
+
+  factory SlotModel.fromJson(Map<String, dynamic> json) {
+    return SlotModel(
+      slot: json['slot'],
+      device: json['device'] != null ? DeviceModel.fromJson(json['device']) : null,
+      type: json['type'],
+    );
+  }
+}
+
+class AssignementStat {
   final List<DeviceModel> pool;
-  final List<DeviceModel?> slots;
+  final List<SlotModel> slots;
 
-  SlotState({required this.pool, required this.slots});
+  AssignementStat({required this.pool, required this.slots});
 
-  factory SlotState.fromJson(Map<String, dynamic> json) {
+  factory AssignementStat.fromJson(Map<String, dynamic> json) {
     List<DeviceModel> pool = (json['pool'] as List<dynamic>? ?? [])
         .map((d) => DeviceModel.fromJson(d))
         .toList();
-    List<DeviceModel?> slots = (json['slots'] as List<dynamic>? ?? [])
+    List<SlotModel> slots = (json['slots'] as List<dynamic>? ?? [])
         .map(
-          (s) => s['device'] != null ? DeviceModel.fromJson(s['device']) : null,
+          (s) => SlotModel.fromJson(s),
         )
         .toList();
-    return SlotState(pool: pool, slots: slots);
+    return AssignementStat(pool: pool, slots: slots);
   }
 }
 
@@ -50,32 +73,23 @@ class ConnectionInfo {
   final String url;
   final String wsUrl;
 
-  ConnectionInfo({
-    required this.url,
-    required this.wsUrl,
-  });
+  ConnectionInfo({required this.url, required this.wsUrl});
 
   factory ConnectionInfo.fromJson(Map<String, dynamic> json) {
-    return ConnectionInfo(
-      url: json['url'],
-      wsUrl: json['wsUrl'],
-    );
+    return ConnectionInfo(url: json['url'], wsUrl: json['wsUrl']);
   }
 }
 
 class HostApiService {
   final String baseUrl;
 
-  HostApiService({
-    required String host,
-    required int port,
-  }) : baseUrl = 'http://$host:$port';
+  HostApiService({required String host, required int port})
+    : baseUrl = 'http://$host:$port';
 
-  Future<SlotState> fetchSlots() async {
+  Future<AssignementStat> fetchSlots() async {
     final response = await http.get(Uri.parse('$baseUrl/api/slots'));
     if (response.statusCode == 200) {
-      print("Response: ${response.body}");
-      return SlotState.fromJson(json.decode(response.body));
+      return AssignementStat.fromJson(json.decode(response.body));
     } else {
       throw Exception('Failed to fetch slots');
     }
@@ -134,7 +148,7 @@ class HostApiService {
     }
   }
 
-  Stream<SlotState> connectAdminSocket() {
+  Stream<AssignementStat> connectAdminSocket() {
     final httpUri = Uri.parse(baseUrl);
 
     final wsUri = httpUri.replace(
@@ -148,7 +162,7 @@ class HostApiService {
       final data = json.decode(message);
 
       if (data['type'] == 'slot_update') {
-        return SlotState.fromJson(data['data']);
+        return AssignementStat.fromJson(data['data']);
       }
 
       throw Exception('Unknown message type');
@@ -161,9 +175,7 @@ class HostApiService {
     );
 
     if (response.statusCode == 200) {
-      return ConnectionInfo.fromJson(
-        json.decode(response.body),
-      );
+      return ConnectionInfo.fromJson(json.decode(response.body));
     } else {
       throw Exception('Failed to fetch connection info');
     }

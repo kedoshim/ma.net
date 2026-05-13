@@ -55,7 +55,8 @@ class ControllerManager:
     def register_device(self, device_id, player_name=None):
         self.connected_devices[device_id] = {
             "deviceId": device_id,
-            "name": player_name or device_id
+            "name": player_name or device_id,
+            "color": self.get_device_color(device_id)
         }
 
     def unregister_device(self, device_id):

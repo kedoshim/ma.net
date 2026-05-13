@@ -4,7 +4,7 @@ from io import BytesIO
 from aiohttp import web
 
 from src.services.qr_service import generate_qr_code_image
-from src.core.slot_handler import notify_device_slot
+from src.core.slot_handler import notify_device_slot, notify_device_unassigned
 from src.utils.network import get_best_access_url, get_local_ipv4_addresses
 
 import logging
@@ -128,5 +128,6 @@ class HTTPRoutes:
         data = await request.json()
         slot_index = data['slotIndex']
         self.manager.unassign_slot(slot_index)
+        await notify_device_unassigned(self.manager, self.manager.slots[slot_index].assigned_device_id)
         self.admin_panel.broadcast_update()
         return web.json_response({'success': True})

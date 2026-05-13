@@ -17,13 +17,49 @@ class ControllerScreen extends StatefulWidget {
   State<ControllerScreen> createState() => _ControllerScreenState();
 }
 
-class _ControllerScreenState extends State<ControllerScreen> {
+class ConnectionManager {
+  ConnectionManager._();
+  static final ConnectionManager instance = ConnectionManager._();
+
+  WebSocketService? ws;
+
+  Future<WebSocketService> getConnection() async {
+    ws ??= await _createConnection();
+    return ws!;
+  }
+
+  Future<WebSocketService> _createConnection() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    String? deviceId = prefs.getString('device_id');
+
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await prefs.setString('device_id', deviceId);
+    }
+
+    final wsUri = Uri(
+      scheme: Uri.base.scheme == 'https' ? 'wss' : 'ws',
+      host: prefs.getString('server_host') ?? Uri.base.host,
+      port: prefs.getInt('server_port') ?? Uri.base.port,
+      path: '/ws',
+      queryParameters: {'deviceId': deviceId},
+    );
+
+    return WebSocketService.connectUri(wsUri);
+  }
+}
+
+class _ControllerScreenState extends State<ControllerScreen>
+    with AutomaticKeepAliveClientMixin {
   WebSocketService? ws;
   String status = 'Conectando...';
-  int playerIndex = 0;
+  int? playerIndex;
   bool dpadMode = false;
   bool editMode = false;
   Color? playerColor;
+
+  bool _listenerAttached = false;
 
   Color colorFromHex(String hex) {
     final cleaned = hex.replaceAll('#', '');
@@ -44,27 +80,13 @@ class _ControllerScreenState extends State<ControllerScreen> {
   };
 
   Future<void> _connectWebSocket() async {
-    final prefs = await SharedPreferences.getInstance();
+    if (ws != null) return;
 
-    String? deviceId = prefs.getString('device_id');
+    if (_listenerAttached) return;
+    
+    _listenerAttached = true;
 
-    if (deviceId == null) {
-      deviceId = const Uuid().v4();
-      await prefs.setString('device_id', deviceId);
-    }
-
-    print(Uri.base.host);
-    print(Uri.base.port);
-
-    final wsUri = Uri(
-      scheme: Uri.base.scheme == 'https' ? 'wss' : 'ws',
-      host: prefs.getString('server_host') ?? Uri.base.host,
-      port: prefs.getInt('server_port') ?? Uri.base.port,
-      path: '/ws',
-      queryParameters: {'deviceId': deviceId},
-    );
-
-    ws = await WebSocketService.connectUri(wsUri);
+    ws = await ConnectionManager.instance.getConnection();
 
     ws!.channel.stream.listen(
       _handleWebSocketMessage,
@@ -82,6 +104,9 @@ class _ControllerScreenState extends State<ControllerScreen> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
     _loadInitialTheme();
@@ -90,7 +115,6 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
   @override
   void dispose() {
-    ws?.dispose();
     super.dispose();
   }
 
@@ -113,29 +137,43 @@ class _ControllerScreenState extends State<ControllerScreen> {
     if (message is String) {
       try {
         final dynamic data = jsonDecode(message);
+
         if (data is Map<String, dynamic>) {
-          if (data['type'] == 'assigned' && data['slot'] != null) {
+          if (data['type'] == 'assigned') {
             _updatePlayerSlot(data['slot'], colorHex: data['color']);
           }
-          if (data['type'] == 'slot_changed' && data['slot'] != null) {
+
+          if (data['type'] == 'slot_changed') {
             _updatePlayerSlot(data['slot'], colorHex: data['color']);
           }
+
+          if (data['type'] == 'unassigned') {
+            _clearPlayerSlot();
+          }
+
           if (data['type'] == 'toggle_btn' && data['btn'] != null) {
             final id = 'btn${(data['btn'] as String).toUpperCase()}';
             final visible = data['visible'] != false;
+
             setState(() {
               visibleButtons[id] = visible;
             });
           }
         }
-      } catch (_) {
-        // ignore errors
-      }
+      } catch (_) {}
     }
   }
 
+  void _clearPlayerSlot() {
+    debugPrint('Player unassigned');
+    setState(() {
+      playerIndex = null;
+      status = 'Aguardando slot';
+    });
+  }
+
   Widget _buildPlayerIndicator() {
-    final selectedIndex = playerIndex - 1;
+    final selectedIndex = playerIndex != null ? playerIndex! - 1 : null;
     return LayoutBuilder(
       builder: (context, constraints) {
         final squareSize = ((constraints.maxWidth - 32) / 4).clamp(12.0, 22.0);
@@ -151,7 +189,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
     );
   }
 
-  Widget _buildIndicatorRow(int selectedIndex, int offset, double squareSize) {
+  Widget _buildIndicatorRow(int? selectedIndex, int offset, double squareSize) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(4, (index) {
@@ -297,6 +335,8 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    
     return Scaffold(
       body: Container(
         color: AppColors.screenBackground,

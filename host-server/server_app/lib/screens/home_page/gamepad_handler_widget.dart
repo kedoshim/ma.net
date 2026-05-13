@@ -6,16 +6,19 @@ import 'package:server_app/theme/app_theme.dart';
 import 'package:styled_divider/styled_divider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'dart:math' as math;
 
 enum DragSource { pool, slot }
 
 class DragData {
-  final DeviceModel device;
+  final DeviceModel? device;
   final DragSource source;
   final int? slotIndex;
 
   DragData({required this.device, required this.source, this.slotIndex});
 }
+
+
 
 Expanded gamepadHandlerWidget(BuildContext context) {
   final state = Provider.of<GamepadState>(context);
@@ -86,27 +89,49 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                                       ),
                               ),
                               clipBehavior: Clip.hardEdge,
-                              child: ListView(
-                                padding: EdgeInsets.zero,
-                                shrinkWrap: true,
-                                scrollDirection: Axis.horizontal,
-                                children: state.pool.map((device) {
-                                  return Draggable<DragData>(
-                                    data: DragData(
-                                      device: device,
-                                      source: DragSource.pool,
-                                    ),
-                                    feedback: _buildDeviceWidget(
-                                      device,
-                                      isDragging: true,
-                                    ),
-                                    childWhenDragging: Opacity(
-                                      opacity: 0.5,
-                                      child: _buildDeviceWidget(device),
-                                    ),
-                                    child: _buildDeviceWidget(device),
-                                  );
-                                }).toList(),
+                              child: SizedBox(
+                                width: double.infinity,
+                                height: double.infinity,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16.0),
+                                    border: candidateData.isNotEmpty
+                                        ? Border.all(color: Colors.green, width: 2)
+                                        : Border.all(
+                                            color: Colors.transparent,
+                                            width: 2,
+                                          ),
+                                  ),
+                                  child: state.pool.isEmpty
+                                      ? const SizedBox.expand()
+                                      : ListView(
+                                          padding: EdgeInsets.zero,
+                                          scrollDirection: Axis.horizontal,
+                                          children: state.pool.map((device) {
+                                            return Draggable<DragData>(
+                                              dragAnchorStrategy: pointerDragAnchorStrategy,
+                                              data: DragData(
+                                                device: device,
+                                                source: DragSource.pool,
+                                              ),
+                                              feedback: _buildDragFeedback(device),
+                                              childWhenDragging: Opacity(
+                                                opacity: 0.5,
+                                                child: SizedBox(
+                                                  width: 100,
+                                                  height: double.infinity,
+                                                  child: _buildDeviceWidget(device, isOnPool: true),
+                                                ),
+                                              ),
+                                              child: SizedBox(
+                                                width: 100,
+                                                height: double.infinity,
+                                                child: _buildDeviceWidget(device, isOnPool: true),
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                ),
                               ),
                             );
                           },
@@ -151,7 +176,8 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                     crossAxisCount: columns,
                     crossAxisSpacing: 15.0,
                     mainAxisSpacing: 15.0,
-                    childAspectRatio: cellWidth / cellHeight > 0 ? cellWidth / cellHeight
+                    childAspectRatio: cellWidth / cellHeight > 0
+                        ? cellWidth / cellHeight
                         : 1.0,
                   ),
                   itemBuilder: (context, index) {
@@ -160,15 +186,15 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                         final data = details.data;
 
                         if (data.source == DragSource.pool) {
-                          if (state.slots[index] == null) {
-                            state.assignDevice(data.device, index);
+                          if (state.slots[index].device == null) {
+                            state.assignDevice(data.device!, index);
                           } else {
-                            state.replaceSlotDevice(data.device, index);
+                            state.replaceSlotDevice(data.device!, index);
                           }
                         } else if (data.source == DragSource.slot) {
                           if (data.slotIndex == index) return;
 
-                          if (state.slots[index] == null) {
+                          if (state.slots[index].device == null) {
                             state.moveDevice(data.slotIndex!, index);
                           } else {
                             state.swapDevices(data.slotIndex!, index);
@@ -189,22 +215,22 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                           ),
                           child: Stack(
                             children: [
-                              if (state.slots[index] != null)
+                              if (state.slots[index].device != null)
                                 Draggable<DragData>(
+                                  dragAnchorStrategy: pointerDragAnchorStrategy,
                                   data: DragData(
-                                    device: state.slots[index]!,
+                                    device: state.slots[index].device,
                                     source: DragSource.slot,
                                     slotIndex: index,
                                   ),
-                                  feedback: _buildDeviceWidget(
-                                    state.slots[index]!,
-                                    isDragging: true,
+                                  feedback: _buildDragFeedback(
+                                    state.slots[index].device!,
                                   ),
-                                  childWhenDragging: Container(),
+                                  childWhenDragging: const SizedBox.expand(),
                                   child: Center(
                                     child: _buildDeviceWidget(
-                                      state.slots[index]!,
-                                      isOnPool: true,
+                                      state.slots[index].device,
+                                      isOnPool: false,
                                     ),
                                   ),
                                 ),
@@ -239,7 +265,7 @@ Expanded gamepadHandlerWidget(BuildContext context) {
                 );
               },
             ),
-          )
+          ),
         ],
       ),
     ),
@@ -247,38 +273,123 @@ Expanded gamepadHandlerWidget(BuildContext context) {
 }
 
 Widget _buildDeviceWidget(
-  DeviceModel device, {
-  bool isDragging = false,
-  bool isOnPool = false,
+  DeviceModel? device,{
+  isOnPool = true,
 }) {
-  return Container(
-    width: 100.0,
-    height: 120.0,
-    decoration: BoxDecoration(),
-    child: Padding(
-      padding: EdgeInsets.all(5.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Container(width: 100.0, height: isOnPool ? 15.0 : 0.0),
-          Container(
-            width: isDragging ? 110.0 : 100.0,
-            height: isDragging ? 110.0 : 100.0,
-            decoration: BoxDecoration(
-              color: device.color,
-              shape: BoxShape.circle,
-            ),
+  if (device == null) {
+    return const SizedBox.shrink();
+  }
+
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final minDimension = math.min(
+        constraints.maxWidth,
+        constraints.maxHeight,
+      );
+
+      final circleSize = isOnPool ? minDimension* 0.9 : minDimension * 0.4;
+
+      return Center(
+        child: Container(
+          width: circleSize,
+          height: circleSize,
+          decoration: BoxDecoration(
+            color: device.color,
+            shape: BoxShape.circle,
           ),
-          // Text(
-          //   device.name,
-          //   style: AppTheme.bodyMedium.copyWith(
-          //     fontFamily: 'pico',
-          //     letterSpacing: 0.0,
-          //   ),
-          // ),
-        ],
+        ),
+      );
+    },
+  );
+}
+
+Widget _buildDragFeedback(DeviceModel device) {
+  return Material(
+    color: Colors.transparent,
+    child: SizedBox(
+      width: 80,
+      height: 80,
+      child: Center(
+        child: Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: device.color,
+            shape: BoxShape.circle,
+          ),
+        ),
       ),
     ),
   );
+}
+
+class DeviceInputIndicator extends StatelessWidget {
+  final DeviceModel device;
+  final DeviceInputState input;
+  final double size;
+
+  const DeviceInputIndicator({
+    super.key,
+    required this.device,
+    required this.input,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stickOffset = Offset(
+      input.x * size * 0.12,
+      input.y * size * 0.12,
+    );
+
+    return Center(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: input.isButtonPressed ? size * 1.18 : size,
+              height: input.isButtonPressed ? size * 1.18 : size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: device.color.withValues(
+                    alpha: input.isButtonPressed ? 0.7 : 0.25,
+                  ),
+                  width: 4,
+                ),
+              ),
+            ),
+
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 70),
+              transform: Matrix4.translationValues(
+                stickOffset.dx,
+                stickOffset.dy,
+                0,
+              ),
+              width: size * 0.72,
+              height: size * 0.72,
+              decoration: BoxDecoration(
+                color: device.color,
+                shape: BoxShape.circle,
+                boxShadow: input.isButtonPressed
+                    ? [
+                        BoxShadow(
+                          blurRadius: 16,
+                          spreadRadius: 3,
+                          color: device.color.withOpacity(0.4),
+                        ),
+                      ]
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

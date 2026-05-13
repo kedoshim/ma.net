@@ -28,4 +28,13 @@ class ServerConfig:
         "#F97316",  # laranja
         "#EC4899",  # rosa
         "#06B6D4",  # ciano
+        "#800606",  # vermelho
+        "#04256D",  # azul
+        "#704A08",  # amarelo
+        "#045F40",  # verde
+        "#280662",  # roxo
+        "#933D00",  # laranja
+        "#7A003D",  # rosa
+        "#006D81",  # ciano
+
     ]

@@ -64,6 +64,38 @@ class DebugCLI:
                 except Exception:
                     print("Usage: swap <slot_a> <slot_b>")
 
+            elif cmd.startswith("unassign "):
+                try:
+                    _, slot_index = cmd.split()
+                    slot_index = int(slot_index)
+                    self.manager.unassign_slot(slot_index)
+                    print(f"Unassigned slot {slot_index}")
+                except Exception:
+                    print("Usage: unassign <slot_index>")
+
+            elif cmd.startswith("assign "):
+                try:
+                    _, slot_index, device_id = cmd.split()
+                    slot_index = int(slot_index)
+                    self.manager.assign_to_slot(device_id, slot_index)
+                    print(f"Assigned device {device_id} to slot {slot_index}")
+                except Exception:
+                    print("Usage: assign <slot_index> <device_id>")
+
+            elif cmd.startswith("move "):
+                try:
+                    _, from_slot, to_slot = cmd.split()
+                    self.manager.move_slot(int(from_slot), int(to_slot))
+                    print(f"Moved slot {from_slot} -> {to_slot}")
+                except Exception:
+                    print("Usage: move <from_slot> <to_slot>")
+
+            elif cmd == "unassigned":
+                unassigned = self.manager.get_unassigned_devices()
+                print("Unassigned devices:")
+                for device in unassigned:
+                    print(f"  {device['deviceId']} (name: {device['name']})")
+
             elif cmd == "slots":
                 for slot in self.manager.slots:
                     print(
