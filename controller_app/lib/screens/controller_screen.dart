@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/websocket_service.dart';
 import '../widgets/joystick.dart';
 import '../widgets/action_buttons.dart';
@@ -9,6 +10,7 @@ import '../widgets/options_popup.dart';
 import '../theme/app_colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'connection_setup_screen.dart';
 
 class ControllerScreen extends StatefulWidget {
   const ControllerScreen({super.key});
@@ -22,6 +24,11 @@ class ConnectionManager {
   static final ConnectionManager instance = ConnectionManager._();
 
   WebSocketService? ws;
+
+  void disconnect() {
+    // If your WebSocketService has a close method, invoke it here safely
+    ws = null;
+  }
 
   Future<WebSocketService> getConnection() async {
     ws ??= await _createConnection();
@@ -38,8 +45,11 @@ class ConnectionManager {
       await prefs.setString('device_id', deviceId);
     }
 
+    final bool isHttps =
+        prefs.getBool('server_https') ?? (Uri.base.scheme == 'https');
+
     final wsUri = Uri(
-      scheme: Uri.base.scheme == 'https' ? 'wss' : 'ws',
+      scheme: isHttps ? 'wss' : 'ws',
       host: prefs.getString('server_host') ?? Uri.base.host,
       port: prefs.getInt('server_port') ?? Uri.base.port,
       path: '/ws',
@@ -59,6 +69,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   bool editMode = false;
   Color? playerColor;
   int totalSlots = 4;
+  bool _needsSetup = false;
 
   bool _listenerAttached = false;
 
@@ -79,6 +90,20 @@ class _ControllerScreenState extends State<ControllerScreen>
     'btnLT': false,
     'btnLS': false,
   };
+
+  Future<void> _checkSetupRequired() async {
+    final prefs = await SharedPreferences.getInstance();
+    final host = prefs.getString('server_host');
+
+    if (!kIsWeb && host == null) {
+      setState(() {
+        _needsSetup = true;
+      });
+    } else {
+      _loadInitialTheme();
+      _connectWebSocket();
+    }
+  }
 
   Future<void> _connectWebSocket() async {
     if (ws != null) return;
@@ -110,13 +135,29 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   void initState() {
     super.initState();
-    _loadInitialTheme();
-    _connectWebSocket();
+    _checkSetupRequired();
   }
 
   @override
   void dispose() {
     super.dispose();
+  }
+
+  void _resetConnection() async {
+    ConnectionManager.instance.disconnect();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('server_host');
+    await prefs.remove('server_port');
+    await prefs.remove('server_https');
+
+    setState(() {
+      _listenerAttached = false;
+      ws = null;
+      _needsSetup = true;
+      status = 'Desconectado';
+      playerIndex = null;
+    });
   }
 
   void _updatePlayerSlot(dynamic slotValue, {String? colorHex}) {
@@ -280,6 +321,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           editMode: editMode,
           onEditModeChanged: (value) => setState(() => editMode = value),
           onThemeChanged: _onThemeChanged,
+          onRescanRequested: _resetConnection,
         );
       },
     );
@@ -366,6 +408,17 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    if (_needsSetup) {
+      return ConnectionSetupScreen(
+        onConnected: () {
+          setState(() {
+            _needsSetup = false;
+          });
+          _checkSetupRequired();
+        },
+      );
+    }
 
     return Scaffold(
       body: Container(

@@ -5,6 +5,7 @@ import threading
 from src.routes.server_routes import ServerRoutes
 from src.routes.http_routes import HTTPRoutes
 from src.routes.websocket_routes import WebSocketRoutes
+from src.routes.file_routes import FileRoutes
 from src.lifecycle.app_lifecycle import AppLifecycle
 from src.routes.register_routes import register_all_routes
 from src.bootstrap.dependencies import build_dependencies
@@ -46,11 +47,14 @@ def create_app(config):
         admin_panel
     )
 
+    file_routes = FileRoutes()
+
     register_all_routes(
         app,
         server_routes,
         http_routes,
-        websocket_routes
+        websocket_routes,
+        file_routes
     )
 
     for route in list(app.router.routes()):

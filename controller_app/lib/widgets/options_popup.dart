@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 
 class OptionsPopup extends StatefulWidget {
   final bool dpadMode;
@@ -10,6 +12,7 @@ class OptionsPopup extends StatefulWidget {
   final bool editMode;
   final ValueChanged<bool> onEditModeChanged;
   final ValueChanged<ColorTheme> onThemeChanged;
+  final VoidCallback? onRescanRequested;
 
   const OptionsPopup({
     super.key,
@@ -20,6 +23,7 @@ class OptionsPopup extends StatefulWidget {
     required this.editMode,
     required this.onEditModeChanged,
     required this.onThemeChanged,
+    this.onRescanRequested,
   });
 
   @override
@@ -82,17 +86,14 @@ class _OptionsPopupState extends State<OptionsPopup> {
             style: TextStyle(
               fontFamily: 'pico',
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary
+              color: AppColors.textPrimary,
             ),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             style: TextButton.styleFrom(
               minimumSize: const Size(40, 40),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -170,6 +171,50 @@ class _OptionsPopupState extends State<OptionsPopup> {
             const SizedBox(height: 8),
             // Action Button Toggles
             ..._buildButtonToggles(),
+
+            if (kIsWeb) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(
+                  Icons.android,
+                  color: AppColors.textPrimary,
+                ),
+                title: const Text(
+                  'Download Android App',
+                  style: TextStyle(
+                    fontFamily: 'pico',
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                onTap: () async {
+                  final url = Uri.base.resolve('/apk');
+                  try {
+                    await launchUrl(url, webOnlyWindowName: '_blank');
+                  } catch (e) {
+                    debugPrint('Could not launch download URL: $e');
+                  }
+                },
+              ),
+            ] else ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(
+                  Icons.qr_code_scanner,
+                  color: AppColors.textPrimary,
+                ),
+                title: const Text(
+                  'Scan New Host',
+                  style: TextStyle(
+                    fontFamily: 'pico',
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  widget.onRescanRequested?.call();
+                },
+              ),
+            ],
           ],
         ),
       ),
