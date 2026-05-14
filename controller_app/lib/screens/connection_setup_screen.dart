@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
 import '../services/network_discovery_service.dart';
+import '../services/preferences_service.dart';
 import 'qr_scanner_screen.dart';
 
 class ConnectionSetupScreen extends StatefulWidget {
@@ -35,10 +35,7 @@ class _ConnectionSetupScreenState extends State<ConnectionSetupScreen> {
   }
 
   Future<void> _connectToHost(DiscoveredHost host) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('server_host', host.ip);
-    await prefs.setInt('server_port', host.port);
-    await prefs.setBool('server_https', false);
+    await PreferencesService.instance.saveConnection(host.ip, host.port, false);
 
     widget.onConnected();
   }

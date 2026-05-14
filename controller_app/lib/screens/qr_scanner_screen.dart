@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/preferences_service.dart';
 import '../theme/app_colors.dart';
 
 class QRScannerScreen extends StatefulWidget {
@@ -29,10 +29,11 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               _isProcessing = true;
             });
 
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('server_host', uri.host);
-            await prefs.setInt('server_port', uri.port);
-            await prefs.setBool('server_https', uri.scheme == 'https');
+            await PreferencesService.instance.saveConnection(
+              uri.host,
+              uri.port,
+              uri.scheme == 'https',
+            );
 
             if (mounted) {
               Navigator.of(context).pop();

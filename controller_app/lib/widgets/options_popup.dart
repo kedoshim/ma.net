@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
@@ -11,6 +10,7 @@ class OptionsPopup extends StatefulWidget {
   final ValueChanged<String> onButtonVisibilityChanged;
   final bool editMode;
   final ValueChanged<bool> onEditModeChanged;
+  final ColorTheme currentTheme;
   final ValueChanged<ColorTheme> onThemeChanged;
   final VoidCallback? onRescanRequested;
 
@@ -22,6 +22,7 @@ class OptionsPopup extends StatefulWidget {
     required this.onButtonVisibilityChanged,
     required this.editMode,
     required this.onEditModeChanged,
+    required this.currentTheme,
     required this.onThemeChanged,
     this.onRescanRequested,
   });
@@ -33,38 +34,14 @@ class OptionsPopup extends StatefulWidget {
 class _OptionsPopupState extends State<OptionsPopup> {
   late bool _dpadMode;
   late bool _editMode;
-  late bool _isHovering = false;
-  ColorTheme _selectedTheme = ColorTheme.blue;
+  late ColorTheme _selectedTheme;
 
   @override
   void initState() {
     super.initState();
     _dpadMode = widget.dpadMode;
     _editMode = widget.editMode;
-    _loadTheme();
-  }
-
-  Future<void> _loadTheme() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final themeIndex = prefs.getInt('selectedTheme') ?? 0;
-      setState(() {
-        _selectedTheme = ColorTheme.values[themeIndex];
-      });
-    } catch (e) {
-      setState(() {
-        _selectedTheme = ColorTheme.blue;
-      });
-    }
-  }
-
-  Future<void> _saveTheme(ColorTheme theme) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('selectedTheme', theme.index);
-    } catch (e) {
-      debugPrint('Error saving theme: $e');
-    }
+    _selectedTheme = widget.currentTheme;
   }
 
   @override
@@ -257,7 +234,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
               _selectedTheme = theme;
             });
             AppColors.setTheme(theme);
-            _saveTheme(theme);
             widget.onThemeChanged(theme);
           },
           child: Column(

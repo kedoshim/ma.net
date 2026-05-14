@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/preferences_service.dart';
 import '../theme/app_colors.dart';
 
 typedef ButtonStateCallback = void Function(String xinputId, String state);
@@ -46,8 +46,7 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   Future<void> _loadButtonOrder() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedOrder = prefs.getStringList('buttonOrder');
+      final savedOrder = await PreferencesService.instance.getButtonOrder();
 
       setState(() {
         _buttonOrder = savedOrder ?? _defaultButtonOrder.toList();
@@ -63,8 +62,7 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   Future<void> _saveButtonOrder() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList('buttonOrder', _buttonOrder);
+      await PreferencesService.instance.setButtonOrder(_buttonOrder);
     } catch (e) {
       debugPrint('Error saving button order: $e');
     }

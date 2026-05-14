@@ -9,8 +9,7 @@ import '../widgets/action_buttons.dart';
 import '../widgets/control_button.dart';
 import '../widgets/options_popup.dart';
 import '../theme/app_colors.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
+import '../services/preferences_service.dart';
 import 'connection_setup_screen.dart';
 
 class ControllerScreen extends StatefulWidget {
@@ -37,22 +36,16 @@ class ConnectionManager {
   }
 
   Future<WebSocketService> _createConnection() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = PreferencesService.instance;
 
-    String? deviceId = prefs.getString('device_id');
-
-    if (deviceId == null) {
-      deviceId = const Uuid().v4();
-      await prefs.setString('device_id', deviceId);
-    }
-
+    final deviceId = await prefs.getDeviceId();
     final bool isHttps =
-        prefs.getBool('server_https') ?? (Uri.base.scheme == 'https');
+        await prefs.getServerHttps() ?? (Uri.base.scheme == 'https');
 
     final wsUri = Uri(
       scheme: isHttps ? 'wss' : 'ws',
-      host: prefs.getString('server_host') ?? Uri.base.host,
-      port: prefs.getInt('server_port') ?? Uri.base.port,
+      host: await prefs.getServerHost() ?? Uri.base.host,
+      port: await prefs.getServerPort() ?? Uri.base.port,
       path: '/ws',
       queryParameters: {'deviceId': deviceId},
     );
@@ -71,6 +64,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   Color? playerColor;
   int totalSlots = 4;
   bool _needsSetup = false;
+  ColorTheme _currentTheme = ColorTheme.blue;
 
   bool _listenerAttached = false;
 
@@ -93,15 +87,14 @@ class _ControllerScreenState extends State<ControllerScreen>
   };
 
   Future<void> _checkSetupRequired() async {
-    final prefs = await SharedPreferences.getInstance();
-    final host = prefs.getString('server_host');
+    final host = await PreferencesService.instance.getServerHost();
 
     if (!kIsWeb && host == null) {
       setState(() {
         _needsSetup = true;
       });
     } else {
-      _loadInitialTheme();
+      await _loadInitialPreferences();
       _connectWebSocket();
     }
   }
@@ -151,11 +144,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   void _resetConnection() async {
     ConnectionManager.instance.disconnect();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('server_host');
-    await prefs.remove('server_port');
-    await prefs.remove('server_https');
-
+    await PreferencesService.instance.clearConnection();
     setState(() {
       _listenerAttached = false;
       ws = null;
@@ -166,8 +155,11 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _updatePlayerSlot(dynamic slotValue, {String? colorHex}) {
+    final slot = (slotValue as num).toInt();
+    PreferencesService.instance.setLastKnownSlot(slot);
+
     setState(() {
-      playerIndex = (slotValue as num).toInt() + 1;
+      playerIndex = slot + 1;
       status = 'Conectado';
 
       if (colorHex != null) {
@@ -320,11 +312,15 @@ class _ControllerScreenState extends State<ControllerScreen>
       builder: (BuildContext context) {
         return OptionsPopup(
           dpadMode: dpadMode,
-          onDpadModeChanged: (value) => setState(() => dpadMode = value),
+          onDpadModeChanged: (value) {
+            setState(() => dpadMode = value);
+            PreferencesService.instance.setDpadMode(value);
+          },
           buttonVisibility: visibleButtons,
           onButtonVisibilityChanged: _toggleButtonVisibility,
           editMode: editMode,
           onEditModeChanged: (value) => setState(() => editMode = value),
+          currentTheme: _currentTheme,
           onThemeChanged: _onThemeChanged,
           onRescanRequested: _resetConnection,
         );
@@ -336,22 +332,32 @@ class _ControllerScreenState extends State<ControllerScreen>
     setState(() {
       visibleButtons[buttonKey] = !(visibleButtons[buttonKey] ?? true);
     });
+    PreferencesService.instance.setButtonVisibility(visibleButtons);
   }
 
-  Future<void> _loadInitialTheme() async {
+  Future<void> _loadInitialPreferences() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final themeIndex = prefs.getInt('selectedTheme') ?? 0;
-      final theme = ColorTheme.values[themeIndex];
-      AppColors.setTheme(theme);
-      setState(() {});
+      final prefs = PreferencesService.instance;
+
+      final themeIndex = await prefs.getSelectedTheme();
+      _currentTheme = ColorTheme.values[themeIndex];
+      AppColors.setTheme(_currentTheme);
+
+      dpadMode = await prefs.getDpadMode();
+
+      final savedVisibility = await prefs.getButtonVisibility();
+      if (savedVisibility != null) {
+        visibleButtons.addAll(savedVisibility);
+      }
     } catch (e) {
       AppColors.setTheme(ColorTheme.blue);
     }
+    if (mounted) setState(() {});
   }
 
   void _onThemeChanged(ColorTheme theme) {
-    setState(() {});
+    setState(() => _currentTheme = theme);
+    PreferencesService.instance.setSelectedTheme(theme.index);
   }
 
   Widget _buildDpad() {
