@@ -12,18 +12,6 @@ import '../../services/host_api_service.dart';
 import '../../services/server_process_service.dart';
 import '../start_page/start_page_widget.dart';
 
-// Helper function to insert dividers between list items
-List<Widget> divideList(List<Widget> items, Widget divider) {
-  if (items.isEmpty) return items;
-  List<Widget> result = [];
-  for (int i = 0; i < items.length; i++) {
-    result.add(items[i]);
-    if (i < items.length - 1) {
-      result.add(divider);
-    }
-  }
-  return result;
-}
 
 class HomePageScreen extends StatelessWidget {
   final String host;
@@ -191,19 +179,14 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              // LEFT SIDE
-                              gamepadHandlerWidget(context),
-                              const SizedBox(width: 25),
-                              // RIGHT SIDE
-                              isLoadingConnection
-                                  ? const CircularProgressIndicator()
-                                  : connectionMethodsContainer(
-                                      connectionInfo?.url ?? "Unavailable",
-                                      qrCodeUrl: _api.getQrCodeUrl(),
-                                    ),
+                              Expanded(
+                                child: AdaptiveStageLayout(
+                                  connectionInfo: connectionInfo,
+                                  qrCodeUrl: _api.getQrCodeUrl(),
+                                  isLoadingConnection: isLoadingConnection,
+                                ),
+                              ),
                             ],
                           ),
                         ),

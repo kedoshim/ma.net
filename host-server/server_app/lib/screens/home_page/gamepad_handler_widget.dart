@@ -7,6 +7,16 @@ import 'package:styled_divider/styled_divider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
+import 'qr_code_container.dart';
+
+class UIScale {
+  final double slot;
+  const UIScale(this.slot);
+
+  double get half => slot / 2;
+  double get quarter => slot / 4;
+  double get eighth => slot / 8;
+}
 
 enum DragSource { pool, slot }
 
@@ -18,329 +28,408 @@ class DragData {
   DragData({required this.device, required this.source, this.slotIndex});
 }
 
-Expanded gamepadHandlerWidget(BuildContext context) {
-  final state = Provider.of<GamepadState>(context);
+class AdaptiveStageLayout extends StatelessWidget {
+  final ConnectionInfo? connectionInfo;
+  final String qrCodeUrl;
+  final bool isLoadingConnection;
 
-  return Expanded(
-    flex: 40,
-    child: Container(
-      decoration: BoxDecoration(),
-      child: Column(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Device Pool Area
-          Flexible(
-            child: Container(
-              width: MediaQuery.sizeOf(context).width * 1.0,
-              height: 200.0,
-              decoration: BoxDecoration(),
+  const AdaptiveStageLayout({
+    super.key,
+    required this.connectionInfo,
+    required this.qrCodeUrl,
+    required this.isLoadingConnection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth / constraints.maxHeight > 1.2;
+        if (isWide) {
+          return WideStageLayout(
+            connectionInfo: connectionInfo,
+            qrCodeUrl: qrCodeUrl,
+            isLoadingConnection: isLoadingConnection,
+          );
+        } else {
+          return CompactStageLayout(
+            connectionInfo: connectionInfo,
+            qrCodeUrl: qrCodeUrl,
+            isLoadingConnection: isLoadingConnection,
+          );
+        }
+      },
+    );
+  }
+}
+
+class WideStageLayout extends StatelessWidget {
+  final ConnectionInfo? connectionInfo;
+  final String qrCodeUrl;
+  final bool isLoadingConnection;
+
+  const WideStageLayout({
+    super.key,
+    required this.connectionInfo,
+    required this.qrCodeUrl,
+    required this.isLoadingConnection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final state = Provider.of<GamepadState>(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        final totalHeight = constraints.maxHeight;
+
+        final leftWidth = totalWidth * 0.75;
+        final rightWidth = totalWidth * 0.25;
+
+        const columns = 4;
+        final rows = (math.max(4, state.slots.length) / columns).ceil();
+
+        final widthFactor = columns + (columns - 1) / 8.0;
+        // +1.5 logic reserves ample room vertically for the DevicePoolArea
+        final heightFactor = rows + (rows - 1) / 8.0 + 0.95;
+
+        final slotSize = math
+            .min(leftWidth / widthFactor, totalHeight / heightFactor)
+            .clamp(40.0, 400.0);
+        final scale = UIScale(slotSize);
+
+        return Row(
+          children: [
+            SizedBox(
+              width: leftWidth,
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(
-                      0.0,
-                      0.0,
-                      0.0,
-                      10.0,
-                    ),
-                    child: Text(
-                      'conectados:',
-                      style: AppTheme.titleLarge.copyWith(
-                        fontFamily: 'pico',
-                        letterSpacing: 0.0,
-                      ),
-                    ),
-                  ),
-                  StyledDivider(
-                    thickness: 2.0,
-                    indent: 15.0,
-                    endIndent: 15.0,
-                    color: AppTheme.primaryText,
-                    lineStyle: DividerLineStyle.dashed,
-                  ),
-                  Flexible(
-                    child: Container(
-                      width: MediaQuery.sizeOf(context).width * 1.0,
-                      height: 130.0,
-                      decoration: BoxDecoration(),
-                      child: Padding(
-                        padding: EdgeInsets.all(15.0),
-                        child: DragTarget<DragData>(
-                          onAcceptWithDetails: (data) {
-                            if (data.data.source == DragSource.slot) {
-                              state.unassignDevice(data.data.slotIndex!);
-                            }
-                          },
-                          builder: (context, candidateData, rejectedData) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16.0),
-                                border: candidateData.isNotEmpty
-                                    ? Border.all(color: Colors.green, width: 2)
-                                    : Border.all(
-                                        color: Colors.transparent,
-                                        width: 2,
-                                      ),
-                              ),
-                              clipBehavior: Clip.hardEdge,
-                              child: SizedBox(
-                                width: double.infinity,
-                                height: double.infinity,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16.0),
-                                    border: candidateData.isNotEmpty
-                                        ? Border.all(
-                                            color: Colors.green,
-                                            width: 2,
-                                          )
-                                        : Border.all(
-                                            color: Colors.transparent,
-                                            width: 2,
-                                          ),
-                                  ),
-                                  child: state.pool.isEmpty
-                                      ? const SizedBox.expand()
-                                      : ListView(
-                                          padding: EdgeInsets.zero,
-                                          scrollDirection: Axis.horizontal,
-                                          children: state.pool.map((device) {
-                                            final inputState =
-                                                state.getInputState(
-                                                  device.id,
-                                                ) ??
-                                                DeviceInputState.idle();
-                                            return Draggable<DragData>(
-                                              dragAnchorStrategy:
-                                                  pointerDragAnchorStrategy,
-                                              data: DragData(
-                                                device: device,
-                                                source: DragSource.pool,
-                                              ),
-                                              feedback: _buildDragFeedback(
-                                                device,
-                                              ),
-                                              childWhenDragging: Opacity(
-                                                opacity: 0.5,
-                                                child: SizedBox(
-                                                  width: 100,
-                                                  height: double.infinity,
-                                                  child: LayoutBuilder(
-                                                    builder:
-                                                        (context, constraints) {
-                                                          final minDimension =
-                                                              math.min(
-                                                                constraints
-                                                                    .maxWidth,
-                                                                constraints
-                                                                    .maxHeight,
-                                                              );
-                                                          return DeviceInputIndicator(
-                                                            device: device,
-                                                            input: inputState,
-                                                            size: minDimension,
-                                                            isOnPool: true,
-                                                          );
-                                                        },
-                                                  ),
-                                                ),
-                                              ),
-                                              child: SizedBox(
-                                                width: 100,
-                                                height: double.infinity,
-                                                child: LayoutBuilder(
-                                                  builder: (context, constraints) {
-                                                    final minDimension = math
-                                                        .min(
-                                                          constraints.maxWidth,
-                                                          constraints.maxHeight,
-                                                        );
-                                                    return DeviceInputIndicator(
-                                                      device: device,
-                                                      input: inputState,
-                                                      size: minDimension,
-                                                      isOnPool: true,
-                                                    );
-                                                  },
-                                                ),
-                                              ),
-                                            );
-                                          }).toList(),
-                                        ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                  StyledDivider(
-                    thickness: 2.0,
-                    indent: 15.0,
-                    endIndent: 15.0,
-                    color: AppTheme.primaryText,
-                    lineStyle: DividerLineStyle.dashed,
+                  DevicePoolArea(scale: scale),
+                  SizedBox(height: scale.eighth),
+                  SizedBox(
+                    height: scale.slot * rows + scale.eighth/2 * (rows - 1),
+                    width: scale.slot * columns + scale.eighth/2 * (columns - 1),
+                    child: ControllerSlotsGrid(scale: scale),
                   ),
                 ],
               ),
             ),
-          ),
-          // Controller Slots Area
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                const int columns = 4;
-                final int itemCount = state.slots.length;
-
-                final int rows = (itemCount / columns).ceil();
-
-                final double totalSpacingX = (columns - 1) * 15.0;
-                final double totalSpacingY = (rows - 1) * 15.0;
-
-                final double cellWidth =
-                    (constraints.maxWidth - totalSpacingX) / columns;
-
-                final double cellHeight =
-                    (constraints.maxHeight - totalSpacingY) / rows;
-
-                return GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  itemCount: itemCount,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: 15.0,
-                    mainAxisSpacing: 15.0,
-                    childAspectRatio: cellWidth / cellHeight > 0
-                        ? cellWidth / cellHeight
-                        : 1.0,
-                  ),
-                  itemBuilder: (context, index) {
-                    return DragTarget<DragData>(
-                      onAcceptWithDetails: (details) {
-                        final data = details.data;
-
-                        if (data.source == DragSource.pool) {
-                          if (state.slots[index].device == null) {
-                            state.assignDevice(data.device!, index);
-                          } else {
-                            state.replaceSlotDevice(data.device!, index);
-                          }
-                        } else if (data.source == DragSource.slot) {
-                          if (data.slotIndex == index) return;
-
-                          if (state.slots[index].device == null) {
-                            state.moveDevice(data.slotIndex!, index);
-                          } else {
-                            state.swapDevices(data.slotIndex!, index);
-                          }
-                        }
-                      },
-                      builder: (context, candidateData, rejectedData) {
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryBackground,
-                            borderRadius: BorderRadius.circular(16.0),
-                            border: Border.all(
-                              color: candidateData.isNotEmpty
-                                  ? Colors.green
-                                  : AppTheme.primaryText,
-                              width: candidateData.isNotEmpty ? 7.0 : 5.0,
-                            ),
-                          ),
-                          child: Stack(
-                            children: [
-                              if (state.slots[index].device != null)
-                                Draggable<DragData>(
-                                  dragAnchorStrategy: pointerDragAnchorStrategy,
-                                  data: DragData(
-                                    device: state.slots[index].device,
-                                    source: DragSource.slot,
-                                    slotIndex: index,
-                                  ),
-                                  feedback: _buildDragFeedback(
-                                    state.slots[index].device!,
-                                  ),
-                                  childWhenDragging: const SizedBox.expand(),
-                                  child: Center(
-                                    child: LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        final minDimension = math.min(
-                                          constraints.maxWidth,
-                                          constraints.maxHeight,
-                                        );
-                                        final inputState =
-                                            state.getInputState(
-                                              state.slots[index].device!.id,
-                                            ) ??
-                                            DeviceInputState.idle();
-                                        return DeviceInputIndicator(
-                                          device: state.slots[index].device!,
-                                          input: inputState,
-                                          size: minDimension,
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              Positioned(
-                                top: 5,
-                                right: 10,
-                                child: Text(
-                                  state.slots[index]?.type ?? 'xx360',
-                                  style: AppTheme.bodyMedium.copyWith(
-                                    fontFamily: 'pico',
-                                    fontSize: 12.0,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 0,
-                                left: 10,
-                                child: Text(
-                                  'p${index + 1}',
-                                  style: AppTheme.bodyMedium.copyWith(
-                                    fontFamily: 'pico',
-                                    fontSize: 20.0,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
+            SizedBox(
+              width: rightWidth,
+              child: Padding(
+                padding: EdgeInsets.only(left: scale.eighth),
+                child: QRCodePanel(
+                  connectionInfo: connectionInfo,
+                  qrCodeUrl: qrCodeUrl,
+                  isLoadingConnection: isLoadingConnection,
+                  scale: scale,
+                ),
+              ),
             ),
-          ),
-        ],
-      ),
-    ),
-  );
+          ],
+        );
+      },
+    );
+  }
 }
 
-Widget _buildDragFeedback(DeviceModel device) {
+class CompactStageLayout extends StatelessWidget {
+  final ConnectionInfo? connectionInfo;
+  final String qrCodeUrl;
+  final bool isLoadingConnection;
+
+  const CompactStageLayout({
+    super.key,
+    required this.connectionInfo,
+    required this.qrCodeUrl,
+    required this.isLoadingConnection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final state = Provider.of<GamepadState>(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        final totalHeight = constraints.maxHeight;
+
+        const columns = 4;
+        final rows = (math.max(4, state.slots.length) / columns).ceil();
+
+        final widthFactor = columns + (columns - 1) / 8.0;
+        final heightFactor = rows + (rows - 1) / 8.0 + 1.5;
+
+        final availableHeight = totalHeight * 0.7; // Lower 70% available for interactive slots/pool
+        final slotSize = math
+            .min(totalWidth / widthFactor, availableHeight / heightFactor)
+            .clamp(40.0, 400.0);
+        final scale = UIScale(slotSize);
+
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              height: totalHeight * 0.3,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: scale.quarter),
+                child: QRCodePanel(
+                  connectionInfo: connectionInfo,
+                  qrCodeUrl: qrCodeUrl,
+                  isLoadingConnection: isLoadingConnection,
+                  scale: scale,
+                ),
+              ),
+            ),
+            DevicePoolArea(scale: scale),
+            SizedBox(height: scale.quarter),
+            SizedBox(
+              height: scale.slot * rows + scale.eighth * (rows - 1),
+              width: scale.slot * columns + scale.eighth * (columns - 1),
+              child: ControllerSlotsGrid(scale: scale),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class ControllerSlotsGrid extends StatelessWidget {
+  final UIScale scale;
+  const ControllerSlotsGrid({super.key, required this.scale});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = Provider.of<GamepadState>(context);
+    return Wrap(
+      spacing: scale.eighth/2,
+      runSpacing: scale.eighth/2,
+      children: List.generate(state.slots.length, (index) {
+        return ControllerSlotWidget(
+          index: index,
+          slotModel: state.slots[index],
+          scale: scale,
+        );
+      }),
+    );
+  }
+}
+
+class ControllerSlotWidget extends StatelessWidget {
+  final int index;
+  final SlotModel slotModel;
+  final UIScale scale;
+
+  const ControllerSlotWidget({
+    super.key,
+    required this.index,
+    required this.slotModel,
+    required this.scale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final state = Provider.of<GamepadState>(context, listen: false);
+
+    return DragTarget<DragData>(
+      onAcceptWithDetails: (details) {
+        final data = details.data;
+        if (data.source == DragSource.pool) {
+          if (slotModel.device == null) {
+            state.assignDevice(data.device!, index);
+          } else {
+            state.replaceSlotDevice(data.device!, index);
+          }
+        } else if (data.source == DragSource.slot) {
+          if (data.slotIndex == index) return;
+          if (slotModel.device == null) {
+            state.moveDevice(data.slotIndex!, index);
+          } else {
+            state.swapDevices(data.slotIndex!, index);
+          }
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+
+        return Container(
+          width: scale.slot,
+          height: scale.slot,
+          decoration: BoxDecoration(
+            color: AppTheme.primaryBackground,
+            borderRadius: BorderRadius.circular(scale.eighth),
+            border: Border.all(
+              color: isHovered ? Colors.green : AppTheme.primaryText,
+              width: isHovered ? scale.eighth / 3 : scale.eighth / 4,
+            ),
+          ),
+          child: Stack(
+            children: [
+              if (slotModel.device != null)
+                Positioned.fill(
+                  child: Draggable<DragData>(
+                    dragAnchorStrategy: pointerDragAnchorStrategy,
+                    data: DragData(
+                      device: slotModel.device,
+                      source: DragSource.slot,
+                      slotIndex: index,
+                    ),
+                    feedback: _buildDragFeedback(slotModel.device!, scale.quarter),
+                    childWhenDragging: const SizedBox.expand(),
+                    child: Center(
+                      child: DeviceInputIndicator(
+                        device: slotModel.device!,
+                        input: state.getInputState(slotModel.device!.id) ??
+                            DeviceInputState.idle(),
+                        size: scale.half,
+                        isOnPool: false,
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                top: scale.eighth / 2,
+                right: scale.eighth / 2,
+                child: Text(
+                  slotModel.type ?? 'x360',
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontFamily: 'pico',
+                    fontSize: scale.eighth,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: scale.eighth / 2,
+                left: scale.eighth / 2,
+                child: Text(
+                  'p${index + 1}',
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontFamily: 'pico',
+                    fontSize: scale.eighth,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class DevicePoolArea extends StatelessWidget {
+  final UIScale scale;
+  const DevicePoolArea({super.key, required this.scale});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = Provider.of<GamepadState>(context);
+
+    return DragTarget<DragData>(
+      onAcceptWithDetails: (details) {
+        if (details.data.source == DragSource.slot) {
+          state.unassignDevice(details.data.slotIndex!);
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(scale.eighth),
+            border: Border.all(
+              color: isHovered ? Colors.green : Colors.transparent,
+              width: scale.eighth / 4,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: scale.slot * 0.8,
+                width: double.infinity,
+                padding: EdgeInsets.all(scale.eighth),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryText.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(scale.eighth),
+                ),
+                child: state.pool.isEmpty
+                    ? Center(
+                        child: Text(
+                          'players',
+                          style: TextStyle(
+                            fontFamily: 'pico',
+                            fontSize: scale.eighth,
+                            color: AppTheme.primaryText.withValues(alpha: 0.3),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: state.pool.length,
+                        separatorBuilder: (_, __) =>
+                            SizedBox(width: scale.eighth),
+                        itemBuilder: (context, index) {
+                          final device = state.pool[index];
+                          final inputState =
+                              state.getInputState(device.id) ??
+                                  DeviceInputState.idle();
+
+                          return Draggable<DragData>(
+                            dragAnchorStrategy: pointerDragAnchorStrategy,
+                            data: DragData(
+                              device: device,
+                              source: DragSource.pool,
+                            ),
+                            feedback: _buildDragFeedback(device, scale.quarter),
+                            childWhenDragging: Opacity(
+                              opacity: 0.5,
+                              child: DeviceInputIndicator(
+                                device: device,
+                                input: inputState,
+                                size: scale.half,
+                                isOnPool: true,
+                              ),
+                            ),
+                            child: DeviceInputIndicator(
+                              device: device,
+                              input: inputState,
+                              size: scale.half,
+                              isOnPool: true,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+Widget _buildDragFeedback(DeviceModel device, double size) {
   return Material(
     color: Colors.transparent,
-    child: SizedBox(
-      width: 80,
-      height: 80,
-      child: Center(
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            color: device.color,
-            shape: BoxShape.circle,
+    child: Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: device.color,
+        shape: BoxShape.rectangle,
+        borderRadius: BorderRadius.circular(size * 0.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: size * 0.2,
+            spreadRadius: size * 0.05,
           ),
-        ),
+        ],
       ),
     ),
   );
@@ -366,7 +455,10 @@ class DeviceInputIndicator extends StatelessWidget {
     // Moving up to 40% of its size keeps it well contained within the indicator area.
     final stickOffset = isOnPool
         ? Offset.zero
-        : Offset(input.stickX * 0.4, input.stickY * 0.4);
+        : Offset(input.stickX * 0.65, input.stickY * 0.65);
+
+    final shape = isOnPool ? BoxShape.rectangle : BoxShape.circle;
+    final borderRadius = isOnPool ? BorderRadius.circular(size * 0.1) : null;
 
     return Center(
       child: SizedBox(
@@ -380,18 +472,19 @@ class DeviceInputIndicator extends StatelessWidget {
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
               width: input.buttonPressed
-                  ? size * 0.9
-                  : size * (isOnPool ? 0.8 : 0.5),
+                  ? size
+                  : size * (isOnPool ? 0.5 : 0.6),
               height: input.buttonPressed
-                  ? size * 0.9
-                  : size * (isOnPool ? 0.8 : 0.5),
+                  ? size
+                  : size * (isOnPool ? 0.5 : 0.6),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
+                shape: shape,
+                borderRadius: borderRadius,
                 border: Border.all(
                   color: device.color.withValues(
                     alpha: input.buttonPressed ? 0.5 : 0.0,
                   ),
-                  width: input.buttonPressed ? 6 : 0,
+                  width: input.buttonPressed ? size * 0.1 : 0,
                 ),
               ),
             ),
@@ -400,20 +493,21 @@ class DeviceInputIndicator extends StatelessWidget {
             AnimatedSlide(
               offset: stickOffset,
               duration: const Duration(milliseconds: 100),
-              curve: Curves.easeOutQuad,
+              curve: Curves.elasticOut,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 100),
-                width: size * (isOnPool ? 0.8 : 0.5),
-                height: size * (isOnPool ? 0.8 : 0.5),
+                width: size * (isOnPool ? 0.6 : 0.9),
+                height: size * (isOnPool ? 0.6 : 0.9),
                 decoration: BoxDecoration(
                   color: device.color,
-                  shape: BoxShape.circle,
+                  shape: shape,
+                  borderRadius: borderRadius,
                   boxShadow: input.buttonPressed
                       ? [
                           BoxShadow(
                             color: device.color.withValues(alpha: 0.6),
-                            blurRadius: 15,
-                            spreadRadius: 2,
+                            blurRadius: size * 0.2,
+                            spreadRadius: size * 0.05,
                           ),
                         ]
                       : [],

@@ -3,109 +3,106 @@ import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:server_app/theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:server_app/services/host_api_service.dart';
+import 'gamepad_handler_widget.dart';
 
-Expanded connectionMethodsContainer(
-  String connectionUrl, {
-  required String qrCodeUrl,
-}) {
-  Future<void> openLink() async {
+class QRCodePanel extends StatelessWidget {
+  final ConnectionInfo? connectionInfo;
+  final String qrCodeUrl;
+  final bool isLoadingConnection;
+  final UIScale scale;
+
+  const QRCodePanel({
+    super.key,
+    required this.connectionInfo,
+    required this.qrCodeUrl,
+    required this.isLoadingConnection,
+    required this.scale,
+  });
+
+  Future<void> _openLink() async {
+    if (connectionInfo == null) return;
+    final connectionUrl = connectionInfo!.url;
     final safeUrl = connectionUrl.startsWith('http')
-    ? connectionUrl
-    : 'http://$connectionUrl';
+        ? connectionUrl
+        : 'http://$connectionUrl';
 
     final uri = Uri.parse(safeUrl);
 
     if (await canLaunchUrl(uri)) {
-      await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
-  return Expanded(
-    flex: 15,
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        return Center(
-          child: Container(
-            width: constraints.maxWidth * 0.95,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppTheme.primaryText,
-                width: 5,
+  @override
+  Widget build(BuildContext context) {
+    if (isLoadingConnection) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final connectionUrl = connectionInfo?.url ?? "Unavailable";
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(scale.eighth),
+        border: Border.all(
+          color: AppTheme.primaryText,
+          width: scale.eighth / 4,
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(scale.eighth),
+        child: Column(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                child: Image.network(
+                  qrCodeUrl,
+                  fit: BoxFit.fitWidth,
+                ),
               ),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        // color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: AppTheme.primaryText,
-                          width: 3,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          qrCodeUrl,
-                          fit: BoxFit.contain,
-                        ),
+            SizedBox(height: scale.eighth),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: _openLink,
+                    child: Text(
+                      '$connectionUrl'.replaceAll('http://', ''),
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontFamily: 'pico',
+                        fontSize: scale.eighth,
+                        decoration: TextDecoration.underline,
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 12),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: openLink,
-                          child: Text(
-                            'link: $connectionUrl',
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTheme.bodyMedium.copyWith(
-                              fontFamily: 'pico',
-                              fontSize: 18,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          FontAwesomeIcons.copy,
-                          color: AppTheme.primaryText,
-                        ),
-                        onPressed: () async {
-                          await Clipboard.setData(
-                            ClipboardData(text: connectionUrl),
-                          );
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Link copied'),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                ),
+                IconButton(
+                  iconSize: scale.eighth,
+                  icon: Icon(
+                    FontAwesomeIcons.copy,
+                    color: AppTheme.primaryText,
                   ),
-                ],
-              ),
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: connectionUrl),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Link copied')),
+                      );
+                    }
+                  },
+                ),
+              ],
             ),
-          ),
-        );
-      },
-    ),
-  );
+          ],
+        ),
+      ),
+    );
+  }
 }
