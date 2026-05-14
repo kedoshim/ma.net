@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:server_app/models/player_face.dart';
 import 'package:server_app/theme/app_theme.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter/material.dart';
@@ -14,22 +15,29 @@ class DeviceModel {
   final String name;
   final Color color;
   final String? type;
+  final bool connected;
+  final PlayerFaceData face;
 
   DeviceModel({
     required this.id,
     required this.name,
     required this.color,
     this.type,
+    required this.connected,
+    required this.face,
   });
 
   factory DeviceModel.fromJson(Map<String, dynamic> json) {
+    final color = json['color'] != null
+        ? colorFromHex(json['color'])
+        : AppTheme.primaryText;
     return DeviceModel(
       id: json['deviceId'],
       name: json['name'] ?? json['deviceId'],
-      color: json['color'] != null
-          ? colorFromHex(json['color'])
-          : AppTheme.primaryText,
+      color: color,
       type: json['type'],
+      connected: json['connected'] != false,
+      face: PlayerFaceData.fromJson(json, fallbackColor: color),
     );
   }
 }

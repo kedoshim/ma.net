@@ -127,7 +127,8 @@ class HTTPRoutes:
     async def unassign_handler(self, request):
         data = await request.json()
         slot_index = data['slotIndex']
+        device_id = self.manager.slots[slot_index].assigned_device_id
         self.manager.unassign_slot(slot_index)
-        await notify_device_unassigned(self.manager, self.manager.slots[slot_index].assigned_device_id)
+        await notify_device_unassigned(self.manager, device_id)
         self.admin_panel.broadcast_update()
         return web.json_response({'success': True})

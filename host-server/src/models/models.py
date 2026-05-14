@@ -15,6 +15,10 @@ class PlayerSlot:
 
     assigned_device_id: Optional[str] = None
     player_name: Optional[str] = None
+    color: Optional[str] = None
+    face_text: str = ":)"
+    face_rotation: str = "normal"
+    preset_id: Optional[str] = None
 
     ws: Optional[object] = None
     connected: bool = False

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import '../models/player_face.dart';
 
 class PreferencesService {
   PreferencesService._();
@@ -51,6 +52,27 @@ class PreferencesService {
       (await _getInstance).setInt('last_known_slot', slot);
   Future<int?> getLastKnownSlot() async =>
       (await _getInstance).getInt('last_known_slot');
+
+  Future<PlayerFaceData> getOrCreatePlayerFace() async {
+    final p = await _getInstance;
+    final stored = p.getString('player_face');
+    if (stored != null) {
+      try {
+        return PlayerFaceData.fromJson(
+          jsonDecode(stored) as Map<String, dynamic>,
+        );
+      } catch (_) {}
+    }
+
+    final generated = PlayerFaceData.random();
+    await savePlayerFace(generated);
+    return generated;
+  }
+
+  Future<void> savePlayerFace(PlayerFaceData face) async {
+    final p = await _getInstance;
+    await p.setString('player_face', jsonEncode(face.toJson()));
+  }
 
   // --- Appearance ---
   Future<void> setSelectedTheme(int themeIndex) async =>

@@ -27,6 +27,12 @@ class WebSocketRoutes:
 
         device_id = request.query.get("deviceId")
         player_name = request.query.get("name")
+        customization = {
+            "color": request.query.get("color"),
+            "faceText": request.query.get("faceText"),
+            "faceRotation": request.query.get("faceRotation"),
+            "presetId": request.query.get("presetId"),
+        }
 
         if not device_id:
             await ws.send_json({
@@ -36,7 +42,7 @@ class WebSocketRoutes:
             await ws.close()
             return ws
 
-        self.manager.register_device(device_id, player_name)
+        self.manager.register_device(device_id, player_name, customization)
         self.manager.register_device_ws(device_id, ws)
         slot = self.manager.assign_slot(device_id, player_name)
 
@@ -44,7 +50,7 @@ class WebSocketRoutes:
             await ws.send_json({
                 "type": "unassigned",
                 "total_slots": len(self.manager.slots),
-                "color": self.manager.get_device_color(device_id)
+                **self.manager.get_device_identity(device_id),
             })
             LOG.info("Device %s connected but unassigned (pool)", device_id)
         else:
@@ -60,7 +66,7 @@ class WebSocketRoutes:
             await ws.send_json({
                 "type": "assigned",
                 "slot": slot.slot_id,
-                "color": self.manager.get_device_color(device_id),
+                **self.manager.get_slot_identity(slot),
                 "total_slots": len(self.manager.slots)
             })
 
@@ -132,6 +138,10 @@ class WebSocketRoutes:
 
                 elif msg_type == "raw":
                     pass
+
+                elif msg_type == "face_update":
+                    self.manager.update_device_identity(device_id, data)
+                    self.admin_panel.broadcast_update()
 
         except asyncio.CancelledError:
             LOG.debug("Websocket cancelled")

@@ -1,6 +1,7 @@
 import time
 from src.models.models import PlayerSlot
 from src.core.gamepad_factory import create_gamepad
+from src.core.player_identity import normalize_identity
 
 
 class ControllerManager:
@@ -10,6 +11,7 @@ class ControllerManager:
         self.device_map: dict[str, int] = {}
         self.connected_devices: dict[str, dict] = {}
         self.device_colors: dict[str, str] = {}
+        self.device_identities: dict[str, dict] = {}
         self.device_ws_map: dict[str, any] = {}
         self.main_loop = None
 
@@ -62,11 +64,16 @@ class ControllerManager:
             if slot.controller_type == "x360"
         )
     
-    def register_device(self, device_id, player_name=None):
+    def register_device(self, device_id, player_name=None, customization=None):
+        identity = self.update_device_identity(device_id, customization)
         self.connected_devices[device_id] = {
             "deviceId": device_id,
             "name": player_name or device_id,
-            "color": self.get_device_color(device_id)
+            "color": identity["color"],
+            "faceText": identity["faceText"],
+            "faceRotation": identity["faceRotation"],
+            "presetId": identity.get("presetId"),
+            "connected": True,
         }
 
     def unregister_device(self, device_id):
@@ -95,6 +102,7 @@ class ControllerManager:
             slot = self.slots[slot_index]
             slot.connected = True
             slot.player_name = player_name or slot.player_name
+            self._apply_identity_to_slot(slot, device_id)
             return slot
 
         for slot in self.slots:
@@ -102,6 +110,7 @@ class ControllerManager:
                 slot.assigned_device_id = device_id
                 slot.player_name = player_name
                 slot.connected = True
+                self._apply_identity_to_slot(slot, device_id)
                 self.device_map[device_id] = slot.slot_id
                 return slot
 
@@ -122,6 +131,7 @@ class ControllerManager:
         slot.assigned_device_id = device_id
         slot.player_name = player_name
         slot.connected = True
+        self._apply_identity_to_slot(slot, device_id)
 
         self.device_map[device_id] = slot.slot_id
 
@@ -141,6 +151,14 @@ class ControllerManager:
         a = self.slots[slot_a]
         b = self.slots[slot_b]
 
+        if a.assigned_device_id is not None and not a.connected and b.assigned_device_id is not None and b.connected:
+            self.move_slot(slot_b, slot_a)
+            return
+
+        if b.assigned_device_id is not None and not b.connected and a.assigned_device_id is not None and a.connected:
+            self.move_slot(slot_a, slot_b)
+            return
+
         a.assigned_device_id, b.assigned_device_id = (
             b.assigned_device_id,
             a.assigned_device_id,
@@ -151,12 +169,19 @@ class ControllerManager:
             a.player_name,
         )
 
+        a.connected, b.connected = b.connected, a.connected
+
+        a.color, b.color = b.color, a.color
+        a.face_text, b.face_text = b.face_text, a.face_text
+        a.face_rotation, b.face_rotation = b.face_rotation, a.face_rotation
+        a.preset_id, b.preset_id = b.preset_id, a.preset_id
+
         if a.assigned_device_id:
             self.device_map[a.assigned_device_id] = slot_a
             self.notify_device(a.assigned_device_id, {
                 "type": "slot_changed",
                 "slot": slot_a,
-                "color": self.get_device_color(a.assigned_device_id),
+                **self.get_device_identity(a.assigned_device_id),
                 "total_slots": len(self.slots)
             })
 
@@ -165,7 +190,7 @@ class ControllerManager:
             self.notify_device(b.assigned_device_id, {
                 "type": "slot_changed",
                 "slot": slot_b,
-                "color": self.get_device_color(b.assigned_device_id),
+                **self.get_device_identity(b.assigned_device_id),
                 "total_slots": len(self.slots)
             })
 
@@ -175,14 +200,25 @@ class ControllerManager:
         slot = self.slots[slot_index]
         if slot.connected:
             return None  # already assigned
+        
+        if slot.assigned_device_id is not None:
+            old_id = slot.assigned_device_id
+            if old_id in self.device_map:
+                del self.device_map[old_id]
+            self.notify_device(old_id, {
+                "type": "unassigned",
+                "total_slots": len(self.slots)
+            })
+            
         slot.assigned_device_id = device_id
         slot.player_name = player_name or device_id
         slot.connected = True
+        self._apply_identity_to_slot(slot, device_id)
         self.device_map[device_id] = slot_index
         self.notify_device(device_id, {
             "type": "assigned",
             "slot": slot_index,
-            "color": self.get_device_color(device_id),
+            **self.get_device_identity(device_id),
             "total_slots": len(self.slots)
         })
         return slot
@@ -191,11 +227,15 @@ class ControllerManager:
         if slot_index >= len(self.slots):
             return
         slot = self.slots[slot_index]
-        if slot.connected:
+        if slot.assigned_device_id is not None:
             device_id = slot.assigned_device_id
             slot.connected = False
             slot.assigned_device_id = None
             slot.player_name = None
+            slot.color = None
+            slot.face_text = ":)"
+            slot.face_rotation = "normal"
+            slot.preset_id = None
             if device_id in self.device_map:
                 del self.device_map[device_id]
             self.notify_device(device_id, {
@@ -220,22 +260,38 @@ class ControllerManager:
             return
 
         if to_slot.assigned_device_id is not None:
-            return
+            if to_slot.connected:
+                return
+            old_id = to_slot.assigned_device_id
+            if old_id in self.device_map:
+                del self.device_map[old_id]
+            self.notify_device(old_id, {
+                "type": "unassigned",
+                "total_slots": len(self.slots)
+            })
 
         to_slot.assigned_device_id = from_slot.assigned_device_id
         to_slot.player_name = from_slot.player_name
         to_slot.connected = from_slot.connected
+        to_slot.color = from_slot.color
+        to_slot.face_text = from_slot.face_text
+        to_slot.face_rotation = from_slot.face_rotation
+        to_slot.preset_id = from_slot.preset_id
 
         self.device_map[to_slot.assigned_device_id] = to_index
 
         from_slot.assigned_device_id = None
         from_slot.player_name = None
         from_slot.connected = False
+        from_slot.color = None
+        from_slot.face_text = ":)"
+        from_slot.face_rotation = "normal"
+        from_slot.preset_id = None
         
         self.notify_device(to_slot.assigned_device_id, {
             "type": "slot_changed",
             "slot": to_index,
-            "color": self.get_device_color(to_slot.assigned_device_id),
+            **self.get_device_identity(to_slot.assigned_device_id),
             "total_slots": len(self.slots)
         })
 
@@ -244,7 +300,8 @@ class ControllerManager:
             {
                 'deviceId': slot.assigned_device_id,
                 'name': slot.player_name or slot.assigned_device_id,
-                'color': self.get_device_color(slot.assigned_device_id)
+                'connected': slot.connected,
+                **self.get_slot_identity(slot),
             }
             for slot in self.slots
             if slot.connected
@@ -270,16 +327,71 @@ class ControllerManager:
                 'device': {
                     'deviceId': slot.assigned_device_id,
                     'name': slot.player_name or slot.assigned_device_id,
-                    'color': self.get_device_color(slot.assigned_device_id),
-                } if slot.connected and slot.assigned_device_id else None,
+                    'connected': slot.connected,
+                    **self.get_slot_identity(slot),
+                } if slot.assigned_device_id else None,
                 'type': slot.controller_type
             }
             for i, slot in enumerate(self.slots)
         ]
     
     def get_device_color(self, device_id: str) -> str:
-        if device_id not in self.device_colors:
-            index = len(self.device_colors) % len(self.config.DEFAULT_COLORS)
-            self.device_colors[device_id] = self.config.DEFAULT_COLORS[index]
+        return self.get_device_identity(device_id)["color"]
 
-        return self.device_colors[device_id]
+    def get_device_identity(self, device_id: str) -> dict:
+        fallback_color = None
+        if device_id in self.device_colors:
+            fallback_color = self.device_colors[device_id]
+        elif hasattr(self.config, "DEFAULT_COLORS") and self.config.DEFAULT_COLORS:
+            index = len(self.device_colors) % len(self.config.DEFAULT_COLORS)
+            fallback_color = self.config.DEFAULT_COLORS[index]
+
+        identity = normalize_identity(
+            self.device_identities.get(device_id),
+            {"color": fallback_color} if fallback_color else None,
+        )
+        self.device_identities[device_id] = identity
+        self.device_colors[device_id] = identity["color"]
+        return identity
+
+    def get_slot_identity(self, slot: PlayerSlot) -> dict:
+        color = slot.color
+        if color is None and slot.assigned_device_id is not None:
+            color = self.get_device_color(slot.assigned_device_id)
+        return {
+            "color": color,
+            "faceText": slot.face_text,
+            "faceRotation": slot.face_rotation,
+            "presetId": slot.preset_id,
+        }
+
+    def update_device_identity(self, device_id: str, customization=None) -> dict:
+        identity = normalize_identity(
+            customization,
+            self.device_identities.get(device_id),
+        )
+        self.device_identities[device_id] = identity
+        self.device_colors[device_id] = identity["color"]
+
+        device = self.connected_devices.get(device_id)
+        if device is not None:
+            device.update({
+                "color": identity["color"],
+                "faceText": identity["faceText"],
+                "faceRotation": identity["faceRotation"],
+                "presetId": identity.get("presetId"),
+                "connected": True,
+            })
+
+        slot = self.get_slot_by_device(device_id)
+        if slot is not None:
+            self._apply_identity_to_slot(slot, device_id)
+
+        return identity
+
+    def _apply_identity_to_slot(self, slot: PlayerSlot, device_id: str):
+        identity = self.get_device_identity(device_id)
+        slot.color = identity["color"]
+        slot.face_text = identity["faceText"]
+        slot.face_rotation = identity["faceRotation"]
+        slot.preset_id = identity.get("presetId")

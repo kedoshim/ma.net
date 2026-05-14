@@ -12,6 +12,8 @@ import '../widgets/options_popup.dart';
 import '../theme/app_colors.dart';
 import '../services/preferences_service.dart';
 import '../services/network_discovery_service.dart';
+import '../models/player_face.dart';
+import '../widgets/player_face_indicator.dart';
 import 'qr_scanner_screen.dart';
 
 enum ControllerConnectionState {
@@ -48,6 +50,7 @@ class ConnectionManager {
     final prefs = PreferencesService.instance;
 
     final deviceId = await prefs.getDeviceId();
+    final playerFace = await prefs.getOrCreatePlayerFace();
     final bool isHttps =
         await prefs.getServerHttps() ?? (Uri.base.scheme == 'https');
 
@@ -56,7 +59,12 @@ class ConnectionManager {
       host: await prefs.getServerHost() ?? Uri.base.host,
       port: await prefs.getServerPort() ?? Uri.base.port,
       path: '/ws',
-      queryParameters: {'deviceId': deviceId},
+      queryParameters: {
+        'deviceId': deviceId,
+        ...playerFace.toJson().map(
+          (key, value) => MapEntry(key, value?.toString() ?? ''),
+        ),
+      },
     );
 
     return WebSocketService.connectUri(wsUri);
@@ -81,13 +89,9 @@ class _ControllerScreenState extends State<ControllerScreen>
   Color? playerColor;
   int totalSlots = 4;
   ColorTheme _currentTheme = ColorTheme.blue;
+  PlayerFaceData _playerFace = PlayerFaceData.random();
 
   bool _listenerAttached = false;
-
-  Color colorFromHex(String hex) {
-    final cleaned = hex.replaceAll('#', '');
-    return Color(int.parse('FF$cleaned', radix: 16));
-  }
 
   final Map<String, bool> visibleButtons = {
     'btnA': true,
@@ -166,6 +170,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         onDone: _handleDisconnect,
         onError: (_) => _handleDisconnect(),
       );
+      _send({'type': 'face_update', ..._playerFace.toJson()});
     } catch (e) {
       _handleDisconnect();
     }
@@ -252,7 +257,9 @@ class _ControllerScreenState extends State<ControllerScreen>
       status = 'Conectado';
 
       if (colorHex != null) {
-        playerColor = colorFromHex(colorHex);
+        final parsedColor = colorFromHex(colorHex);
+        playerColor = parsedColor;
+        _playerFace = _playerFace.copyWith(color: parsedColor);
       }
     });
   }
@@ -276,10 +283,12 @@ class _ControllerScreenState extends State<ControllerScreen>
 
           if (data['type'] == 'assigned') {
             _updatePlayerSlot(data['slot'], colorHex: data['color']);
+            _ingestFaceData(data);
           }
 
           if (data['type'] == 'slot_changed') {
             _updatePlayerSlot(data['slot'], colorHex: data['color']);
+            _ingestFaceData(data);
           }
 
           if (data['type'] == 'unassigned') {
@@ -305,6 +314,33 @@ class _ControllerScreenState extends State<ControllerScreen>
       playerIndex = null;
       status = 'Em espera';
     });
+  }
+
+  void _ingestFaceData(Map<String, dynamic> data) {
+    if (!data.containsKey('faceText') && !data.containsKey('faceRotation')) {
+      return;
+    }
+
+    final nextFace = PlayerFaceData.fromJson({
+      ..._playerFace.toJson(),
+      ...data,
+    });
+
+    setState(() {
+      _playerFace = nextFace;
+      playerColor = nextFace.color;
+    });
+
+    PreferencesService.instance.savePlayerFace(nextFace);
+  }
+
+  Future<void> _updatePlayerFace(PlayerFaceData nextFace) async {
+    setState(() {
+      _playerFace = nextFace;
+      playerColor = nextFace.color;
+    });
+    await PreferencesService.instance.savePlayerFace(nextFace);
+    _send({'type': 'face_update', ...nextFace.toJson()});
   }
 
   Widget _buildPlayerIndicator() {
@@ -355,21 +391,28 @@ class _ControllerScreenState extends State<ControllerScreen>
         final isActive = selectedIndex == position;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: SizedBox(
-            width: squareSize,
-            height: squareSize,
-            child: Container(
-              decoration: BoxDecoration(
-                color: (isActive && status == 'Conectado')
-                    ? AppColors.textPrimary
-                    : Colors.transparent,
-                border: Border.all(
-                  color: AppColors.textPrimary,
-                  width: AppColors.borderThickness,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
+          child: AnimatedOpacity(
+            opacity: isActive && status == 'Conectado' ? 1 : 0.4,
+            duration: const Duration(milliseconds: 180),
+            child: isActive && status == 'Conectado'
+                ? PlayerFaceIndicator(
+                    face: _playerFace,
+                    size: squareSize,
+                    roundedSquare: true,
+                    borderColor: AppColors.textPrimary,
+                  )
+                : Container(
+                    width: squareSize,
+                    height: squareSize,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      border: Border.all(
+                        color: AppColors.textPrimary,
+                        width: AppColors.borderThickness,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
           ),
         );
       }),
@@ -413,6 +456,8 @@ class _ControllerScreenState extends State<ControllerScreen>
           currentTheme: _currentTheme,
           onThemeChanged: _onThemeChanged,
           onDisconnectRequested: _resetConnection,
+          playerFace: _playerFace,
+          onPlayerFaceChanged: _updatePlayerFace,
         );
       },
     );
@@ -432,6 +477,8 @@ class _ControllerScreenState extends State<ControllerScreen>
       final themeIndex = await prefs.getSelectedTheme();
       _currentTheme = ColorTheme.values[themeIndex];
       AppColors.setTheme(_currentTheme);
+      _playerFace = await prefs.getOrCreatePlayerFace();
+      playerColor = _playerFace.color;
 
       dpadMode = await prefs.getDpadMode();
 
@@ -572,13 +619,13 @@ class _ControllerScreenState extends State<ControllerScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           if (playerColor != null)
-            Container(
-              width: 16,
-              height: 16,
-              margin: const EdgeInsets.only(right: 8),
-              decoration: BoxDecoration(
-                color: playerColor,
-                borderRadius: BorderRadius.circular(4),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: PlayerFaceIndicator(
+                face: _playerFace,
+                size: 20,
+                roundedSquare: true,
+                borderColor: AppColors.textPrimary,
               ),
             ),
           Text(
@@ -662,7 +709,9 @@ class _ControllerScreenState extends State<ControllerScreen>
                               style: TextStyle(
                                 fontFamily: 'pico',
                                 fontSize: 10,
-                                color: AppColors.textPrimary.withOpacity(0.7),
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.7,
+                                ),
                               ),
                             ),
                           ],
@@ -786,6 +835,9 @@ class _ControllerScreenState extends State<ControllerScreen>
                 ),
               ),
             ),
+            if (_connectionState ==
+                ControllerConnectionState.multipleHostsFound)
+              _buildMultipleHostsOverlay(),
           ],
         ),
       ),

@@ -98,6 +98,11 @@ flutter:
       fonts:
         - asset: assets/fonts/picobl.ttf
           style: normal
+
+    - family: monomaniac
+      fonts:
+        - asset: assets/fonts/monomaniac-one.ttf
+          style: normal
   # fonts:
   #   - family: Schyler
   #     fonts:

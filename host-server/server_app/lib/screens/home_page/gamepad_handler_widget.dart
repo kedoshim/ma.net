@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/services/host_api_service.dart';
 import 'package:server_app/theme/app_theme.dart';
-import 'package:styled_divider/styled_divider.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:server_app/widgets/player_face_indicator.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'qr_code_container.dart';
@@ -109,8 +107,9 @@ class WideStageLayout extends StatelessWidget {
                   DevicePoolArea(scale: scale),
                   SizedBox(height: scale.eighth),
                   SizedBox(
-                    height: scale.slot * rows + scale.eighth/2 * (rows - 1),
-                    width: scale.slot * columns + scale.eighth/2 * (columns - 1),
+                    height: scale.slot * rows + scale.eighth / 2 * (rows - 1),
+                    width:
+                        scale.slot * columns + scale.eighth / 2 * (columns - 1),
                     child: ControllerSlotsGrid(scale: scale),
                   ),
                 ],
@@ -161,7 +160,8 @@ class CompactStageLayout extends StatelessWidget {
         final widthFactor = columns + (columns - 1) / 8.0;
         final heightFactor = rows + (rows - 1) / 8.0 + 1.5;
 
-        final availableHeight = totalHeight * 0.7; // Lower 70% available for interactive slots/pool
+        final availableHeight =
+            totalHeight * 0.7; // Lower 70% available for interactive slots/pool
         final slotSize = math
             .min(totalWidth / widthFactor, availableHeight / heightFactor)
             .clamp(40.0, 400.0);
@@ -204,8 +204,8 @@ class ControllerSlotsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = Provider.of<GamepadState>(context);
     return Wrap(
-      spacing: scale.eighth/2,
-      runSpacing: scale.eighth/2,
+      spacing: scale.eighth / 2,
+      runSpacing: scale.eighth / 2,
       children: List.generate(state.slots.length, (index) {
         return ControllerSlotWidget(
           index: index,
@@ -269,25 +269,40 @@ class ControllerSlotWidget extends StatelessWidget {
             children: [
               if (slotModel.device != null)
                 Positioned.fill(
-                  child: Draggable<DragData>(
-                    dragAnchorStrategy: pointerDragAnchorStrategy,
-                    data: DragData(
-                      device: slotModel.device,
-                      source: DragSource.slot,
-                      slotIndex: index,
-                    ),
-                    feedback: _buildDragFeedback(slotModel.device!, scale.quarter),
-                    childWhenDragging: const SizedBox.expand(),
-                    child: Center(
-                      child: DeviceInputIndicator(
-                        device: slotModel.device!,
-                        input: state.getInputState(slotModel.device!.id) ??
-                            DeviceInputState.idle(),
-                        size: scale.half,
-                        isOnPool: false,
-                      ),
-                    ),
-                  ),
+                  child: slotModel.device!.connected
+                      ? Draggable<DragData>(
+                          dragAnchorStrategy: pointerDragAnchorStrategy,
+                          data: DragData(
+                            device: slotModel.device,
+                            source: DragSource.slot,
+                            slotIndex: index,
+                          ),
+                          feedback: _buildDragFeedback(
+                            slotModel.device!,
+                            scale.quarter,
+                          ),
+                          childWhenDragging: const SizedBox.expand(),
+                          child: Center(
+                            child: DeviceInputIndicator(
+                              device: slotModel.device!,
+                              input:
+                                  state.getInputState(slotModel.device!.id) ??
+                                  DeviceInputState.idle(),
+                              size: scale.half,
+                              isOnPool: false,
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: DeviceInputIndicator(
+                            device: slotModel.device!,
+                            input:
+                                state.getInputState(slotModel.device!.id) ??
+                                DeviceInputState.idle(),
+                            size: scale.half,
+                            isOnPool: false,
+                          ),
+                        ),
                 ),
               Positioned(
                 top: scale.eighth / 2,
@@ -303,12 +318,30 @@ class ControllerSlotWidget extends StatelessWidget {
               Positioned(
                 top: scale.eighth / 2,
                 left: scale.eighth / 2,
-                child: Text(
-                  'p${index + 1}',
-                  style: AppTheme.bodyMedium.copyWith(
-                    fontFamily: 'pico',
-                    fontSize: scale.eighth,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'p${index + 1}',
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontFamily: 'pico',
+                        fontSize: scale.eighth,
+                      ),
+                    ),
+                    if (slotModel.device != null &&
+                        !slotModel.device!.connected)
+                      Padding(
+                        padding: EdgeInsets.only(left: scale.eighth / 3),
+                        child: Text(
+                          'hold',
+                          style: AppTheme.bodyMedium.copyWith(
+                            fontFamily: 'pico',
+                            fontSize: scale.eighth * 0.7,
+                            color: AppTheme.primaryText.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -377,7 +410,7 @@ class DevicePoolArea extends StatelessWidget {
                           final device = state.pool[index];
                           final inputState =
                               state.getInputState(device.id) ??
-                                  DeviceInputState.idle();
+                              DeviceInputState.idle();
 
                           return Draggable<DragData>(
                             dragAnchorStrategy: pointerDragAnchorStrategy,
@@ -417,12 +450,7 @@ Widget _buildDragFeedback(DeviceModel device, double size) {
   return Material(
     color: Colors.transparent,
     child: Container(
-      width: size,
-      height: size,
       decoration: BoxDecoration(
-        color: device.color,
-        shape: BoxShape.rectangle,
-        borderRadius: BorderRadius.circular(size * 0.2),
         boxShadow: [
           BoxShadow(
             color: Colors.black26,
@@ -430,6 +458,11 @@ Widget _buildDragFeedback(DeviceModel device, double size) {
             spreadRadius: size * 0.05,
           ),
         ],
+      ),
+      child: PlayerFaceIndicator(
+        face: device.face,
+        size: size,
+        roundedSquare: true,
       ),
     ),
   );
@@ -451,9 +484,6 @@ class DeviceInputIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shape = isOnPool ? BoxShape.rectangle : BoxShape.circle;
-    final borderRadius = isOnPool ? BorderRadius.circular(size * 0.1) : null;
-
     double stickX = input.stickX;
     double stickY = input.stickY;
     double magnitude = math.sqrt(stickX * stickX + stickY * stickY);
@@ -462,7 +492,9 @@ class DeviceInputIndicator extends StatelessWidget {
     // Subtle elastic deformation: stretch in direction of movement, squash perpendicular
     double stretch = 1;
     double squash = 1;
-    double angle = (stickX == 0 && stickY == 0) ? 0.0 : math.atan2(stickY, stickX);
+    double angle = (stickX == 0 && stickY == 0)
+        ? 0.0
+        : math.atan2(stickY, stickX);
 
     double maxOffset = size * 0.65;
     double translateX = isOnPool ? 0 : stickX * maxOffset;
@@ -472,35 +504,38 @@ class DeviceInputIndicator extends StatelessWidget {
     final isPressed = input.buttonPressed;
 
     double baseScale = isOnPool ? 0.6 : 0.9;
-    double targetScale = baseScale * (isPressed ? 0.75 : 1.0);
+    final indicatorOpacity = device.connected ? 1.0 : 0.55;
+    final borderColor = device.connected
+        ? null
+        : AppTheme.primaryText.withValues(alpha: 0.25);
 
     return Center(
       child: SizedBox(
         width: size,
         height: size,
-        child: AnimatedScale(
-          scale: targetScale,
-          duration: Duration(milliseconds: isPressed ? 50 : 400),
-          curve: isPressed ? Curves.easeOut : Curves.elasticOut,
-          child: AnimatedContainer(
-            duration: isCentered
-                ? const Duration(milliseconds: 400)
-                : const Duration(milliseconds: 100),
-            curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
-            transformAlignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..translate(translateX, translateY)
-              ..rotateZ(angle)
-              ..scale(stretch, squash)
-              ..rotateZ(-angle),
-            decoration: BoxDecoration(
-              color: device.color,
-              shape: shape,
-              borderRadius: borderRadius,
-            ),
+        child: AnimatedContainer(
+          duration: isCentered
+              ? const Duration(milliseconds: 400)
+              : const Duration(milliseconds: 100),
+          curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
+          transformAlignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..rotateZ(angle)
+            ..scaleByDouble(stretch, squash, 1, 1)
+            ..rotateZ(-angle),
+          child: PlayerFaceIndicator(
+            face: device.face,
+            size: size,
+            roundedSquare: isOnPool,
+            scale: baseScale,
+            opacity: indicatorOpacity,
+            translateX: translateX,
+            translateY: translateY,
+            pressed: isPressed,
+            borderColor: borderColor,
           ),
         ),
-      )
+      ),
     );
   }
 }
