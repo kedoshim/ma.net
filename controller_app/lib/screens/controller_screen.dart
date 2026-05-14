@@ -11,7 +11,6 @@ import '../widgets/control_button.dart';
 import '../widgets/options_popup.dart';
 import '../theme/app_colors.dart';
 import '../services/preferences_service.dart';
-import 'connection_setup_screen.dart';
 import '../services/network_discovery_service.dart';
 import 'qr_scanner_screen.dart';
 
@@ -80,7 +79,6 @@ class _ControllerScreenState extends State<ControllerScreen>
   bool editMode = false;
   Color? playerColor;
   int totalSlots = 4;
-  bool _needsSetup = false;
   ColorTheme _currentTheme = ColorTheme.blue;
 
   bool _listenerAttached = false;
@@ -104,15 +102,8 @@ class _ControllerScreenState extends State<ControllerScreen>
   };
 
   Future<void> _checkSetupRequired() async {
-    final host = await PreferencesService.instance.getServerHost();
     await _loadInitialPreferences();
 
-    if (!kIsWeb && host == null) {
-      setState(() {
-        _needsSetup = true;
-      });
-    } else {
-      await _loadInitialPreferences();
     if (kIsWeb) {
       _connectWebSocket();
       return;
@@ -154,13 +145,10 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   Future<void> _connectWebSocket() async {
     if (ws != null) return;
-
     if (_listenerAttached) return;
 
-    _listenerAttached = true;
     setState(() => _connectionState = ControllerConnectionState.searching);
 
-    ws = await ConnectionManager.instance.getConnection();
     try {
       _listenerAttached = true;
       ws = await ConnectionManager.instance.getConnection();
@@ -170,18 +158,6 @@ class _ControllerScreenState extends State<ControllerScreen>
         status = 'Conectado';
       });
 
-    ws!.channel.stream.listen(
-      _handleWebSocketMessage,
-      onDone: () {
-        if (mounted) {
-          setState(() => status = 'Desconectado');
-        }
-      },
-      onError: (_) {
-        if (mounted) {
-          setState(() => status = 'Erro');
-        }
-      },
       ws!.channel.stream.listen(
         _handleWebSocketMessage,
         onDone: _handleDisconnect,
@@ -243,15 +219,7 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   void _resetConnection() async {
     ConnectionManager.instance.disconnect();
-
     await PreferencesService.instance.clearConnection();
-    setState(() {
-      _listenerAttached = false;
-      ws = null;
-      _needsSetup = true;
-      status = 'Desconectado';
-      playerIndex = null;
-    });
     _autoConnectEnabled = false;
     _handleDisconnect();
   }
@@ -644,133 +612,97 @@ class _ControllerScreenState extends State<ControllerScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    if (_needsSetup) {
-      return ConnectionSetupScreen(
-        onConnected: () {
-          setState(() {
-            _needsSetup = false;
-          });
-          _checkSetupRequired();
-        },
-      );
-    }
-
     return Scaffold(
       body: Container(
         color: AppColors.screenBackground,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
         child: Stack(
           children: [
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: dpadMode
-                        ? _buildDpad()
-                        : Joystick(
-                            size: 220,
-                            onChanged: _onStickChanged,
-                            onReleased: _onStickRelease,
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Text(
-                        'ma•net',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.normal,
-                          color: AppColors.textPrimary,
-                          fontFamily: 'pico',
-                        ),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: dpadMode
+                            ? _buildDpad()
+                            : Joystick(
+                                size: 220,
+                                onChanged: _onStickChanged,
+                                onReleased: _onStickRelease,
+                              ),
                       ),
-                      const SizedBox(height: 10),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Text(
+                            'ma•net',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.normal,
+                              color: AppColors.textPrimary,
+                              fontFamily: 'pico',
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (playerColor != null &&
-                                    status == 'Conectado')
-                                  Container(
-                                    width: 16,
-                                    height: 16,
-                                    margin: const EdgeInsets.only(right: 8),
-                                    decoration: BoxDecoration(
-                                      color: playerColor,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                  ),
-                                Text(
-                                  status,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.normal,
-                                    color: AppColors.textPrimary,
-                                    fontFamily: 'pico',
-                                  ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _buildCenterStatus(),
+                                  ],
                                 ),
-                                _buildCenterStatus(),
+                                const SizedBox(height: 8),
+                                _buildPlayerIndicator(),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            _buildPlayerIndicator(),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 10),
+                          IconButton(
+                            icon: const Icon(Icons.settings, size: 32),
+                            onPressed: _showOptionsDialog,
+                            tooltip: 'Options',
+                          ),
+                          const SizedBox(height: 18),
+                          _buildCenterAction(),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      IconButton(
-                        icon: const Icon(Icons.settings, size: 32),
-                        onPressed: _showOptionsDialog,
-                        tooltip: 'Options',
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: ActionButtons(
+                              visibleButtons: visibleButtons,
+                              onButtonStateChanged: _sendButton,
+                              editMode: editMode,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 18),
-                      _buildCenterAction(),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: ActionButtons(
-                          visibleButtons: visibleButtons,
-                          onButtonStateChanged: _sendButton,
-                          editMode: editMode,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
+          ],
+        )
+      )
     );
   }
 }
