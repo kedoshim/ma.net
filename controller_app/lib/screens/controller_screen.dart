@@ -173,6 +173,7 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   void _handleDisconnect() {
     if (!mounted) return;
+    ConnectionManager.instance.disconnect();
     _listenerAttached = false;
     ws = null;
     setState(() => _connectionState = ControllerConnectionState.disconnected);
@@ -530,8 +531,12 @@ class _ControllerScreenState extends State<ControllerScreen>
           const SizedBox(width: 8),
           InkWell(
             onTap: () {
-              _autoConnectEnabled = true;
-              _startDiscovery();
+              if (kIsWeb) {
+                _connectWebSocket();
+              } else {
+                _autoConnectEnabled = true;
+                _startDiscovery();
+              }
             },
             child: const Icon(
               Icons.refresh,
@@ -539,15 +544,17 @@ class _ControllerScreenState extends State<ControllerScreen>
               size: 24,
             ),
           ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: _openQRScanner,
-            child: const Icon(
-              Icons.qr_code_scanner,
-              color: AppColors.textPrimary,
-              size: 24,
+          if (!kIsWeb) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: _openQRScanner,
+              child: const Icon(
+                Icons.qr_code_scanner,
+                color: AppColors.textPrimary,
+                size: 24,
+              ),
             ),
-          ),
+          ],
         ],
       );
     } else if (_connectionState ==
@@ -664,21 +671,23 @@ class _ControllerScreenState extends State<ControllerScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  icon: const Icon(
-                    Icons.qr_code_scanner,
-                    color: AppColors.textPrimary,
-                  ),
-                  label: const Text(
-                    'Scan QR Instead',
-                    style: TextStyle(
-                      fontFamily: 'pico',
+                if (!kIsWeb) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    icon: const Icon(
+                      Icons.qr_code_scanner,
                       color: AppColors.textPrimary,
                     ),
+                    label: const Text(
+                      'Scan QR Instead',
+                      style: TextStyle(
+                        fontFamily: 'pico',
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    onPressed: _openQRScanner,
                   ),
-                  onPressed: _openQRScanner,
-                ),
+                ],
               ],
             ),
           ),
