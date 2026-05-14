@@ -52,20 +52,25 @@ class QRCodePanel extends StatelessWidget {
           width: scale.eighth / 4,
         ),
       ),
-      child: Padding(
-        padding: EdgeInsets.all(scale.eighth),
-        child: Column(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                child: Image.network(
-                  qrCodeUrl,
-                  fit: BoxFit.fitWidth,
-                ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(scale.eighth * 0.75),
+                topRight: Radius.circular(scale.eighth * 0.75),
+              ),
+              child: Image.network(
+                qrCodeUrl,
+                width: double.infinity,
+                fit: BoxFit.contain,
               ),
             ),
-            SizedBox(height: scale.eighth),
-            Row(
+          ),
+          Padding(
+            padding: EdgeInsets.all(scale.eighth),
+            child: Row(
               children: [
                 Expanded(
                   child: InkWell(
@@ -88,9 +93,7 @@ class QRCodePanel extends StatelessWidget {
                     color: AppTheme.primaryText,
                   ),
                   onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: connectionUrl),
-                    );
+                    await Clipboard.setData(ClipboardData(text: connectionUrl));
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Link copied')),
@@ -100,8 +103,8 @@ class QRCodePanel extends StatelessWidget {
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

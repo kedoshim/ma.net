@@ -8,7 +8,7 @@ def generate_qr_code_image(url: str):
     qr = qrcode.QRCode(
         version=1,
         box_size=10,
-        border=4
+        border=0
     )
 
     qr.add_data(url)
