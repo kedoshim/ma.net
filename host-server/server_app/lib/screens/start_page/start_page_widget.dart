@@ -26,6 +26,43 @@ Future<void> waitUntilServerReady(int port) async {
   }
 }
 
+Future<bool> isServerRunning(int port) async {
+  final client = HttpClient();
+  client.connectionTimeout = const Duration(milliseconds: 500);
+  try {
+    final request = await client.getUrl(
+      Uri.parse('http://127.0.0.1:$port/api/server/status'),
+    );
+    final response = await request.close().timeout(const Duration(milliseconds: 500));
+    return response.statusCode == 200;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close();
+  }
+}
+
+Future<void> killExistingServer(int port) async {
+  try {
+    if (Platform.isWindows) {
+      final result = await Process.run('cmd', ['/c', 'netstat -ano | findstr :$port']);
+      final lines = result.stdout.toString().split('\n');
+      for (var line in lines) {
+        if (line.contains('LISTENING')) {
+          final parts = line.trim().split(RegExp(r'\s+'));
+          if (parts.isNotEmpty) {
+            final pid = parts.last;
+            await Process.run('taskkill', ['/F', '/PID', pid]);
+          }
+        }
+      }
+    } else {
+      await Process.run('sh', ['-c', 'fuser -k $port/tcp || lsof -t -i:$port | xargs kill -9']);
+    }
+    await Future.delayed(const Duration(seconds: 1));
+  } catch (_) {}
+}
+
 class StartPageWidget extends StatefulWidget {
   const StartPageWidget({super.key});
 
@@ -104,13 +141,39 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                         return;
                       }
 
-                      await _serverService.startServer(
-                        port: port,
-                        slots: slots,
-                        fixed: fixed,
-                        controllerMode: mode,
+                  final running = await isServerRunning(port);
+
+                  if (running) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Servidor anterior encontrado. Encerrando para reiniciar...'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    await killExistingServer(port);
+                  } else {
+                    try {
+                      // Testa se a porta está ocupada por um processo desconhecido
+                      final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
+                      await socket.close();
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('A porta $port já está em uso por outro programa!'),
+                        ),
                       );
-                      await waitUntilServerReady(port);
+                      return;
+                    }
+                  }
+
+                  await _serverService.startServer(
+                    port: port,
+                    slots: slots,
+                    fixed: fixed,
+                    controllerMode: mode,
+                  );
+                  await waitUntilServerReady(port);
 
                       if (!mounted) return;
 
