@@ -35,8 +35,8 @@ class ConnectionManager {
   WebSocketService? ws;
 
   void disconnect() {
-    // If your WebSocketService has a close method, invoke it here safely
-    ws = null;
+    ws?.channel.sink.close();
+    ws = null; // Drop the reference
   }
 
   Future<WebSocketService> getConnection() async {
@@ -64,10 +64,11 @@ class ConnectionManager {
 }
 
 class _ControllerScreenState extends State<ControllerScreen>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   WebSocketService? ws;
-  
-  ControllerConnectionState _connectionState = ControllerConnectionState.searching;
+
+  ControllerConnectionState _connectionState =
+      ControllerConnectionState.searching;
   late NetworkDiscoveryService _discoveryService;
   StreamSubscription? _discoverySubscription;
   List<DiscoveredHost> _discoveredHosts = [];
@@ -119,7 +120,7 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   void _startDiscovery() {
     setState(() => _connectionState = ControllerConnectionState.searching);
-    
+
     _discoveryService.startScanning();
     _discoverySubscription?.cancel();
     _discoverySubscription = _discoveryService.discoveredHosts.listen((hosts) {
@@ -138,7 +139,9 @@ class _ControllerScreenState extends State<ControllerScreen>
     // Timeout to disconnected state if nothing is found
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted && _connectionState == ControllerConnectionState.searching) {
-        setState(() => _connectionState = ControllerConnectionState.disconnected);
+        setState(
+          () => _connectionState = ControllerConnectionState.disconnected,
+        );
       }
     });
   }
@@ -152,7 +155,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     try {
       _listenerAttached = true;
       ws = await ConnectionManager.instance.getConnection();
-      
+
       setState(() {
         _connectionState = ControllerConnectionState.connected;
         status = 'Conectado';
@@ -174,7 +177,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     ws = null;
     setState(() => _connectionState = ControllerConnectionState.disconnected);
     _clearPlayerSlot();
-    _autoConnectEnabled = false; // Prevent endless auto-reconnect loops to a dead host
+    _autoConnectEnabled =
+        false; // Prevent endless auto-reconnect loops to a dead host
   }
 
   Future<void> _connectToHost(DiscoveredHost host) async {
@@ -202,6 +206,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _discoveryService = NetworkDiscoveryService();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeRight,
@@ -212,9 +217,22 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    ConnectionManager.instance.disconnect();
     _discoveryService.stopScanning();
     _discoverySubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // The `detached` state is when the view is detached from the engine,
+    // which is the last state before the app is terminated.
+    // This is a good place to ensure cleanup happens.
+    if (state == AppLifecycleState.detached) {
+      ConnectionManager.instance.disconnect();
+    }
   }
 
   void _resetConnection() async {
@@ -393,7 +411,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onEditModeChanged: (value) => setState(() => editMode = value),
           currentTheme: _currentTheme,
           onThemeChanged: _onThemeChanged,
-          onRescanRequested: _resetConnection,
+          onDisconnectRequested: _resetConnection,
         );
       },
     );
@@ -491,7 +509,11 @@ class _ControllerScreenState extends State<ControllerScreen>
     if (_connectionState == ControllerConnectionState.searching) {
       return const Text(
         'searching...',
-        style: TextStyle(fontSize: 18, color: AppColors.textPrimary, fontFamily: 'pico'),
+        style: TextStyle(
+          fontSize: 18,
+          color: AppColors.textPrimary,
+          fontFamily: 'pico',
+        ),
       );
     } else if (_connectionState == ControllerConnectionState.disconnected) {
       return Row(
@@ -499,7 +521,11 @@ class _ControllerScreenState extends State<ControllerScreen>
         children: [
           const Text(
             'disconnected',
-            style: TextStyle(fontSize: 18, color: AppColors.textPrimary, fontFamily: 'pico'),
+            style: TextStyle(
+              fontSize: 18,
+              color: AppColors.textPrimary,
+              fontFamily: 'pico',
+            ),
           ),
           const SizedBox(width: 8),
           InkWell(
@@ -507,19 +533,32 @@ class _ControllerScreenState extends State<ControllerScreen>
               _autoConnectEnabled = true;
               _startDiscovery();
             },
-            child: const Icon(Icons.refresh, color: AppColors.textPrimary, size: 24),
+            child: const Icon(
+              Icons.refresh,
+              color: AppColors.textPrimary,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 8),
           InkWell(
             onTap: _openQRScanner,
-            child: const Icon(Icons.qr_code_scanner, color: AppColors.textPrimary, size: 24),
+            child: const Icon(
+              Icons.qr_code_scanner,
+              color: AppColors.textPrimary,
+              size: 24,
+            ),
           ),
         ],
       );
-    } else if (_connectionState == ControllerConnectionState.multipleHostsFound) {
+    } else if (_connectionState ==
+        ControllerConnectionState.multipleHostsFound) {
       return const Text(
         'select host',
-        style: TextStyle(fontSize: 18, color: AppColors.textPrimary, fontFamily: 'pico'),
+        style: TextStyle(
+          fontSize: 18,
+          color: AppColors.textPrimary,
+          fontFamily: 'pico',
+        ),
       );
     } else if (_connectionState == ControllerConnectionState.connected) {
       return Row(
@@ -563,41 +602,81 @@ class _ControllerScreenState extends State<ControllerScreen>
             decoration: BoxDecoration(
               color: AppColors.screenBackground,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.textPrimary, width: AppColors.borderThickness),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppColors.borderThickness,
+              ),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Multiple Hosts Found', style: TextStyle(fontFamily: 'pico', color: AppColors.textPrimary, fontSize: 16)),
+                const Text(
+                  'Multiple Hosts Found',
+                  style: TextStyle(
+                    fontFamily: 'pico',
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                  ),
+                ),
                 const SizedBox(height: 16),
-                ..._discoveredHosts.map((host) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.highlightColor,
-                      foregroundColor: AppColors.textPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.textPrimary, width: 2)),
-                    ),
-                    onPressed: () {
-                      _autoConnectEnabled = true;
-                      _connectToHost(host);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(host.name, style: const TextStyle(fontFamily: 'pico', fontSize: 14)),
-                          Text(host.ip, style: TextStyle(fontFamily: 'pico', fontSize: 10, color: AppColors.textPrimary.withOpacity(0.7))),
-                        ],
+                ..._discoveredHosts.map(
+                  (host) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.highlightColor,
+                        foregroundColor: AppColors.textPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(
+                            color: AppColors.textPrimary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      onPressed: () {
+                        _autoConnectEnabled = true;
+                        _connectToHost(host);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              host.name,
+                              style: const TextStyle(
+                                fontFamily: 'pico',
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              host.ip,
+                              style: TextStyle(
+                                fontFamily: 'pico',
+                                fontSize: 10,
+                                color: AppColors.textPrimary.withOpacity(0.7),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                )),
+                ),
                 const SizedBox(height: 8),
                 TextButton.icon(
-                  icon: const Icon(Icons.qr_code_scanner, color: AppColors.textPrimary),
-                  label: const Text('Scan QR Instead', style: TextStyle(fontFamily: 'pico', color: AppColors.textPrimary)),
+                  icon: const Icon(
+                    Icons.qr_code_scanner,
+                    color: AppColors.textPrimary,
+                  ),
+                  label: const Text(
+                    'Scan QR Instead',
+                    style: TextStyle(
+                      fontFamily: 'pico',
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                   onPressed: _openQRScanner,
                 ),
               ],
@@ -660,9 +739,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    _buildCenterStatus(),
-                                  ],
+                                  children: [_buildCenterStatus()],
                                 ),
                                 const SizedBox(height: 8),
                                 _buildPlayerIndicator(),
@@ -701,8 +778,8 @@ class _ControllerScreenState extends State<ControllerScreen>
               ),
             ),
           ],
-        )
-      )
+        ),
+      ),
     );
   }
 }

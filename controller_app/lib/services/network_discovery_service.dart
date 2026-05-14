@@ -50,7 +50,10 @@ class NetworkDiscoveryService {
   }
 
   void forceRefresh() {
-    if (!_isScanning) return;
+    if (!_isScanning) {
+      startScanning();
+      return;
+    }
     _foundHosts.clear();
     if (!_hostsController.isClosed) {
       _hostsController.add([]);
@@ -61,6 +64,10 @@ class NetworkDiscoveryService {
   void stopScanning() {
     _isScanning = false;
     _periodicScanTimer?.cancel();
+  }
+
+  void dispose() {
+    stopScanning();
     if (!_hostsController.isClosed) {
       _hostsController.close();
     }

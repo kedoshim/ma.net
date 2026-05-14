@@ -12,7 +12,7 @@ class OptionsPopup extends StatefulWidget {
   final ValueChanged<bool> onEditModeChanged;
   final ColorTheme currentTheme;
   final ValueChanged<ColorTheme> onThemeChanged;
-  final VoidCallback? onRescanRequested;
+  final VoidCallback? onDisconnectRequested;
 
   const OptionsPopup({
     super.key,
@@ -24,7 +24,7 @@ class OptionsPopup extends StatefulWidget {
     required this.onEditModeChanged,
     required this.currentTheme,
     required this.onThemeChanged,
-    this.onRescanRequested,
+    this.onDisconnectRequested,
   });
 
   @override
@@ -176,11 +176,11 @@ class _OptionsPopupState extends State<OptionsPopup> {
               const Divider(),
               ListTile(
                 leading: const Icon(
-                  Icons.qr_code_scanner,
+                  Icons.link_off,
                   color: AppColors.textPrimary,
                 ),
                 title: const Text(
-                  'Scan New Host',
+                  'Disconnect',
                   style: TextStyle(
                     fontFamily: 'pico',
                     color: AppColors.textPrimary,
@@ -188,7 +188,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
                 ),
                 onTap: () {
                   Navigator.of(context).pop();
-                  widget.onRescanRequested?.call();
+                  widget.onDisconnectRequested?.call();
                 },
               ),
             ],

@@ -56,18 +56,18 @@ class QRCodePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(scale.eighth * 0.75),
-                topRight: Radius.circular(scale.eighth * 0.75),
-              ),
-              child: Image.network(
-                qrCodeUrl,
-                width: double.infinity,
-                fit: BoxFit.contain,
+            child: Padding(
+              padding: EdgeInsets.all(scale.eighth),
+              child: ClipRRect(
+                child: Image.network(
+                  qrCodeUrl,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           ),
+
           Padding(
             padding: EdgeInsets.all(scale.eighth),
             child: Row(
