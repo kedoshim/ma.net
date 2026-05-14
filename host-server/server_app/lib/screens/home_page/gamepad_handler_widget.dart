@@ -451,72 +451,56 @@ class DeviceInputIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // AnimatedSlide uses fractional offsets relative to the child's size.
-    // Moving up to 40% of its size keeps it well contained within the indicator area.
-    final stickOffset = isOnPool
-        ? Offset.zero
-        : Offset(input.stickX * 0.65, input.stickY * 0.65);
-
     final shape = isOnPool ? BoxShape.rectangle : BoxShape.circle;
     final borderRadius = isOnPool ? BorderRadius.circular(size * 0.1) : null;
+
+    double stickX = input.stickX;
+    double stickY = input.stickY;
+    double magnitude = math.sqrt(stickX * stickX + stickY * stickY);
+    if (magnitude > 1.0) magnitude = 1.0;
+
+    // Subtle elastic deformation: stretch in direction of movement, squash perpendicular
+    double stretch = 1;
+    double squash = 1;
+    double angle = (stickX == 0 && stickY == 0) ? 0.0 : math.atan2(stickY, stickX);
+
+    double maxOffset = size * 0.65;
+    double translateX = isOnPool ? 0 : stickX * maxOffset;
+    double translateY = isOnPool ? 0 : stickY * maxOffset;
+
+    final isCentered = stickX == 0 && stickY == 0;
+    final isPressed = input.buttonPressed;
+
+    double baseScale = isOnPool ? 0.6 : 0.9;
+    double targetScale = baseScale * (isPressed ? 0.75 : 1.0);
 
     return Center(
       child: SizedBox(
         width: size,
         height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Outer glow / ripple effect for button presses
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOutCubic,
-              width: input.buttonPressed
-                  ? size
-                  : size * (isOnPool ? 0.5 : 0.6),
-              height: input.buttonPressed
-                  ? size
-                  : size * (isOnPool ? 0.5 : 0.6),
-              decoration: BoxDecoration(
-                shape: shape,
-                borderRadius: borderRadius,
-                border: Border.all(
-                  color: device.color.withValues(
-                    alpha: input.buttonPressed ? 0.5 : 0.0,
-                  ),
-                  width: input.buttonPressed ? size * 0.1 : 0,
-                ),
-              ),
+        child: AnimatedScale(
+          scale: targetScale,
+          duration: Duration(milliseconds: isPressed ? 50 : 400),
+          curve: isPressed ? Curves.easeOut : Curves.elasticOut,
+          child: AnimatedContainer(
+            duration: isCentered
+                ? const Duration(milliseconds: 400)
+                : const Duration(milliseconds: 100),
+            curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
+            transformAlignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..translate(translateX, translateY)
+              ..rotateZ(angle)
+              ..scale(stretch, squash)
+              ..rotateZ(-angle),
+            decoration: BoxDecoration(
+              color: device.color,
+              shape: shape,
+              borderRadius: borderRadius,
             ),
-
-            // Inner joystick visualizer
-            AnimatedSlide(
-              offset: stickOffset,
-              duration: const Duration(milliseconds: 100),
-              curve: Curves.elasticOut,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 100),
-                width: size * (isOnPool ? 0.6 : 0.9),
-                height: size * (isOnPool ? 0.6 : 0.9),
-                decoration: BoxDecoration(
-                  color: device.color,
-                  shape: shape,
-                  borderRadius: borderRadius,
-                  boxShadow: input.buttonPressed
-                      ? [
-                          BoxShadow(
-                            color: device.color.withValues(alpha: 0.6),
-                            blurRadius: size * 0.2,
-                            spreadRadius: size * 0.05,
-                          ),
-                        ]
-                      : [],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+      )
     );
   }
 }
