@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -11,6 +12,15 @@ import '../widgets/options_popup.dart';
 import '../theme/app_colors.dart';
 import '../services/preferences_service.dart';
 import 'connection_setup_screen.dart';
+import '../services/network_discovery_service.dart';
+import 'qr_scanner_screen.dart';
+
+enum ControllerConnectionState {
+  searching,
+  connected,
+  disconnected,
+  multipleHostsFound,
+}
 
 class ControllerScreen extends StatefulWidget {
   const ControllerScreen({super.key});
@@ -57,6 +67,13 @@ class ConnectionManager {
 class _ControllerScreenState extends State<ControllerScreen>
     with AutomaticKeepAliveClientMixin {
   WebSocketService? ws;
+  
+  ControllerConnectionState _connectionState = ControllerConnectionState.searching;
+  late NetworkDiscoveryService _discoveryService;
+  StreamSubscription? _discoverySubscription;
+  List<DiscoveredHost> _discoveredHosts = [];
+  bool _autoConnectEnabled = true;
+
   String status = 'Conectando...';
   int? playerIndex;
   bool dpadMode = false;
@@ -88,6 +105,7 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   Future<void> _checkSetupRequired() async {
     final host = await PreferencesService.instance.getServerHost();
+    await _loadInitialPreferences();
 
     if (!kIsWeb && host == null) {
       setState(() {
@@ -95,8 +113,43 @@ class _ControllerScreenState extends State<ControllerScreen>
       });
     } else {
       await _loadInitialPreferences();
+    if (kIsWeb) {
       _connectWebSocket();
+      return;
     }
+
+    final host = await PreferencesService.instance.getServerHost();
+    if (host != null) {
+      _connectWebSocket();
+    } else {
+      _startDiscovery();
+    }
+  }
+
+  void _startDiscovery() {
+    setState(() => _connectionState = ControllerConnectionState.searching);
+    
+    _discoveryService.startScanning();
+    _discoverySubscription?.cancel();
+    _discoverySubscription = _discoveryService.discoveredHosts.listen((hosts) {
+      if (_connectionState == ControllerConnectionState.connected) return;
+
+      if (hosts.length == 1 && _autoConnectEnabled) {
+        _connectToHost(hosts.first);
+      } else if (hosts.length > 1) {
+        setState(() {
+          _connectionState = ControllerConnectionState.multipleHostsFound;
+          _discoveredHosts = hosts;
+        });
+      }
+    });
+
+    // Timeout to disconnected state if nothing is found
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted && _connectionState == ControllerConnectionState.searching) {
+        setState(() => _connectionState = ControllerConnectionState.disconnected);
+      }
+    });
   }
 
   Future<void> _connectWebSocket() async {
@@ -105,8 +158,17 @@ class _ControllerScreenState extends State<ControllerScreen>
     if (_listenerAttached) return;
 
     _listenerAttached = true;
+    setState(() => _connectionState = ControllerConnectionState.searching);
 
     ws = await ConnectionManager.instance.getConnection();
+    try {
+      _listenerAttached = true;
+      ws = await ConnectionManager.instance.getConnection();
+      
+      setState(() {
+        _connectionState = ControllerConnectionState.connected;
+        status = 'Conectado';
+      });
 
     ws!.channel.stream.listen(
       _handleWebSocketMessage,
@@ -120,6 +182,41 @@ class _ControllerScreenState extends State<ControllerScreen>
           setState(() => status = 'Erro');
         }
       },
+      ws!.channel.stream.listen(
+        _handleWebSocketMessage,
+        onDone: _handleDisconnect,
+        onError: (_) => _handleDisconnect(),
+      );
+    } catch (e) {
+      _handleDisconnect();
+    }
+  }
+
+  void _handleDisconnect() {
+    if (!mounted) return;
+    _listenerAttached = false;
+    ws = null;
+    setState(() => _connectionState = ControllerConnectionState.disconnected);
+    _clearPlayerSlot();
+    _autoConnectEnabled = false; // Prevent endless auto-reconnect loops to a dead host
+  }
+
+  Future<void> _connectToHost(DiscoveredHost host) async {
+    _discoveryService.stopScanning();
+    await PreferencesService.instance.saveConnection(host.ip, host.port, false);
+    _connectWebSocket();
+  }
+
+  void _openQRScanner() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => QRScannerScreen(
+          onConnected: () {
+            _autoConnectEnabled = true;
+            _connectWebSocket();
+          },
+        ),
+      ),
     );
   }
 
@@ -129,6 +226,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   void initState() {
     super.initState();
+    _discoveryService = NetworkDiscoveryService();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeRight,
       DeviceOrientation.landscapeLeft,
@@ -138,6 +236,8 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   @override
   void dispose() {
+    _discoveryService.stopScanning();
+    _discoverySubscription?.cancel();
     super.dispose();
   }
 
@@ -152,6 +252,8 @@ class _ControllerScreenState extends State<ControllerScreen>
       status = 'Desconectado';
       playerIndex = null;
     });
+    _autoConnectEnabled = false;
+    _handleDisconnect();
   }
 
   void _updatePlayerSlot(dynamic slotValue, {String? colorHex}) {
@@ -169,6 +271,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _send(Map<String, dynamic> obj) {
+    if (_connectionState != ControllerConnectionState.connected) return;
     ws?.send(obj);
   }
 
@@ -416,6 +519,127 @@ class _ControllerScreenState extends State<ControllerScreen>
     );
   }
 
+  Widget _buildCenterStatus() {
+    if (_connectionState == ControllerConnectionState.searching) {
+      return const Text(
+        'searching...',
+        style: TextStyle(fontSize: 18, color: AppColors.textPrimary, fontFamily: 'pico'),
+      );
+    } else if (_connectionState == ControllerConnectionState.disconnected) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'disconnected',
+            style: TextStyle(fontSize: 18, color: AppColors.textPrimary, fontFamily: 'pico'),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: () {
+              _autoConnectEnabled = true;
+              _startDiscovery();
+            },
+            child: const Icon(Icons.refresh, color: AppColors.textPrimary, size: 24),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: _openQRScanner,
+            child: const Icon(Icons.qr_code_scanner, color: AppColors.textPrimary, size: 24),
+          ),
+        ],
+      );
+    } else if (_connectionState == ControllerConnectionState.multipleHostsFound) {
+      return const Text(
+        'select host',
+        style: TextStyle(fontSize: 18, color: AppColors.textPrimary, fontFamily: 'pico'),
+      );
+    } else if (_connectionState == ControllerConnectionState.connected) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (playerColor != null)
+            Container(
+              width: 16,
+              height: 16,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: playerColor,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          Text(
+            status,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 18,
+              color: AppColors.textPrimary,
+              fontFamily: 'pico',
+            ),
+          ),
+        ],
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildMultipleHostsOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black54,
+        child: Center(
+          child: Container(
+            width: 320,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.screenBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.textPrimary, width: AppColors.borderThickness),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Multiple Hosts Found', style: TextStyle(fontFamily: 'pico', color: AppColors.textPrimary, fontSize: 16)),
+                const SizedBox(height: 16),
+                ..._discoveredHosts.map((host) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.highlightColor,
+                      foregroundColor: AppColors.textPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: AppColors.textPrimary, width: 2)),
+                    ),
+                    onPressed: () {
+                      _autoConnectEnabled = true;
+                      _connectToHost(host);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(host.name, style: const TextStyle(fontFamily: 'pico', fontSize: 14)),
+                          Text(host.ip, style: TextStyle(fontFamily: 'pico', fontSize: 10, color: AppColors.textPrimary.withOpacity(0.7))),
+                        ],
+                      ),
+                    ),
+                  ),
+                )),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.qr_code_scanner, color: AppColors.textPrimary),
+                  label: const Text('Scan QR Instead', style: TextStyle(fontFamily: 'pico', color: AppColors.textPrimary)),
+                  onPressed: _openQRScanner,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -438,6 +662,12 @@ class _ControllerScreenState extends State<ControllerScreen>
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
+        child: Stack(
+          children: [
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
@@ -476,6 +706,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 if (playerColor != null &&
                                     status == 'Conectado')
@@ -500,6 +731,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                                     fontFamily: 'pico',
                                   ),
                                 ),
+                                _buildCenterStatus(),
                               ],
                             ),
                             const SizedBox(height: 8),

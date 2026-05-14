@@ -1,19 +1,14 @@
 {
-    "name": "controller_app",
-    "short_name": "controller_app",
+    "name": "ma-net",
+    "short_name": "ma-net",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
+    "background_color": "#hexcode",
+    "theme_color": "#hexcode",
     "description": "A new Flutter project.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
-        {
-            "src": "assets/assets/icon/icon.svg",
-            "sizes": "any",
-            "type": "image/svg+xml"
-        },
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",
