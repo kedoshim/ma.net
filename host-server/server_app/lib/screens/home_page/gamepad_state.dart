@@ -78,7 +78,7 @@ class GamepadState extends ChangeNotifier {
       slots = state.slots;
       for (int i = 0; i < slots.length; i++) {
         final slot = slots[i];
-        print('Slot ${slot?.slot} - ${slot?.type}');
+        print('Slot ${slot.slot} - ${slot.type}');
       }
       notifyListeners();
     } catch (e, stack) {

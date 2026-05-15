@@ -333,7 +333,7 @@ class ControllerSlotWidget extends StatelessWidget {
                       Padding(
                         padding: EdgeInsets.only(left: scale.eighth / 3),
                         child: Text(
-                          'hold',
+                          'segure',
                           style: AppTheme.bodyMedium.copyWith(
                             fontFamily: 'pico',
                             fontSize: scale.eighth * 0.7,

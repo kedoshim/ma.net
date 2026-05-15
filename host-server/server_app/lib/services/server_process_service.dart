@@ -1,15 +1,27 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 class ServerProcessService {
   ServerProcessService._internal();
 
-  static final ServerProcessService instance =
-      ServerProcessService._internal();
+  static final ServerProcessService instance = ServerProcessService._internal();
 
   Process? _process;
 
-  String _resolvePythonPath() {
+  String _resolveExecutablePath() {
+    if (kReleaseMode) {
+      final exeDir = p.dirname(Platform.resolvedExecutable);
+      return p.join(
+        exeDir,
+        'data',
+        'flutter_assets',
+        'assets',
+        'server',
+        'python_server.exe',
+      );
+    }
+
     final currentDir = Directory.current.path;
     final projectRoot = Directory(currentDir).parent.path;
 
@@ -31,32 +43,42 @@ class ServerProcessService {
       return;
     }
 
-    final pythonPath = _resolvePythonPath();
+    final executablePath = _resolveExecutablePath();
 
-    if (!File(pythonPath).existsSync()) {
-      throw Exception('Python not found at: $pythonPath');
+    if (!File(executablePath).existsSync()) {
+      throw Exception('Executable not found at: $executablePath');
     }
 
     print(
-      'Starting server with Python at: $pythonPath '
+      'Starting server at: $executablePath '
       'port=$port slots=$slots fixed=$fixed mode=$controllerMode',
     );
 
+    final List<String> arguments = [];
+
+    // If debugging, we need to instruct python to run our module
+    if (!kReleaseMode) {
+      arguments.addAll(['-m', 'src.app.main']);
+    }
+
+    // Append the standard flags for the app
+    arguments.addAll([
+      '--port',
+      port.toString(),
+      '--slots',
+      slots.toString(),
+      if (!fixed) '--auto-expand',
+      '--controller-type',
+      controllerMode,
+    ]);
+
     _process = await Process.start(
-      pythonPath,
-      [
-        '-m',
-        'src.app.main',
-        '--port',
-        port.toString(),
-        '--slots',
-        slots.toString(),
-        if (!fixed) '--auto-expand',
-        '--controller-type',
-        controllerMode,
-      ],
+      executablePath,
+      arguments,
       runInShell: false,
-      workingDirectory: Directory(Directory.current.path).parent.path,
+      workingDirectory: kReleaseMode
+          ? p.dirname(executablePath)
+          : Directory(Directory.current.path).parent.path,
     );
 
     _process!.stdout
@@ -66,6 +88,11 @@ class ServerProcessService {
     _process!.stderr
         .transform(SystemEncoding().decoder)
         .listen((data) => print('[SERVER ERROR] $data'));
+
+    _process!.exitCode.then((code) {
+      print('[SERVER] Process exited with code $code');
+      _process = null; // Clear process so it can be restarted later
+    });
   }
 
   Future<void> stopServer() async {

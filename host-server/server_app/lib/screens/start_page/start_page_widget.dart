@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:server_app/screens/home_page/home_page_widget.dart';
 import 'package:server_app/services/server_process_service.dart';
 import 'package:styled_divider/styled_divider.dart';
@@ -8,7 +10,7 @@ import '../../theme/app_theme.dart';
 import 'start_page_model.dart';
 export 'start_page_model.dart';
 
-Future<void> waitUntilServerReady(int port) async {
+Future<bool> waitUntilServerReady(int port) async {
   final client = HttpClient();
 
   for (int i = 0; i < 10; i++) {
@@ -19,11 +21,12 @@ Future<void> waitUntilServerReady(int port) async {
 
       final response = await request.close();
 
-      if (response.statusCode == 200) return;
+      if (response.statusCode == 200) return true;
     } catch (_) {}
 
     await Future.delayed(const Duration(milliseconds: 500));
   }
+  return false;
 }
 
 Future<bool> isServerRunning(int port) async {
@@ -33,7 +36,9 @@ Future<bool> isServerRunning(int port) async {
     final request = await client.getUrl(
       Uri.parse('http://127.0.0.1:$port/api/server/status'),
     );
-    final response = await request.close().timeout(const Duration(milliseconds: 500));
+    final response = await request.close().timeout(
+      const Duration(milliseconds: 500),
+    );
     return response.statusCode == 200;
   } catch (_) {
     return false;
@@ -45,7 +50,10 @@ Future<bool> isServerRunning(int port) async {
 Future<void> killExistingServer(int port) async {
   try {
     if (Platform.isWindows) {
-      final result = await Process.run('cmd', ['/c', 'netstat -ano | findstr :$port']);
+      final result = await Process.run('cmd', [
+        '/c',
+        'netstat -ano | findstr :$port',
+      ]);
       final lines = result.stdout.toString().split('\n');
       for (var line in lines) {
         if (line.contains('LISTENING')) {
@@ -57,7 +65,10 @@ Future<void> killExistingServer(int port) async {
         }
       }
     } else {
-      await Process.run('sh', ['-c', 'fuser -k $port/tcp || lsof -t -i:$port | xargs kill -9']);
+      await Process.run('sh', [
+        '-c',
+        'fuser -k $port/tcp || lsof -t -i:$port | xargs kill -9',
+      ]);
     }
     await Future.delayed(const Duration(seconds: 1));
   } catch (_) {}
@@ -76,8 +87,9 @@ class StartPageWidget extends StatefulWidget {
 class _StartPageWidgetState extends State<StartPageWidget> {
   late StartPageModel _model;
 
-  final TextEditingController _portController =
-    TextEditingController(text: '8765');
+  final TextEditingController _portController = TextEditingController(
+    text: '8765',
+  );
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -87,6 +99,152 @@ class _StartPageWidgetState extends State<StartPageWidget> {
   void initState() {
     super.initState();
     _model = StartPageModel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkDriverAndShowDialog();
+    });
+  }
+
+  Future<void> _checkDriverAndShowDialog() async {
+    if (Platform.isWindows) {
+      final isInstalled = await _isDriverInstalled();
+      if (!isInstalled && mounted) {
+        _showDriverInstallDialog();
+      }
+    }
+  }
+
+  Future<bool> _isDriverInstalled() async {
+    try {
+      print('[DRIVER CHECK] Executing: sc query ViGEmBus');
+      final result = await Process.run('cmd', ['/c', 'sc query ViGEmBus']);
+      final output = result.stdout.toString() + result.stderr.toString();
+      print('[DRIVER CHECK] Exit code: ${result.exitCode}');
+      print('[DRIVER CHECK] Output:\n$output');
+      
+      final lowerOutput = output.toLowerCase();
+      if (result.exitCode != 0 || 
+          output.contains('1060') || 
+          lowerOutput.contains('does not exist') ||
+          lowerOutput.contains('falha') ||
+          lowerOutput.contains('não existe') ||
+          lowerOutput.contains('stopped')) {
+        print('[DRIVER CHECK] Driver not found (service query failed).');
+        return false;
+      }
+      print('[DRIVER CHECK] Driver is installed.');
+      return true;
+    } catch (e) {
+      print('[DRIVER CHECK] sc query threw an exception: $e');
+      final driverFile = File(r'C:\Windows\System32\drivers\ViGEmBus.sys');
+      final exists = driverFile.existsSync();
+      print('[DRIVER CHECK] Fallback check: ViGEmBus.sys exists = $exists');
+      return exists;
+    }
+  }
+
+  void _showDriverInstallDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppTheme.primaryBackground,
+          title: Text(
+            'Sem Driver',
+            style: AppTheme.titleSmall.copyWith(fontFamily: 'pico'),
+          ),
+          content: Text(
+            'Esse app precisa do driver ViGEmBus para funcionar :P',
+            style: AppTheme.bodyMedium.copyWith(fontFamily: 'pico'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Cancelar',
+                style: AppTheme.bodyMedium.copyWith(
+                  fontFamily: 'pico',
+                  color: AppTheme.primaryText,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _installDriver();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryText,
+                foregroundColor: AppTheme.primaryBackground,
+              ),
+              child: Text(
+                'Instalar Driver',
+                style: AppTheme.titleSmall.copyWith(
+                  fontFamily: 'pico',
+                  color: AppTheme.primaryBackground,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<String?> _findDriverInstallerPath() async {
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+    final candidates = <String>[
+      p.join(
+        exeDir,
+        'data',
+        'flutter_assets',
+        'assets',
+        'drivers',
+        'ViGEmBus_Setup.exe',
+      ),
+      p.join(exeDir, 'data', 'flutter_assets', 'drivers', 'ViGEmBus_Setup.exe'),
+      p.join(Directory.current.path, 'assets', 'drivers', 'ViGEmBus_Setup.exe'),
+      p.join(Directory.current.path, 'drivers', 'ViGEmBus_Setup.exe'),
+      p.join(
+        p.dirname(Platform.script.toFilePath()),
+        'assets',
+        'drivers',
+        'ViGEmBus_Setup.exe',
+      ),
+    ];
+
+    for (final path in candidates) {
+      if (File(path).existsSync()) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _installDriver() async {
+    try {
+      final installerPath = await _findDriverInstallerPath();
+
+      if (installerPath != null) {
+        await Process.start(installerPath, [], mode: ProcessStartMode.detached);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Instalador não encontrado em assets/drivers/ViGEmBus_Setup.exe',
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao iniciar instalador: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -128,54 +286,73 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                         'only x•input': 'x360',
                       };
 
-                      final mode = modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
+                      final mode =
+                          modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
 
                       final port = int.tryParse(_portController.text) ?? 8765;
 
                       if (port < 1024 || port > 65535) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Porta inválida'),
-                          ),
+                          const SnackBar(content: Text('Porta inválida')),
                         );
                         return;
                       }
 
-                  final running = await isServerRunning(port);
+                      final running = await isServerRunning(port);
 
-                  if (running) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Servidor anterior encontrado. Encerrando para reiniciar...'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                    await killExistingServer(port);
-                  } else {
-                    try {
-                      // Testa se a porta está ocupada por um processo desconhecido
-                      final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, port);
-                      await socket.close();
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('A porta $port já está em uso por outro programa!'),
-                        ),
+                      if (running) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Servidor anterior encontrado. Encerrando para reiniciar...',
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                        await killExistingServer(port);
+                      } else {
+                        try {
+                          // Testa se a porta está ocupada por um processo desconhecido
+                          final socket = await ServerSocket.bind(
+                            InternetAddress.loopbackIPv4,
+                            port,
+                          );
+                          await socket.close();
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'A porta $port já está em uso por outro programa!',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                      }
+
+                      await _serverService.startServer(
+                        port: port,
+                        slots: slots,
+                        fixed: fixed,
+                        controllerMode: mode,
                       );
-                      return;
-                    }
-                  }
-
-                  await _serverService.startServer(
-                    port: port,
-                    slots: slots,
-                    fixed: fixed,
-                    controllerMode: mode,
-                  );
-                  await waitUntilServerReady(port);
+                      final isReady = await waitUntilServerReady(port);
 
                       if (!mounted) return;
+
+                      if (!isReady) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Falha ao iniciar o servidor. O driver ViGEmBus pode estar ausente ou houve um erro interno.',
+                            ),
+                          ),
+                        );
+                        // Re-trigger the driver check to immediately pop up the dialog if missing
+                        await _checkDriverAndShowDialog();
+                        return; // DO NOT PROGRESS TO THE HOME PAGE
+                      }
 
                       Navigator.push(
                         context,
@@ -237,30 +414,54 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                             child: Container(
                                               width: 40,
                                               decoration: BoxDecoration(),
-                                              child: DropdownButtonFormField<String>(
-                                                initialValue: _model.dropDownValue1 ?? '4',
-                                                items: ['1', '2', '3', '4', '5', '6', '7', '8']
-                                                    .map((e) => DropdownMenuItem(
-                                                          value: e,
-                                                          child: Text(e),
-                                                        ))
-                                                    .toList(),
-                                                onChanged: (val) {
-                                                  setState(() {
-                                                    _model.dropDownValue1 = val;
-                                                  });
-                                                },
-                                                decoration: const InputDecoration(
-                                                  border: InputBorder.none,
-                                                ),
-                                                style: AppTheme.bodyMedium.copyWith(
-                                                  fontFamily: 'pico',
-                                                  letterSpacing: 0.0,
-                                                ),
-                                              ),
+                                              child:
+                                                  DropdownButtonFormField<
+                                                    String
+                                                  >(
+                                                    initialValue:
+                                                        _model.dropDownValue1 ??
+                                                        '4',
+                                                    items:
+                                                        [
+                                                              '1',
+                                                              '2',
+                                                              '3',
+                                                              '4',
+                                                              '5',
+                                                              '6',
+                                                              '7',
+                                                              '8',
+                                                            ]
+                                                            .map(
+                                                              (e) =>
+                                                                  DropdownMenuItem(
+                                                                    value: e,
+                                                                    child: Text(
+                                                                      e,
+                                                                    ),
+                                                                  ),
+                                                            )
+                                                            .toList(),
+                                                    onChanged: (val) {
+                                                      setState(() {
+                                                        _model.dropDownValue1 =
+                                                            val;
+                                                      });
+                                                    },
+                                                    decoration:
+                                                        const InputDecoration(
+                                                          border:
+                                                              InputBorder.none,
+                                                        ),
+                                                    style: AppTheme.bodyMedium
+                                                        .copyWith(
+                                                          fontFamily: 'pico',
+                                                          letterSpacing: 0.0,
+                                                        ),
+                                                  ),
                                             ),
                                           ),
-                                        ]
+                                        ],
                                       ),
                                     ),
                                     Expanded(
@@ -290,11 +491,13 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                           materialTapTargetSize:
                                               MaterialTapTargetSize.shrinkWrap,
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(4.0),
+                                            borderRadius: BorderRadius.circular(
+                                              4.0,
+                                            ),
                                           ),
                                         ),
-                                        unselectedWidgetColor: AppTheme.primaryText,
+                                        unselectedWidgetColor:
+                                            AppTheme.primaryText,
                                       ),
                                       child: Checkbox(
                                         value: _model.checkboxValue ??= false,
@@ -329,10 +532,10 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                         ),
                                       ),
                                     ),
-                                  ]
-                                )
-                              )
-                            ]
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -349,13 +552,17 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                               width: 230,
                               decoration: BoxDecoration(),
                               child: DropdownButtonFormField<String>(
-                                initialValue: _model.dropDownValue2 ?? 'modo padrao',
-                                items: ['modo padrao', 'd•input', 'only x•input']
-                                    .map((e) => DropdownMenuItem(
-                                          value: e,
-                                          child: Text(e),
-                                        ))
-                                    .toList(),
+                                initialValue:
+                                    _model.dropDownValue2 ?? 'modo padrao',
+                                items:
+                                    ['modo padrao', 'd•input', 'only x•input']
+                                        .map(
+                                          (e) => DropdownMenuItem(
+                                            value: e,
+                                            child: Text(e),
+                                          ),
+                                        )
+                                        .toList(),
                                 onChanged: (val) {
                                   setState(() {
                                     _model.dropDownValue2 = val;

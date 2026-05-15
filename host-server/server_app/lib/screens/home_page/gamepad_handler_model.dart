@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 class GamepadHandlerModel extends ChangeNotifier {
   ///  State fields for stateful widgets in this page.

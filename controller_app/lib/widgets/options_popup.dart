@@ -85,16 +85,40 @@ class _OptionsPopupState extends State<OptionsPopup> {
       title: isTypingFace
           ? const SizedBox.shrink()
           : Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Options',
+                  'Opcoes',
                   style: TextStyle(
                     fontFamily: 'pico',
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
                   ),
                 ),
+                const Spacer(),
+                if (kIsWeb)
+                  TextButton.icon(
+                    onPressed: () async {
+                      final url = Uri.base.resolve('/apk');
+                      try {
+                        await launchUrl(url, webOnlyWindowName: '_blank');
+                      } catch (e) {
+                        debugPrint('Could not launch download URL: $e');
+                      }
+                    },
+                    icon: const Icon(
+                      Icons.android,
+                      size: 18,
+                      color: AppColors.textPrimary,
+                    ),
+                    label: const Text(
+                      'Baixar App Android',
+                      style: TextStyle(
+                        fontFamily: 'pico',
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: TextButton.styleFrom(
@@ -157,7 +181,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Controller',
+          'Controle',
           style: TextStyle(
             fontFamily: 'pico',
             fontWeight: FontWeight.bold,
@@ -167,7 +191,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
         ),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('D-Pad Mode', style: TextStyle(fontFamily: 'pico')),
+          title: const Text('Modo D-Pad', style: TextStyle(fontFamily: 'pico')),
           value: _dpadMode,
           onChanged: (value) {
             setState(() => _dpadMode = value);
@@ -178,9 +202,12 @@ class _OptionsPopupState extends State<OptionsPopup> {
         ),
         const Divider(),
         SwitchListTile(
-          title: const Text('Edit Mode', style: TextStyle(fontFamily: 'pico')),
+          title: const Text(
+            'Modo de Edicao',
+            style: TextStyle(fontFamily: 'pico'),
+          ),
           subtitle: const Text(
-            'Reorder buttons by dragging',
+            'Reordenar botoes arrastando',
             style: TextStyle(fontFamily: 'pico', fontSize: 12),
           ),
           value: _editMode,
@@ -193,7 +220,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
         ),
         const Divider(),
         const Text(
-          'Color Theme',
+          'Tema de Cores',
           style: TextStyle(
             fontFamily: 'pico',
             fontWeight: FontWeight.bold,
@@ -204,7 +231,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
         _buildThemeSelector(),
         const Divider(),
         const Text(
-          'Action Buttons',
+          'Botoes Visiveis',
           style: TextStyle(
             fontFamily: 'pico',
             fontWeight: FontWeight.bold,
@@ -214,30 +241,11 @@ class _OptionsPopupState extends State<OptionsPopup> {
         const SizedBox(height: 8),
         ..._buildButtonToggles(),
         const Divider(),
-        if (kIsWeb)
-          ListTile(
-            leading: const Icon(Icons.android, color: AppColors.textPrimary),
-            title: const Text(
-              'Download Android App',
-              style: TextStyle(
-                fontFamily: 'pico',
-                color: AppColors.textPrimary,
-              ),
-            ),
-            onTap: () async {
-              final url = Uri.base.resolve('/apk');
-              try {
-                await launchUrl(url, webOnlyWindowName: '_blank');
-              } catch (e) {
-                debugPrint('Could not launch download URL: $e');
-              }
-            },
-          )
-        else
+        if (!kIsWeb)
           ListTile(
             leading: const Icon(Icons.link_off, color: AppColors.textPrimary),
             title: const Text(
-              'Disconnect',
+              'Desconectar',
               style: TextStyle(
                 fontFamily: 'pico',
                 color: AppColors.textPrimary,
@@ -258,7 +266,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
       children: [
         if (!isTypingFace) ...[
           const Text(
-            'Tiny Face Lab',
+            'Rostinhos',
             style: TextStyle(
               fontFamily: 'pico',
               fontWeight: FontWeight.bold,
@@ -268,7 +276,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Quick, goofy, and ready in seconds.',
+            'Deixe com a sua cara :)',
             style: TextStyle(
               fontFamily: 'pico',
               fontSize: 12,
@@ -309,22 +317,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
           ),
           const SizedBox(height: 14),
           const Text(
-            'Presets',
-            style: TextStyle(
-              fontFamily: 'pico',
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: playerFacePresets.map(_buildPresetChip).toList(),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Paint',
+            'Cores',
             style: TextStyle(
               fontFamily: 'pico',
               fontWeight: FontWeight.bold,
@@ -351,7 +344,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
                 children: [
                   if (!isTypingFace) ...[
                     const Text(
-                      'Face',
+                      'Rosto',
                       style: TextStyle(
                         fontFamily: 'pico',
                         fontWeight: FontWeight.bold,
@@ -434,7 +427,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Spin',
+                      'Rotacao',
                       style: TextStyle(
                         fontFamily: 'pico',
                         fontWeight: FontWeight.bold,
@@ -455,6 +448,21 @@ class _OptionsPopupState extends State<OptionsPopup> {
             ],
           ],
         ),
+        const Text(
+          'Presets',
+          style: TextStyle(
+            fontFamily: 'pico',
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: playerFacePresets.map(_buildPresetChip).toList(),
+        ),
+        const SizedBox(height: 14),
       ],
     );
   }
@@ -480,7 +488,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
 
   Widget _buildThemeSelector() {
     final themes = ColorTheme.values;
-    final themeNames = ['Blue', 'Red', 'Green', 'Yellow'];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -513,10 +520,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                themeNames[index],
-                style: const TextStyle(fontFamily: 'pico', fontSize: 12),
-              ),
             ],
           ),
         );

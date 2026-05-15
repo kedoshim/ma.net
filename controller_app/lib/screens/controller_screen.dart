@@ -556,7 +556,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   Widget _buildCenterStatus() {
     if (_connectionState == ControllerConnectionState.searching) {
       return const Text(
-        'searching...',
+        'procurando...',
         style: TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
@@ -568,7 +568,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'disconnected',
+            'disconectado',
             style: TextStyle(
               fontSize: 18,
               color: AppColors.textPrimary,
@@ -607,7 +607,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     } else if (_connectionState ==
         ControllerConnectionState.multipleHostsFound) {
       return const Text(
-        'select host',
+        'selecionar host',
         style: TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
@@ -665,7 +665,7 @@ class _ControllerScreenState extends State<ControllerScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Multiple Hosts Found',
+                  'Varios Hosts Encontrados',
                   style: TextStyle(
                     fontFamily: 'pico',
                     color: AppColors.textPrimary,
@@ -728,7 +728,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                       color: AppColors.textPrimary,
                     ),
                     label: const Text(
-                      'Scan QR Instead',
+                      'Escanear QR em vez disso',
                       style: TextStyle(
                         fontFamily: 'pico',
                         color: AppColors.textPrimary,

@@ -1,5 +1,6 @@
 
 import os
+import sys
 
 from aiohttp import web
 
@@ -13,7 +14,15 @@ def register_all_routes(app, server_routes, http_routes, websocket_routes, file_
 
 def register_server_routes(app, server_routes):
     app.router.add_get("/", server_routes.index)
-    app.router.add_static("/", path=server_routes.web_page_static_path)
+    
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        web_static_path = os.path.join(sys._MEIPASS, 'web')
+    else:
+        # Ensure absolute path in Dev Mode to avoid aiohttp ValueError
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        web_static_path = os.path.normpath(os.path.join(base_dir, '..', 'controller_app', 'build', 'web'))
+        
+    app.router.add_static("/", path=web_static_path)
 
 def register_file_routes(app, file_routes):
     app.router.add_get('/apk', file_routes.serve_apk)

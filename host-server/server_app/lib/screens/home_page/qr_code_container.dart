@@ -96,7 +96,7 @@ class QRCodePanel extends StatelessWidget {
                     await Clipboard.setData(ClipboardData(text: connectionUrl));
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Link copied')),
+                        const SnackBar(content: Text('Link copiado')),
                       );
                     }
                   },

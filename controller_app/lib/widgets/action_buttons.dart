@@ -261,7 +261,7 @@ class _ActionButtonsState extends State<ActionButtons> {
     if (visible.isEmpty) {
       return Center(
         child: Text(
-          widget.editMode ? 'No buttons visible' : 'Enable buttons in options',
+          widget.editMode ? 'Sem botões visiveis' : 'Habilite botões nas configurações',
           style: TextStyle(
             fontFamily: 'pico',
             fontSize: 14,
