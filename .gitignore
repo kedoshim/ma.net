@@ -2,3 +2,5 @@
 *.bat
 *.cmake
 *.h
+*.cc
+*.swift

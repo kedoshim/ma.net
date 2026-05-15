@@ -26,5 +26,9 @@ class PlayerSlot:
     reserved_until: float = 0
     created_at: float = field(default_factory=time.time)
 
+    # Rumble state tracking (normalized 0.0-1.0)
+    last_rumble_strong: float = 0.0
+    last_rumble_weak: float = 0.0
+    last_rumble_sent_at: float = 0.0
     def is_available(self):
         return self.assigned_device_id is None

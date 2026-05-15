@@ -142,6 +142,20 @@ class WebSocketRoutes:
                 elif msg_type == "face_update":
                     self.manager.update_device_identity(device_id, data)
                     self.admin_panel.broadcast_update()
+                elif msg_type == "rumble_test":
+                    LOG.info("Received rumble_test from device %s", device_id)
+
+                    async def _send_pulse():
+                        try:
+                            await ws.send_json({"type": "rumble", "weak": 0.3, "strong": 0.8})
+                            LOG.info("Sent rumble test to %s", device_id)
+                            await asyncio.sleep(0.12)
+                            await ws.send_json({"type": "rumble", "weak": 0.0, "strong": 0.0})
+                            LOG.info("Cleared rumble test for %s", device_id)
+                        except Exception:
+                            LOG.error("Failed to send rumble_test payload to %s", device_id)
+
+                    asyncio.create_task(_send_pulse())
 
         except asyncio.CancelledError:
             LOG.debug("Websocket cancelled")

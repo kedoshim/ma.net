@@ -107,4 +107,11 @@ class PreferencesService {
       return null;
     }
   }
+
+  // --- Rumble / Haptics ---
+  Future<void> setRumbleEnabled(bool enabled) async =>
+      (await _getInstance).setBool('rumbleEnabled', enabled);
+
+  Future<bool> getRumbleEnabled() async =>
+      (await _getInstance).getBool('rumbleEnabled') ?? true;
 }

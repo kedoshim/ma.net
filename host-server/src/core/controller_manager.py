@@ -85,6 +85,7 @@ class ControllerManager:
             self.config.controller_type,
             self._existing_x360_count(),
             self.main_loop,
+            index,
         )
 
         slot = PlayerSlot(

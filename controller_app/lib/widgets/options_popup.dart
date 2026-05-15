@@ -4,7 +4,9 @@ import '../theme/app_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 import '../models/player_face.dart';
+import '../services/preferences_service.dart';
 import 'player_face_indicator.dart';
+import '../services/haptics_manager.dart';
 
 class OptionsPopup extends StatefulWidget {
   final bool dpadMode;
@@ -16,6 +18,7 @@ class OptionsPopup extends StatefulWidget {
   final ColorTheme currentTheme;
   final ValueChanged<ColorTheme> onThemeChanged;
   final VoidCallback? onDisconnectRequested;
+  final VoidCallback? onRumbleTest;
   final PlayerFaceData playerFace;
   final ValueChanged<PlayerFaceData> onPlayerFaceChanged;
 
@@ -30,6 +33,7 @@ class OptionsPopup extends StatefulWidget {
     required this.currentTheme,
     required this.onThemeChanged,
     this.onDisconnectRequested,
+    this.onRumbleTest,
     required this.playerFace,
     required this.onPlayerFaceChanged,
   });
@@ -41,6 +45,7 @@ class OptionsPopup extends StatefulWidget {
 class _OptionsPopupState extends State<OptionsPopup> {
   late bool _dpadMode;
   late bool _editMode;
+  bool _rumbleEnabled = true;
   late ColorTheme _selectedTheme;
   late PlayerFaceData _playerFace;
   late TextEditingController _faceController;
@@ -58,6 +63,15 @@ class _OptionsPopupState extends State<OptionsPopup> {
     _faceFocusNode.addListener(() {
       setState(() {});
     });
+    // load rumble pref (default true)
+    PreferencesService.instance
+        .getRumbleEnabled()
+        .then((v) {
+          setState(() => _rumbleEnabled = v);
+        })
+        .catchError((_) {
+          setState(() => _rumbleEnabled = true);
+        });
   }
 
   @override
@@ -196,6 +210,20 @@ class _OptionsPopupState extends State<OptionsPopup> {
           onChanged: (value) {
             setState(() => _dpadMode = value);
             widget.onDpadModeChanged(value);
+          },
+          activeThumbColor: AppColors.switchActiveThumb,
+          activeTrackColor: AppColors.highlightColor,
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: const Text(
+            'Ativar vibracoes',
+            style: TextStyle(fontFamily: 'pico'),
+          ),
+          value: _rumbleEnabled,
+          onChanged: (value) {
+            setState(() => _rumbleEnabled = value);
+            HapticsManager.instance.setEnabled(value);
           },
           activeThumbColor: AppColors.switchActiveThumb,
           activeTrackColor: AppColors.highlightColor,

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import '../services/websocket_service.dart';
+import '../services/haptics_manager.dart';
 import '../widgets/joystick.dart';
 import '../widgets/action_buttons.dart';
 import '../widgets/control_button.dart';
@@ -218,6 +219,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       DeviceOrientation.landscapeRight,
       DeviceOrientation.landscapeLeft,
     ]);
+    HapticsManager.instance.init();
     _checkSetupRequired();
   }
 
@@ -284,6 +286,10 @@ class _ControllerScreenState extends State<ControllerScreen>
           if (data['type'] == 'assigned') {
             _updatePlayerSlot(data['slot'], colorHex: data['color']);
             _ingestFaceData(data);
+            // Friendly connection pulse
+            try {
+              HapticsManager.instance.connectionPulse();
+            } catch (_) {}
           }
 
           if (data['type'] == 'slot_changed') {
@@ -293,6 +299,23 @@ class _ControllerScreenState extends State<ControllerScreen>
 
           if (data['type'] == 'unassigned') {
             _clearPlayerSlot();
+          }
+
+          if (data['type'] == 'rumble') {
+            try {
+              final weak = (data['weak'] is num)
+                  ? (data['weak'] as num).toDouble()
+                  : double.parse('${data['weak'] ?? 0}');
+              final strong = (data['strong'] is num)
+                  ? (data['strong'] as num).toDouble()
+                  : double.parse('${data['strong'] ?? 0}');
+              debugPrint(
+                'ControllerScreen: received rumble weak=$weak strong=$strong',
+              );
+              HapticsManager.instance.onRumble(weak, strong);
+            } catch (e) {
+              debugPrint('ControllerScreen: rumble handling error: $e');
+            }
           }
 
           if (data['type'] == 'toggle_btn' && data['btn'] != null) {
@@ -456,6 +479,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           currentTheme: _currentTheme,
           onThemeChanged: _onThemeChanged,
           onDisconnectRequested: _resetConnection,
+          onRumbleTest: _onRumbleTest,
           playerFace: _playerFace,
           onPlayerFaceChanged: _updatePlayerFace,
         );
@@ -490,6 +514,24 @@ class _ControllerScreenState extends State<ControllerScreen>
       AppColors.setTheme(ColorTheme.blue);
     }
     if (mounted) setState(() {});
+  }
+
+  void _onRumbleTest() {
+    debugPrint('ControllerScreen: local rumble test triggered');
+    // Local immediate feedback
+    try {
+      HapticsManager.instance.onRumble(0.3, 0.7);
+    } catch (e) {
+      debugPrint('ControllerScreen: local rumble error: $e');
+    }
+
+    // Ask server to send a test pulse back
+    try {
+      _send({'type': 'rumble_test'});
+      debugPrint('ControllerScreen: sent rumble_test to server');
+    } catch (e) {
+      debugPrint('ControllerScreen: failed to send rumble_test: $e');
+    }
   }
 
   void _onThemeChanged(ColorTheme theme) {
