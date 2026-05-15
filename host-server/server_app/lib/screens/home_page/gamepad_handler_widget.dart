@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/services/host_api_service.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:server_app/theme/app_theme.dart';
 import 'package:server_app/widgets/player_face_indicator.dart';
 import 'package:provider/provider.dart';
@@ -283,6 +284,22 @@ class ControllerSlotWidget extends StatelessWidget {
                           ),
                           childWhenDragging: const SizedBox.expand(),
                           child: Center(
+                            child: DeviceJoinPopEffect(
+                              device: slotModel.device!,
+                              child: DeviceInputIndicator(
+                                device: slotModel.device!,
+                                input:
+                                    state.getInputState(slotModel.device!.id) ??
+                                    DeviceInputState.idle(),
+                                size: scale.half,
+                                isOnPool: false,
+                              ),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: DeviceJoinPopEffect(
+                            device: slotModel.device!,
                             child: DeviceInputIndicator(
                               device: slotModel.device!,
                               input:
@@ -291,16 +308,6 @@ class ControllerSlotWidget extends StatelessWidget {
                               size: scale.half,
                               isOnPool: false,
                             ),
-                          ),
-                        )
-                      : Center(
-                          child: DeviceInputIndicator(
-                            device: slotModel.device!,
-                            input:
-                                state.getInputState(slotModel.device!.id) ??
-                                DeviceInputState.idle(),
-                            size: scale.half,
-                            isOnPool: false,
                           ),
                         ),
                 ),
@@ -428,11 +435,14 @@ class DevicePoolArea extends StatelessWidget {
                                 isOnPool: true,
                               ),
                             ),
-                            child: DeviceInputIndicator(
+                            child: DeviceJoinPopEffect(
                               device: device,
-                              input: inputState,
-                              size: scale.half,
-                              isOnPool: true,
+                              child: DeviceInputIndicator(
+                                device: device,
+                                input: inputState,
+                                size: scale.half,
+                                isOnPool: true,
+                              ),
                             ),
                           );
                         },
@@ -466,6 +476,104 @@ Widget _buildDragFeedback(DeviceModel device, double size) {
       ),
     ),
   );
+}
+
+class DeviceJoinPopEffect extends StatefulWidget {
+  final DeviceModel device;
+  final Widget child;
+  const DeviceJoinPopEffect({
+    super.key,
+    required this.device,
+    required this.child,
+  });
+
+  @override
+  State<DeviceJoinPopEffect> createState() => _DeviceJoinPopEffectState();
+}
+
+class _DeviceJoinPopEffectState extends State<DeviceJoinPopEffect>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  static final Set<String> _connectedDevices = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _checkAndPop();
+  }
+
+  @override
+  void didUpdateWidget(DeviceJoinPopEffect oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _checkAndPop();
+  }
+
+  void _checkAndPop() {
+    if (widget.device.connected &&
+        !_connectedDevices.contains(widget.device.id)) {
+      _connectedDevices.add(widget.device.id);
+      _triggerPop();
+    } else if (!widget.device.connected) {
+      _connectedDevices.remove(widget.device.id);
+      _scaleAnimation = Tween<double>(
+        begin: 1.0,
+        end: 1.0,
+      ).animate(_controller);
+    } else if (!_controller.isAnimating) {
+      _scaleAnimation = Tween<double>(
+        begin: 1.0,
+        end: 1.0,
+      ).animate(_controller);
+    }
+  }
+
+  void _triggerPop() {
+    _scaleAnimation = Tween<double>(
+      begin: 0.2,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
+    _controller.forward(from: 0.0);
+    _playSound();
+  }
+
+  void _playSound() async {
+    try {
+      final player = AudioPlayer();
+      final randomVariant = math.Random().nextInt(4) + 1;
+      await player.play(
+        AssetSource('audio/bubble_pop/bubble_pop$randomVariant.mp3'),
+        volume: 0.4,
+      );
+      player.onPlayerComplete.listen((_) => player.dispose());
+    } catch (e) {
+      debugPrint('Audio play error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: widget.child,
+        );
+      },
+    );
+  }
 }
 
 class DeviceInputIndicator extends StatelessWidget {
@@ -513,27 +621,48 @@ class DeviceInputIndicator extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: AnimatedContainer(
-          duration: isCentered
-              ? const Duration(milliseconds: 400)
-              : const Duration(milliseconds: 100),
-          curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
-          transformAlignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..rotateZ(angle)
-            ..scaleByDouble(stretch, squash, 1, 1)
-            ..rotateZ(-angle),
-          child: PlayerFaceIndicator(
-            face: device.face,
-            size: size,
-            roundedSquare: isOnPool,
-            scale: baseScale,
-            opacity: indicatorOpacity,
-            translateX: translateX,
-            translateY: translateY,
-            pressed: isPressed,
-            borderColor: borderColor,
+        child: TweenAnimationBuilder<Offset>(
+          tween: Tween(
+            begin: Offset(stickX, stickY),
+            end: Offset(stickX, stickY),
           ),
+          duration: isCentered
+              ? const Duration(milliseconds: 350)
+              : const Duration(milliseconds: 150),
+          curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
+          builder: (context, laggedStick, child) {
+            double faceTx = isOnPool
+                ? 0
+                : (laggedStick.dx - stickX) * maxOffset * 0.6;
+            double faceTy = isOnPool
+                ? 0
+                : (laggedStick.dy - stickY) * maxOffset * 0.6;
+
+            return AnimatedContainer(
+              duration: isCentered
+                  ? const Duration(milliseconds: 400)
+                  : const Duration(milliseconds: 100),
+              curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
+              transformAlignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..rotateZ(angle)
+                ..scaleByDouble(stretch, squash, 1, 1)
+                ..rotateZ(-angle),
+              child: PlayerFaceIndicator(
+                face: device.face,
+                size: size,
+                roundedSquare: isOnPool,
+                scale: baseScale,
+                opacity: indicatorOpacity,
+                translateX: translateX,
+                translateY: translateY,
+                faceTranslateX: faceTx,
+                faceTranslateY: faceTy,
+                pressed: isPressed,
+                borderColor: borderColor,
+              ),
+            );
+          },
         ),
       ),
     );

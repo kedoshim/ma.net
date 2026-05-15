@@ -171,3 +171,8 @@ Amante da experiência de juntar amigos no mesmo lugar pra jogar.
 Esse projeto existe porque eu queria facilitar minhas próprias jogatinas.
 
 Agora eu quero levar isso pra mais pessoas também.
+
+
+# Creditos
+
+Bubble Pops by Abacagi -- https://freesound.org/s/497198/ -- License: Attribution 4.0

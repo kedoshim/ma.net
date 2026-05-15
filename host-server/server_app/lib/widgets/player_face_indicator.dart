@@ -12,6 +12,8 @@ class PlayerFaceIndicator extends StatelessWidget {
   final double opacity;
   final double translateX;
   final double translateY;
+  final double faceTranslateX;
+  final double faceTranslateY;
   final bool pressed;
   final Color? borderColor;
 
@@ -24,6 +26,8 @@ class PlayerFaceIndicator extends StatelessWidget {
     this.opacity = 1,
     this.translateX = 0,
     this.translateY = 0,
+    this.faceTranslateX = 0,
+    this.faceTranslateY = 0,
     this.pressed = false,
     this.borderColor,
   });
@@ -63,18 +67,21 @@ class PlayerFaceIndicator extends StatelessWidget {
                 ),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Transform.rotate(
-                    angle: playerFaceRotationAngle(face.rotation),
-                    child: Text(
-                      face.faceText,
-                      maxLines: 1,
-                      softWrap: false,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'monomaniac',
-                        fontSize: size * 0.7,
-                        height: 0.9,
-                        color: Colors.black.withValues(alpha: 0.8),
+                  child: Transform.translate(
+                    offset: Offset(faceTranslateX, faceTranslateY),
+                    child: Transform.rotate(
+                      angle: playerFaceRotationAngle(face.rotation),
+                      child: Text(
+                        face.faceText,
+                        maxLines: 1,
+                        softWrap: false,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'monomaniac',
+                          fontSize: size * 0.7,
+                          height: 0.9,
+                          color: Colors.black.withValues(alpha: 0.8),
+                        ),
                       ),
                     ),
                   ),
