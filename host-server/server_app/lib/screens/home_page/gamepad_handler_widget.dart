@@ -333,7 +333,7 @@ class ControllerSlotWidget extends StatelessWidget {
                       Padding(
                         padding: EdgeInsets.only(left: scale.eighth / 3),
                         child: Text(
-                          'segure',
+                          'offline',
                           style: AppTheme.bodyMedium.copyWith(
                             fontFamily: 'pico',
                             fontSize: scale.eighth * 0.7,
@@ -393,7 +393,7 @@ class DevicePoolArea extends StatelessWidget {
                 child: state.pool.isEmpty
                     ? Center(
                         child: Text(
-                          'players',
+                          'banco de reservas',
                           style: TextStyle(
                             fontFamily: 'pico',
                             fontSize: scale.eighth,
