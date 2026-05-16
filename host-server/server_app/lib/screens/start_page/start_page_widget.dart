@@ -6,7 +6,9 @@ import 'package:server_app/screens/home_page/home_page_widget.dart';
 import 'package:server_app/services/server_process_service.dart';
 import 'package:styled_divider/styled_divider.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/app_colors.dart';
 import 'start_page_model.dart';
 export 'start_page_model.dart';
 
@@ -99,9 +101,27 @@ class _StartPageWidgetState extends State<StartPageWidget> {
   void initState() {
     super.initState();
     _model = StartPageModel();
+    _loadTheme();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkDriverAndShowDialog();
     });
+  }
+
+  Future<void> _loadTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeName = prefs.getString('selected_theme');
+      if (themeName != null) {
+        final theme = ColorTheme.values.firstWhere(
+          (e) => e.name == themeName,
+          orElse: () => ColorTheme.blue,
+        );
+        AppColors.setTheme(theme);
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkDriverAndShowDialog() async {
@@ -148,14 +168,20 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: AppTheme.primaryBackground,
+          backgroundColor: AppColors.screenBackground,
           title: Text(
             'Sem Driver',
-            style: AppTheme.titleSmall.copyWith(fontFamily: 'pico'),
+            style: AppTheme.titleSmall.copyWith(
+              fontFamily: 'pico',
+              color: AppColors.textPrimary,
+            ),
           ),
           content: Text(
             'Esse app precisa do driver ViGEmBus para funcionar :P',
-            style: AppTheme.bodyMedium.copyWith(fontFamily: 'pico'),
+            style: AppTheme.bodyMedium.copyWith(
+              fontFamily: 'pico',
+              color: AppColors.textPrimary,
+            ),
           ),
           actions: [
             TextButton(
@@ -164,7 +190,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                 'Cancelar',
                 style: AppTheme.bodyMedium.copyWith(
                   fontFamily: 'pico',
-                  color: AppTheme.primaryText,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
@@ -174,14 +200,14 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                 _installDriver();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryText,
-                foregroundColor: AppTheme.primaryBackground,
+                backgroundColor: AppColors.textPrimary,
+                foregroundColor: AppColors.screenBackground,
               ),
               child: Text(
                 'Instalar Driver',
                 style: AppTheme.titleSmall.copyWith(
                   fontFamily: 'pico',
-                  color: AppTheme.primaryBackground,
+                  color: AppColors.screenBackground,
                 ),
               ),
             ),
@@ -263,7 +289,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       },
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: AppTheme.primaryBackground,
+        backgroundColor: AppColors.screenBackground,
         body: SafeArea(
           top: true,
           child: Align(
@@ -365,10 +391,10 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryBackground,
-                      foregroundColor: AppTheme.primaryText,
-                      side: const BorderSide(
-                        color: AppTheme.primaryText,
+                      backgroundColor: AppColors.screenBackground,
+                      foregroundColor: AppColors.textPrimary,
+                      side: BorderSide(
+                        color: AppColors.textPrimary,
                         width: 3.0,
                       ),
                       shape: RoundedRectangleBorder(
@@ -382,6 +408,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                       style: AppTheme.titleSmall.copyWith(
                         fontFamily: 'pico',
                         letterSpacing: 0.0,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -418,6 +445,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                                   DropdownButtonFormField<
                                                     String
                                                   >(
+                                                    dropdownColor: AppColors.screenBackground,
                                                     initialValue:
                                                         _model.dropDownValue1 ??
                                                         '4',
@@ -457,6 +485,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                                         .copyWith(
                                                           fontFamily: 'pico',
                                                           letterSpacing: 0.0,
+                                                          color: AppColors.textPrimary,
                                                         ),
                                                   ),
                                             ),
@@ -471,6 +500,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                         style: AppTheme.bodyMedium.copyWith(
                                           fontFamily: 'pico',
                                           letterSpacing: 0.0,
+                                          color: AppColors.textPrimary,
                                         ),
                                       ),
                                     ),
@@ -497,7 +527,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                           ),
                                         ),
                                         unselectedWidgetColor:
-                                            AppTheme.primaryText,
+                                            AppColors.textPrimary,
                                       ),
                                       child: Checkbox(
                                         value: _model.checkboxValue ??= false,
@@ -508,10 +538,10 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                         },
                                         side: BorderSide(
                                           width: 2,
-                                          color: AppTheme.primaryText,
+                                          color: AppColors.textPrimary,
                                         ),
-                                        activeColor: AppTheme.primaryText,
-                                        checkColor: AppTheme.primaryBackground,
+                                        activeColor: AppColors.textPrimary,
+                                        checkColor: AppColors.screenBackground,
                                       ),
                                     ),
                                     Text(
@@ -519,6 +549,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                       style: AppTheme.bodyMedium.copyWith(
                                         fontFamily: 'pico',
                                         letterSpacing: 0.0,
+                                          color: AppColors.textPrimary,
                                       ),
                                     ),
                                     SizedBox(
@@ -529,6 +560,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                         style: AppTheme.bodyMedium.copyWith(
                                           fontFamily: 'pico',
                                           letterSpacing: 0.0,
+                                          color: AppColors.textPrimary,
                                         ),
                                       ),
                                     ),
@@ -552,6 +584,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                               width: 230,
                               decoration: BoxDecoration(),
                               child: DropdownButtonFormField<String>(
+                                dropdownColor: AppColors.screenBackground,
                                 initialValue:
                                     _model.dropDownValue2 ?? 'modo padrao',
                                 items:
@@ -574,6 +607,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                 style: AppTheme.bodyMedium.copyWith(
                                   fontFamily: 'pico',
                                   letterSpacing: 0.0,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
                             ),

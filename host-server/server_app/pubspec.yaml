@@ -43,6 +43,7 @@ dependencies:
   window_manager: ^0.4.3
   url_launcher: ^6.3.0
   audioplayers: ^5.2.1
+  shared_preferences: ^2.2.0
 
 dev_dependencies:
   flutter_test:
@@ -97,6 +98,7 @@ flutter:
     - assets/server/
     - assets/drivers/
     - assets/audio/bubble_pop/
+    - assets/audio/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

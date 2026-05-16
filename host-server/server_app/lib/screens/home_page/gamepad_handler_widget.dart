@@ -3,6 +3,7 @@ import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/services/host_api_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:server_app/theme/app_theme.dart';
+import 'package:server_app/theme/app_colors.dart';
 import 'package:server_app/widgets/player_face_indicator.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
@@ -26,6 +27,43 @@ class DragData {
 
   DragData({required this.device, required this.source, this.slotIndex});
 }
+
+class _AudioEffectService {
+  static final _AudioEffectService instance = _AudioEffectService._();
+  _AudioEffectService._();
+
+  final AudioPlayer _hoverPlayer = AudioPlayer()..setReleaseMode(ReleaseMode.stop);
+  final List<AudioPlayer> _popPlayers = List.generate(4, (_) => AudioPlayer()..setReleaseMode(ReleaseMode.stop));
+
+  DateTime _lastHoverSoundTime = DateTime.now();
+
+  void playHover() async {
+    final now = DateTime.now();
+    if (now.difference(_lastHoverSoundTime).inMilliseconds < 100) return;
+    _lastHoverSoundTime = now;
+
+    try {
+      if (_hoverPlayer.state == PlayerState.playing) {
+        await _hoverPlayer.stop();
+      }
+      await _hoverPlayer.play(AssetSource('audio/slot-click.mp3'), volume: 0.3);
+    } catch (_) {}
+  }
+
+  void playPop() async {
+    try {
+      final variantIdx = math.Random().nextInt(4);
+      final p = _popPlayers[variantIdx];
+      
+      if (p.state == PlayerState.playing) {
+        await p.stop();
+      }
+      await p.play(AssetSource('audio/bubble_pop/bubble_pop${variantIdx + 1}.mp3'), volume: 0.4);
+    } catch (_) {}
+  }
+}
+
+void _playHoverSound() => _AudioEffectService.instance.playHover();
 
 class AdaptiveStageLayout extends StatelessWidget {
   final ConnectionInfo? connectionInfo;
@@ -105,7 +143,10 @@ class WideStageLayout extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  DevicePoolArea(scale: scale),
+                  SizedBox(
+                    width: scale.slot * columns + scale.eighth / 2 * (columns - 1),
+                    child: DevicePoolArea(scale: scale),
+                  ),
                   SizedBox(height: scale.eighth),
                   SizedBox(
                     height: scale.slot * rows + scale.eighth / 2 * (rows - 1),
@@ -183,11 +224,14 @@ class CompactStageLayout extends StatelessWidget {
                 ),
               ),
             ),
-            DevicePoolArea(scale: scale),
+            SizedBox(
+              width: scale.slot * columns + scale.eighth / 2 * (columns - 1),
+              child: DevicePoolArea(scale: scale),
+            ),
             SizedBox(height: scale.quarter),
             SizedBox(
-              height: scale.slot * rows + scale.eighth * (rows - 1),
-              width: scale.slot * columns + scale.eighth * (columns - 1),
+              height: scale.slot * rows + scale.eighth / 2 * (rows - 1),
+              width: scale.slot * columns + scale.eighth / 2 * (columns - 1),
               child: ControllerSlotsGrid(scale: scale),
             ),
           ],
@@ -235,6 +279,10 @@ class ControllerSlotWidget extends StatelessWidget {
     final state = Provider.of<GamepadState>(context, listen: false);
 
     return DragTarget<DragData>(
+      onWillAcceptWithDetails: (details) {
+        _playHoverSound();
+        return true;
+      },
       onAcceptWithDetails: (details) {
         final data = details.data;
         if (data.source == DragSource.pool) {
@@ -259,10 +307,10 @@ class ControllerSlotWidget extends StatelessWidget {
           width: scale.slot,
           height: scale.slot,
           decoration: BoxDecoration(
-            color: AppTheme.primaryBackground,
+            color: AppColors.lightColor,
             borderRadius: BorderRadius.circular(scale.eighth),
             border: Border.all(
-              color: isHovered ? Colors.green : AppTheme.primaryText,
+              color: isHovered ? AppColors.highlightColor : AppTheme.primaryText,
               width: isHovered ? scale.eighth / 3 : scale.eighth / 4,
             ),
           ),
@@ -272,27 +320,34 @@ class ControllerSlotWidget extends StatelessWidget {
                 Positioned.fill(
                   child: slotModel.device!.connected
                       ? Draggable<DragData>(
-                          dragAnchorStrategy: pointerDragAnchorStrategy,
+                          dragAnchorStrategy: (draggable, context, position) =>
+                              Offset(scale.quarter / 2, scale.quarter / 2),
                           data: DragData(
                             device: slotModel.device,
                             source: DragSource.slot,
                             slotIndex: index,
                           ),
-                          feedback: _buildDragFeedback(
-                            slotModel.device!,
-                            scale.quarter,
+                          feedback: MouseRegion(
+                            cursor: SystemMouseCursors.grab,
+                            child: _buildDragFeedback(
+                              slotModel.device!,
+                              scale.quarter,
+                            ),
                           ),
                           childWhenDragging: const SizedBox.expand(),
-                          child: Center(
-                            child: DeviceJoinPopEffect(
-                              device: slotModel.device!,
-                              child: DeviceInputIndicator(
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: Center(
+                              child: DeviceJoinPopEffect(
                                 device: slotModel.device!,
-                                input:
-                                    state.getInputState(slotModel.device!.id) ??
-                                    DeviceInputState.idle(),
-                                size: scale.half,
-                                isOnPool: false,
+                                child: DeviceInputIndicator(
+                                  device: slotModel.device!,
+                                  input:
+                                      state.getInputState(slotModel.device!.id) ??
+                                      DeviceInputState.idle(),
+                                  size: scale.half,
+                                  isOnPool: false,
+                                ),
                               ),
                             ),
                           ),
@@ -368,6 +423,10 @@ class DevicePoolArea extends StatelessWidget {
     final state = Provider.of<GamepadState>(context);
 
     return DragTarget<DragData>(
+      onWillAcceptWithDetails: (details) {
+        _playHoverSound();
+        return true;
+      },
       onAcceptWithDetails: (details) {
         if (details.data.source == DragSource.slot) {
           state.unassignDevice(details.data.slotIndex!);
@@ -381,7 +440,7 @@ class DevicePoolArea extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(scale.eighth),
             border: Border.all(
-              color: isHovered ? Colors.green : Colors.transparent,
+              color: isHovered ? AppColors.highlightColor : Colors.transparent,
               width: scale.eighth / 4,
             ),
           ),
@@ -420,12 +479,16 @@ class DevicePoolArea extends StatelessWidget {
                               DeviceInputState.idle();
 
                           return Draggable<DragData>(
-                            dragAnchorStrategy: pointerDragAnchorStrategy,
+                            dragAnchorStrategy: (draggable, context, position) =>
+                                Offset(scale.quarter / 2, scale.quarter / 2),
                             data: DragData(
                               device: device,
                               source: DragSource.pool,
                             ),
-                            feedback: _buildDragFeedback(device, scale.quarter),
+                            feedback: MouseRegion(
+                              cursor: SystemMouseCursors.move,
+                              child: _buildDragFeedback(device, scale.quarter),
+                            ),
                             childWhenDragging: Opacity(
                               opacity: 0.5,
                               child: DeviceInputIndicator(
@@ -435,13 +498,16 @@ class DevicePoolArea extends StatelessWidget {
                                 isOnPool: true,
                               ),
                             ),
-                            child: DeviceJoinPopEffect(
-                              device: device,
-                              child: DeviceInputIndicator(
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: DeviceJoinPopEffect(
                                 device: device,
-                                input: inputState,
-                                size: scale.half,
-                                isOnPool: true,
+                                child: DeviceInputIndicator(
+                                  device: device,
+                                  input: inputState,
+                                  size: scale.half,
+                                  isOnPool: true,
+                                ),
                               ),
                             ),
                           );
@@ -542,18 +608,8 @@ class _DeviceJoinPopEffectState extends State<DeviceJoinPopEffect>
     _playSound();
   }
 
-  void _playSound() async {
-    try {
-      final player = AudioPlayer();
-      final randomVariant = math.Random().nextInt(4) + 1;
-      await player.play(
-        AssetSource('audio/bubble_pop/bubble_pop$randomVariant.mp3'),
-        volume: 0.4,
-      );
-      player.onPlayerComplete.listen((_) => player.dispose());
-    } catch (e) {
-      debugPrint('Audio play error: $e');
-    }
+  void _playSound() {
+    _AudioEffectService.instance.playPop();
   }
 
   @override

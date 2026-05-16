@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/screens/home_page/gamepad_handler_widget.dart';
@@ -11,6 +12,8 @@ import '../../services/host_api_service.dart';
 
 import '../../services/server_process_service.dart';
 import '../start_page/start_page_widget.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/server_options_popup.dart';
 
 
 class HomePageScreen extends StatelessWidget {
@@ -54,6 +57,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
   ConnectionInfo? connectionInfo;
   bool isLoadingConnection = true;
+  ColorTheme _currentTheme = ColorTheme.blue;
 
   @override
   void initState() {
@@ -63,6 +67,25 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       port: widget.port,
     );
     loadConnectionInfo();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final themeName = prefs.getString('selected_theme');
+      if (themeName != null) {
+        final theme = ColorTheme.values.firstWhere(
+          (e) => e.name == themeName,
+          orElse: () => ColorTheme.blue,
+        );
+        if (mounted) {
+          setState(() {
+            _currentTheme = theme;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> loadConnectionInfo() async {
@@ -98,7 +121,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       },
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: AppTheme.primaryBackground,
+        backgroundColor: AppColors.screenBackground,
         body: SafeArea(
           top: true,
           child: Column(
@@ -135,11 +158,34 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             ),
                           ),
                         ),
+                        const Spacer(),
                         IconButton(
                           iconSize: 30.0,
-                          icon: Icon(
+                          icon: const Icon(
+                            Icons.settings,
+                            color: AppColors.textPrimary,
+                          ),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => ServerOptionsPopup(
+                                currentTheme: _currentTheme,
+                                onThemeChanged: (theme) async {
+                                  setState(() => _currentTheme = theme);
+                                  try {
+                                    final prefs = await SharedPreferences.getInstance();
+                                    await prefs.setString('selected_theme', theme.name);
+                                  } catch (_) {}
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          iconSize: 30.0,
+                          icon: const Icon(
                             Icons.power_settings_new_rounded,
-                            color: AppTheme.primaryText,
+                            color: AppColors.textPrimary,
                           ),
                           onPressed: () async {
                             print('Turning off ...');
@@ -156,6 +202,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             );
                           },
                         ),
+                        SizedBox(width: 50),
                       ],
                     ),
                   ),
@@ -173,7 +220,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                         child: Padding(
                           padding: EdgeInsetsDirectional.fromSTEB(
                             50.0,
-                            0.0,
+                            50.0,
                             50.0,
                             50.0,
                           ),
