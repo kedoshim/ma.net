@@ -1,30 +1,23 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/screens/home_page/gamepad_handler_widget.dart';
-import 'package:server_app/screens/home_page/qr_code_container.dart';
 
 import '../../theme/app_theme.dart';
 import '../../services/host_api_service.dart';
-
 import '../../services/server_process_service.dart';
+import '../../services/sound_effect_service.dart';
 import '../start_page/start_page_widget.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/server_options_popup.dart';
-
 
 class HomePageScreen extends StatelessWidget {
   final String host;
   final int port;
 
-  const HomePageScreen({
-    super.key,
-    required this.host,
-    required this.port,
-  });
+  const HomePageScreen({super.key, required this.host, required this.port});
 
   @override
   Widget build(BuildContext context) {
@@ -32,10 +25,7 @@ class HomePageScreen extends StatelessWidget {
 
     return ChangeNotifierProvider(
       create: (_) => GamepadState(api)..initialize(),
-      child: HomePageWidget(
-        host: host,
-        port: port,
-      ),
+      child: HomePageWidget(host: host, port: port),
     );
   }
 }
@@ -62,10 +52,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   @override
   void initState() {
     super.initState();
-    _api = HostApiService(
-      host: widget.host,
-      port: widget.port,
-    );
+    SoundEffectService.instance.init();
+    _api = HostApiService(host: widget.host, port: widget.port);
     loadConnectionInfo();
     _loadTheme();
   }
@@ -166,6 +154,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             color: AppColors.textPrimary,
                           ),
                           onPressed: () {
+                            SoundEffectService.instance.playOptionsButton();
                             showDialog(
                               context: context,
                               builder: (context) => ServerOptionsPopup(
@@ -173,8 +162,12 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 onThemeChanged: (theme) async {
                                   setState(() => _currentTheme = theme);
                                   try {
-                                    final prefs = await SharedPreferences.getInstance();
-                                    await prefs.setString('selected_theme', theme.name);
+                                    final prefs =
+                                        await SharedPreferences.getInstance();
+                                    await prefs.setString(
+                                      'selected_theme',
+                                      theme.name,
+                                    );
                                   } catch (_) {}
                                 },
                               ),
@@ -195,8 +188,29 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             if (!mounted) return;
 
                             Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                builder: (_) => const StartPageWidget(),
+                              PageRouteBuilder(
+                                pageBuilder:
+                                    (context, animation, secondaryAnimation) =>
+                                        const StartPageWidget(),
+                                transitionsBuilder:
+                                    (
+                                      context,
+                                      animation,
+                                      secondaryAnimation,
+                                      child,
+                                    ) {
+                                      const begin = Offset(-1.0, 0.0);
+                                      const end = Offset.zero;
+                                      const curve = Curves.easeInOutCubic;
+                                      var tween = Tween(
+                                        begin: begin,
+                                        end: end,
+                                      ).chain(CurveTween(curve: curve));
+                                      return SlideTransition(
+                                        position: animation.drive(tween),
+                                        child: child,
+                                      );
+                                    },
                               ),
                               (route) => false,
                             );

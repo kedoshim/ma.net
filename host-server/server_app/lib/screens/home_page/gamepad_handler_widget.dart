@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/services/host_api_service.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:server_app/theme/app_theme.dart';
 import 'package:server_app/theme/app_colors.dart';
 import 'package:server_app/widgets/player_face_indicator.dart';
+import 'package:server_app/services/sound_effect_service.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'qr_code_container.dart';
@@ -28,42 +28,7 @@ class DragData {
   DragData({required this.device, required this.source, this.slotIndex});
 }
 
-class _AudioEffectService {
-  static final _AudioEffectService instance = _AudioEffectService._();
-  _AudioEffectService._();
-
-  final AudioPlayer _hoverPlayer = AudioPlayer()..setReleaseMode(ReleaseMode.stop);
-  final List<AudioPlayer> _popPlayers = List.generate(4, (_) => AudioPlayer()..setReleaseMode(ReleaseMode.stop));
-
-  DateTime _lastHoverSoundTime = DateTime.now();
-
-  void playHover() async {
-    final now = DateTime.now();
-    if (now.difference(_lastHoverSoundTime).inMilliseconds < 100) return;
-    _lastHoverSoundTime = now;
-
-    try {
-      if (_hoverPlayer.state == PlayerState.playing) {
-        await _hoverPlayer.stop();
-      }
-      await _hoverPlayer.play(AssetSource('audio/slot-click.mp3'), volume: 0.3);
-    } catch (_) {}
-  }
-
-  void playPop() async {
-    try {
-      final variantIdx = math.Random().nextInt(4);
-      final p = _popPlayers[variantIdx];
-      
-      if (p.state == PlayerState.playing) {
-        await p.stop();
-      }
-      await p.play(AssetSource('audio/bubble_pop/bubble_pop${variantIdx + 1}.mp3'), volume: 0.4);
-    } catch (_) {}
-  }
-}
-
-void _playHoverSound() => _AudioEffectService.instance.playHover();
+void _playHoverSound() => SoundEffectService.instance.playHover();
 
 class AdaptiveStageLayout extends StatelessWidget {
   final ConnectionInfo? connectionInfo;
@@ -144,7 +109,8 @@ class WideStageLayout extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width: scale.slot * columns + scale.eighth / 2 * (columns - 1),
+                    width:
+                        scale.slot * columns + scale.eighth / 2 * (columns - 1),
                     child: DevicePoolArea(scale: scale),
                   ),
                   SizedBox(height: scale.eighth),
@@ -299,6 +265,8 @@ class ControllerSlotWidget extends StatelessWidget {
             state.swapDevices(data.slotIndex!, index);
           }
         }
+
+        SoundEffectService.instance.playDropPlayer();
       },
       builder: (context, candidateData, rejectedData) {
         final isHovered = candidateData.isNotEmpty;
@@ -310,7 +278,9 @@ class ControllerSlotWidget extends StatelessWidget {
             color: AppColors.lightColor,
             borderRadius: BorderRadius.circular(scale.eighth),
             border: Border.all(
-              color: isHovered ? AppColors.highlightColor : AppTheme.primaryText,
+              color: isHovered
+                  ? AppColors.highlightColor
+                  : AppTheme.primaryText,
               width: isHovered ? scale.eighth / 3 : scale.eighth / 4,
             ),
           ),
@@ -332,6 +302,7 @@ class ControllerSlotWidget extends StatelessWidget {
                             child: _buildDragFeedback(
                               slotModel.device!,
                               scale.quarter,
+                              false,
                             ),
                           ),
                           childWhenDragging: const SizedBox.expand(),
@@ -340,13 +311,18 @@ class ControllerSlotWidget extends StatelessWidget {
                             child: Center(
                               child: DeviceJoinPopEffect(
                                 device: slotModel.device!,
-                                child: DeviceInputIndicator(
-                                  device: slotModel.device!,
-                                  input:
-                                      state.getInputState(slotModel.device!.id) ??
-                                      DeviceInputState.idle(),
-                                  size: scale.half,
-                                  isOnPool: false,
+                                child: DropBounceEffect(
+                                  key: ValueKey('drop_${slotModel.device!.id}'),
+                                  child: DeviceInputIndicator(
+                                    device: slotModel.device!,
+                                    input:
+                                        state.getInputState(
+                                          slotModel.device!.id,
+                                        ) ??
+                                        DeviceInputState.idle(),
+                                    size: scale.half,
+                                    isOnPool: false,
+                                  ),
                                 ),
                               ),
                             ),
@@ -355,13 +331,16 @@ class ControllerSlotWidget extends StatelessWidget {
                       : Center(
                           child: DeviceJoinPopEffect(
                             device: slotModel.device!,
-                            child: DeviceInputIndicator(
-                              device: slotModel.device!,
-                              input:
-                                  state.getInputState(slotModel.device!.id) ??
-                                  DeviceInputState.idle(),
-                              size: scale.half,
-                              isOnPool: false,
+                            child: DropBounceEffect(
+                              key: ValueKey('drop_${slotModel.device!.id}'),
+                              child: DeviceInputIndicator(
+                                device: slotModel.device!,
+                                input:
+                                    state.getInputState(slotModel.device!.id) ??
+                                    DeviceInputState.idle(),
+                                size: scale.half,
+                                isOnPool: false,
+                              ),
                             ),
                           ),
                         ),
@@ -430,6 +409,7 @@ class DevicePoolArea extends StatelessWidget {
       onAcceptWithDetails: (details) {
         if (details.data.source == DragSource.slot) {
           state.unassignDevice(details.data.slotIndex!);
+          SoundEffectService.instance.playDropPlayer();
         }
       },
       builder: (context, candidateData, rejectedData) {
@@ -479,15 +459,22 @@ class DevicePoolArea extends StatelessWidget {
                               DeviceInputState.idle();
 
                           return Draggable<DragData>(
-                            dragAnchorStrategy: (draggable, context, position) =>
-                                Offset(scale.quarter / 2, scale.quarter / 2),
+                            dragAnchorStrategy:
+                                (draggable, context, position) => Offset(
+                                  scale.quarter / 2,
+                                  scale.quarter / 2,
+                                ),
                             data: DragData(
                               device: device,
                               source: DragSource.pool,
                             ),
                             feedback: MouseRegion(
                               cursor: SystemMouseCursors.move,
-                              child: _buildDragFeedback(device, scale.quarter),
+                              child: _buildDragFeedback(
+                                device,
+                                scale.quarter,
+                                true,
+                              ),
                             ),
                             childWhenDragging: Opacity(
                               opacity: 0.5,
@@ -502,11 +489,14 @@ class DevicePoolArea extends StatelessWidget {
                               cursor: SystemMouseCursors.click,
                               child: DeviceJoinPopEffect(
                                 device: device,
-                                child: DeviceInputIndicator(
-                                  device: device,
-                                  input: inputState,
-                                  size: scale.half,
-                                  isOnPool: true,
+                                child: DropBounceEffect(
+                                  key: ValueKey('drop_${device.id}'),
+                                  child: DeviceInputIndicator(
+                                    device: device,
+                                    input: inputState,
+                                    size: scale.half,
+                                    isOnPool: true,
+                                  ),
                                 ),
                               ),
                             ),
@@ -522,26 +512,134 @@ class DevicePoolArea extends StatelessWidget {
   }
 }
 
-Widget _buildDragFeedback(DeviceModel device, double size) {
-  return Material(
-    color: Colors.transparent,
-    child: Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: size * 0.2,
-            spreadRadius: size * 0.05,
+class DynamicDragFeedback extends StatefulWidget {
+  final DeviceModel device;
+  final double size;
+  final bool isOnPool;
+
+  const DynamicDragFeedback({
+    super.key,
+    required this.device,
+    required this.size,
+    required this.isOnPool,
+  });
+
+  @override
+  State<DynamicDragFeedback> createState() => _DynamicDragFeedbackState();
+}
+
+class _DynamicDragFeedbackState extends State<DynamicDragFeedback>
+    with SingleTickerProviderStateMixin {
+  Offset _lastPosition = Offset.zero;
+  Offset _faceOffset = Offset.zero;
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat();
+    _controller.addListener(_onTick);
+  }
+
+  void _onTick() {
+    if (!mounted) return;
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox != null && renderBox.hasSize) {
+      final position = renderBox.localToGlobal(Offset.zero);
+      if (_lastPosition != Offset.zero) {
+        final delta = position - _lastPosition;
+
+        final targetX = -delta.dx * 1.5;
+        final targetY = -delta.dy * 1.5;
+
+        _faceOffset = Offset(
+          _faceOffset.dx + (targetX - _faceOffset.dx) * 0.25,
+          _faceOffset.dy + (targetY - _faceOffset.dy) * 0.25,
+        );
+
+        final maxOffset = widget.size * 0.35;
+        if (_faceOffset.distance > maxOffset) {
+          _faceOffset = Offset.fromDirection(_faceOffset.direction, maxOffset);
+        }
+
+        setState(() {});
+      }
+      _lastPosition = position;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0.75, end: 1.15),
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        builder: (context, scale, child) {
+          return Transform.scale(
+            scale: scale,
+            alignment: Alignment.center,
+            child: child,
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: widget.size * 0.2,
+                spreadRadius: widget.size * 0.05,
+              ),
+            ],
           ),
-        ],
+          child: PlayerFaceIndicator(
+            face: widget.device.face,
+            size: widget.size,
+            roundedSquare: true,
+            faceTranslateX: _faceOffset.dx,
+            faceTranslateY: _faceOffset.dy,
+          ),
+        ),
       ),
-      child: PlayerFaceIndicator(
-        face: device.face,
-        size: size,
-        roundedSquare: true,
-      ),
-    ),
-  );
+    );
+  }
+}
+
+Widget _buildDragFeedback(DeviceModel device, double size, bool isOnPool) {
+  return DynamicDragFeedback(device: device, size: size, isOnPool: isOnPool);
+}
+
+class DropBounceEffect extends StatelessWidget {
+  final Widget child;
+
+  const DropBounceEffect({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.5, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) {
+        return Transform.scale(
+          scale: scale,
+          alignment: Alignment.center,
+          child: child,
+        );
+      },
+      child: child,
+    );
+  }
 }
 
 class DeviceJoinPopEffect extends StatefulWidget {
@@ -609,7 +707,7 @@ class _DeviceJoinPopEffectState extends State<DeviceJoinPopEffect>
   }
 
   void _playSound() {
-    _AudioEffectService.instance.playPop();
+    SoundEffectService.instance.playPlayerJoinPop();
   }
 
   @override

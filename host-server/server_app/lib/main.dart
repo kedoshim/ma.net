@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:media_kit/media_kit.dart';
 import 'services/server_process_service.dart';
 import 'screens/start_page/start_page_widget.dart';
 
@@ -7,6 +8,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await windowManager.ensureInitialized();
+  MediaKit.ensureInitialized();
 
   const options = WindowOptions(
     center: true,

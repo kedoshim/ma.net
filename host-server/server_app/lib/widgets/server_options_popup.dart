@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/sound_effect_service.dart';
 import '../theme/app_colors.dart';
 
 class ServerOptionsPopup extends StatefulWidget {
@@ -50,10 +51,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
             onPressed: () => Navigator.of(context).pop(),
             style: TextButton.styleFrom(
               minimumSize: const Size(40, 40),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -93,6 +91,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
 
               return GestureDetector(
                 onTap: () {
+                  SoundEffectService.instance.playThemeSelect();
                   setState(() => _selectedTheme = theme);
                   AppColors.setTheme(theme);
                   widget.onThemeChanged(theme);

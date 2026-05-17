@@ -42,7 +42,7 @@ class GamepadState extends ChangeNotifier {
   GamepadState(this._api);
 
   void _log(String action) {
-    debugPrint(
+    debugPrint( 
       '[GAMEPAD STATE] $action | pool=${pool.length} slots=${slots.length}',
     );
   }
@@ -82,7 +82,7 @@ class GamepadState extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e, stack) {
-      debugPrint('fetchSlots error: $e');
+      _log('fetchSlots error: $e');
       debugPrintStack(stackTrace: stack);
     }
   }

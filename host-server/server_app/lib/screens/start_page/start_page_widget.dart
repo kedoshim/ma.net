@@ -1,14 +1,12 @@
 import 'dart:io';
-import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:server_app/screens/home_page/home_page_widget.dart';
 import 'package:server_app/services/server_process_service.dart';
-import 'package:styled_divider/styled_divider.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_colors.dart';
+import '../../services/sound_effect_service.dart';
 import 'start_page_model.dart';
 export 'start_page_model.dart';
 
@@ -97,10 +95,13 @@ class _StartPageWidgetState extends State<StartPageWidget> {
 
   final _serverService = ServerProcessService.instance;
 
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
     _model = StartPageModel();
+    SoundEffectService.instance.init();
     _loadTheme();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkDriverAndShowDialog();
@@ -140,10 +141,10 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       final output = result.stdout.toString() + result.stderr.toString();
       print('[DRIVER CHECK] Exit code: ${result.exitCode}');
       print('[DRIVER CHECK] Output:\n$output');
-      
+
       final lowerOutput = output.toLowerCase();
-      if (result.exitCode != 0 || 
-          output.contains('1060') || 
+      if (result.exitCode != 0 ||
+          output.contains('1060') ||
           lowerOutput.contains('does not exist') ||
           lowerOutput.contains('falha') ||
           lowerOutput.contains('não existe') ||
@@ -303,92 +304,129 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                 children: [
                   ElevatedButton(
                     onPressed: () async {
-                      final slots = int.parse(_model.dropDownValue1 ?? '4');
-                      final fixed = _model.checkboxValue ?? false;
+                      if (_isLoading) return;
 
-                      final modeMap = {
-                        'modo padrao': 'mixed',
-                        'd•input': 'ds4',
-                        'only x•input': 'x360',
-                      };
+                      setState(() {
+                        _isLoading = true;
+                      });
 
-                      final mode =
-                          modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
+                      try {
+                        SoundEffectService.instance.playStartButton();
 
-                      final port = int.tryParse(_portController.text) ?? 8765;
+                        final slots = int.parse(_model.dropDownValue1 ?? '4');
+                        final fixed = _model.checkboxValue ?? false;
 
-                      if (port < 1024 || port > 65535) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Porta inválida')),
-                        );
-                        return;
-                      }
+                        final modeMap = {
+                          'modo padrao': 'mixed',
+                          'd•input': 'ds4',
+                          'only x•input': 'x360',
+                        };
 
-                      final running = await isServerRunning(port);
+                        final mode =
+                            modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
 
-                      if (running) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Servidor anterior encontrado. Encerrando para reiniciar...',
-                            ),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
-                        await killExistingServer(port);
-                      } else {
-                        try {
-                          // Testa se a porta está ocupada por um processo desconhecido
-                          final socket = await ServerSocket.bind(
-                            InternetAddress.loopbackIPv4,
-                            port,
-                          );
-                          await socket.close();
-                        } catch (e) {
-                          if (!mounted) return;
+                        final port = int.tryParse(_portController.text) ?? 8765;
+
+                        if (port < 1024 || port > 65535) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'A porta $port já está em uso por outro programa!',
-                              ),
-                            ),
+                            const SnackBar(content: Text('Porta inválida')),
                           );
                           return;
                         }
-                      }
 
-                      await _serverService.startServer(
-                        port: port,
-                        slots: slots,
-                        fixed: fixed,
-                        controllerMode: mode,
-                      );
-                      final isReady = await waitUntilServerReady(port);
+                        final running = await isServerRunning(port);
 
-                      if (!mounted) return;
-
-                      if (!isReady) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Falha ao iniciar o servidor. O driver ViGEmBus pode estar ausente ou houve um erro interno.',
+                        if (running) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Servidor anterior encontrado. Encerrando para reiniciar...',
+                              ),
+                              duration: const Duration(seconds: 2),
                             ),
+                          );
+                          await killExistingServer(port);
+                        } else {
+                          try {
+                            // Testa se a porta está ocupada por um processo desconhecido
+                            final socket = await ServerSocket.bind(
+                              InternetAddress.loopbackIPv4,
+                              port,
+                            );
+                            await socket.close();
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'A porta $port já está em uso por outro programa!',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                        }
+
+                        await _serverService.startServer(
+                          port: port,
+                          slots: slots,
+                          fixed: fixed,
+                          controllerMode: mode,
+                        );
+                        final isReady = await waitUntilServerReady(port);
+
+                        if (!mounted) return;
+
+                        if (!isReady) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Falha ao iniciar o servidor. O driver ViGEmBus pode estar ausente ou houve um erro interno.',
+                              ),
+                            ),
+                          );
+                          // Re-trigger the driver check to immediately pop up the dialog if missing
+                          await _checkDriverAndShowDialog();
+                          return; // DO NOT PROGRESS TO THE HOME PAGE
+                        }
+
+                        Navigator.push(
+                          context,
+                          PageRouteBuilder(
+                            pageBuilder:
+                                (context, animation, secondaryAnimation) =>
+                                    const HomePageScreen(
+                                      host: '127.0.0.1',
+                                      port: 8765,
+                                    ),
+                            transitionsBuilder:
+                                (
+                                  context,
+                                  animation,
+                                  secondaryAnimation,
+                                  child,
+                                ) {
+                                  const begin = Offset(1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.easeInOutCubic;
+                                  var tween = Tween(
+                                    begin: begin,
+                                    end: end,
+                                  ).chain(CurveTween(curve: curve));
+                                  return SlideTransition(
+                                    position: animation.drive(tween),
+                                    child: child,
+                                  );
+                                },
                           ),
                         );
-                        // Re-trigger the driver check to immediately pop up the dialog if missing
-                        await _checkDriverAndShowDialog();
-                        return; // DO NOT PROGRESS TO THE HOME PAGE
+                      } finally {
+                        if (mounted) {
+                          setState(() {
+                            _isLoading = false;
+                          });
+                        }
                       }
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const HomePageScreen(
-                            host: '127.0.0.1',
-                            port: 8765,
-                          ),
-                        ),
-                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.screenBackground,
@@ -403,14 +441,23 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                       minimumSize: const Size(double.infinity, 60.0),
                       elevation: 0.0,
                     ),
-                    child: Text(
-                      'iniciar',
-                      style: AppTheme.titleSmall.copyWith(
-                        fontFamily: 'pico',
-                        letterSpacing: 0.0,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                            width: 24.0,
+                            height: 24.0,
+                            child: CircularProgressIndicator(
+                              color: AppColors.textPrimary,
+                              strokeWidth: 3.0,
+                            ),
+                          )
+                        : Text(
+                            'iniciar',
+                            style: AppTheme.titleSmall.copyWith(
+                              fontFamily: 'pico',
+                              letterSpacing: 0.0,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
                   ),
                   Row(
                     mainAxisSize: MainAxisSize.max,
@@ -445,7 +492,8 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                                   DropdownButtonFormField<
                                                     String
                                                   >(
-                                                    dropdownColor: AppColors.screenBackground,
+                                                    dropdownColor: AppColors
+                                                        .screenBackground,
                                                     initialValue:
                                                         _model.dropDownValue1 ??
                                                         '4',
@@ -485,7 +533,8 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                                         .copyWith(
                                                           fontFamily: 'pico',
                                                           letterSpacing: 0.0,
-                                                          color: AppColors.textPrimary,
+                                                          color: AppColors
+                                                              .textPrimary,
                                                         ),
                                                   ),
                                             ),
@@ -549,7 +598,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                       style: AppTheme.bodyMedium.copyWith(
                                         fontFamily: 'pico',
                                         letterSpacing: 0.0,
-                                          color: AppColors.textPrimary,
+                                        color: AppColors.textPrimary,
                                       ),
                                     ),
                                     SizedBox(

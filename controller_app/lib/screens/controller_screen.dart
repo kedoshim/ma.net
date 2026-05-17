@@ -610,7 +610,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text(
-            'disconectado',
+            'desconectado',
             style: TextStyle(
               fontSize: 18,
               color: AppColors.textPrimary,
