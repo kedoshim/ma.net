@@ -1,19 +1,20 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/websocket_service.dart';
+
+import '../models/player_face.dart';
 import '../services/haptics_manager.dart';
-import '../widgets/joystick.dart';
+import '../services/network_discovery_service.dart';
+import '../services/preferences_service.dart';
+import '../services/websocket_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/action_buttons.dart';
 import '../widgets/control_button.dart';
+import '../widgets/joystick.dart';
 import '../widgets/options_popup.dart';
-import '../theme/app_colors.dart';
-import '../services/preferences_service.dart';
-import '../services/network_discovery_service.dart';
-import '../models/player_face.dart';
 import '../widgets/player_face_indicator.dart';
 import 'qr_scanner_screen.dart';
 
@@ -39,7 +40,7 @@ class ConnectionManager {
 
   void disconnect() {
     ws?.channel.sink.close();
-    ws = null; // Drop the reference
+    ws = null;
   }
 
   Future<WebSocketService> getConnection() async {
@@ -76,7 +77,21 @@ class _ControllerScreenState extends State<ControllerScreen>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   static const Map<String, String> _serverCodeText = {
     'missing_device_id': 'Missing device id',
+    'mouse_mode_in_use': 'Mouse mode already in use',
   };
+
+  static const List<String> _editableButtons = [
+    'btnA',
+    'btnB',
+    'btnX',
+    'btnY',
+    'btnLB',
+    'btnRB',
+    'btnLT',
+    'btnRT',
+    'btnLS',
+    'btnRS',
+  ];
 
   WebSocketService? ws;
 
@@ -91,6 +106,10 @@ class _ControllerScreenState extends State<ControllerScreen>
   int? playerIndex;
   bool dpadMode = false;
   bool editMode = false;
+  bool _mouseModeRequested = false;
+  bool _mouseModeOwned = false;
+  String? _mouseModeOwnerName;
+  bool _centerPulseExpanded = false;
   Color? playerColor;
   int totalSlots = 4;
   ColorTheme _currentTheme = ColorTheme.blue;
@@ -110,6 +129,10 @@ class _ControllerScreenState extends State<ControllerScreen>
     'btnLT': false,
     'btnLS': false,
   };
+
+  bool get _isMouseModeVisible => _mouseModeRequested;
+  bool get _isEditModeActive => editMode;
+  bool get _isTemporaryModeActive => _isMouseModeVisible || _isEditModeActive;
 
   Future<void> _checkSetupRequired() async {
     await _loadInitialPreferences();
@@ -145,7 +168,6 @@ class _ControllerScreenState extends State<ControllerScreen>
       }
     });
 
-    // Timeout to disconnected state if nothing is found
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted && _connectionState == ControllerConnectionState.searching) {
         setState(
@@ -156,8 +178,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   Future<void> _connectWebSocket() async {
-    if (ws != null) return;
-    if (_listenerAttached) return;
+    if (ws != null || _listenerAttached) return;
 
     setState(() => _connectionState = ControllerConnectionState.searching);
 
@@ -176,7 +197,10 @@ class _ControllerScreenState extends State<ControllerScreen>
         onError: (_) => _handleDisconnect(),
       );
       _send({'type': 'face_update', ..._playerFace.toJson()});
-    } catch (e) {
+      if (_mouseModeRequested) {
+        _send({'type': 'set_mouse_mode', 'active': true});
+      }
+    } catch (_) {
       _handleDisconnect();
     }
   }
@@ -186,10 +210,15 @@ class _ControllerScreenState extends State<ControllerScreen>
     ConnectionManager.instance.disconnect();
     _listenerAttached = false;
     ws = null;
-    setState(() => _connectionState = ControllerConnectionState.disconnected);
+    setState(() {
+      _connectionState = ControllerConnectionState.disconnected;
+      _mouseModeRequested = false;
+      _mouseModeOwned = false;
+      _mouseModeOwnerName = null;
+      editMode = false;
+    });
     _clearPlayerSlot();
-    _autoConnectEnabled =
-        false; // Prevent endless auto-reconnect loops to a dead host
+    _autoConnectEnabled = false;
   }
 
   Future<void> _connectToHost(DiscoveredHost host) async {
@@ -239,9 +268,6 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // The `detached` state is when the view is detached from the engine,
-    // which is the last state before the app is terminated.
-    // This is a good place to ensure cleanup happens.
     if (state == AppLifecycleState.detached) {
       ConnectionManager.instance.disconnect();
     }
@@ -276,76 +302,79 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _handleWebSocketMessage(dynamic message) {
-    if (message is String) {
-      try {
-        final dynamic data = jsonDecode(message);
+    if (message is! String) return;
 
-        if (data is Map<String, dynamic>) {
-          if (data.containsKey('total_slots')) {
-            setState(() {
-              totalSlots = data['total_slots'];
-            });
-          }
+    try {
+      final dynamic data = jsonDecode(message);
+      if (data is! Map<String, dynamic>) return;
 
-          if (data['type'] == 'assigned') {
-            _updatePlayerSlot(data['slot'], colorHex: data['color']);
-            _ingestFaceData(data);
-            // Friendly connection pulse
-            try {
-              HapticsManager.instance.connectionPulse();
-            } catch (_) {}
-          }
+      if (data.containsKey('total_slots')) {
+        setState(() {
+          totalSlots = data['total_slots'];
+        });
+      }
 
-          if (data['type'] == 'slot_changed') {
-            _updatePlayerSlot(data['slot'], colorHex: data['color']);
-            _ingestFaceData(data);
-          }
-
-          if (data['type'] == 'error') {
-            final code = data['code'] as String?;
-            if (code != null && mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(_serverCodeText[code] ?? code)),
-              );
+      switch (data['type']) {
+        case 'assigned':
+          _updatePlayerSlot(data['slot'], colorHex: data['color']);
+          _ingestFaceData(data);
+          HapticsManager.instance.connectionPulse();
+          break;
+        case 'slot_changed':
+          _updatePlayerSlot(data['slot'], colorHex: data['color']);
+          _ingestFaceData(data);
+          break;
+        case 'mouse_mode_status':
+          setState(() {
+            _mouseModeOwned = data['owner'] == true;
+            _mouseModeOwnerName = data['ownerName'] as String?;
+            if (data['active'] != true) {
+              _mouseModeOwnerName = null;
+              _mouseModeOwned = false;
             }
+          });
+          break;
+        case 'error':
+          final code = data['code'] as String?;
+          if (code == 'mouse_mode_in_use') {
+            unawaited(_exitMouseMode(send: false));
+            _mouseModeOwnerName = data['ownerName'] as String?;
           }
-
-          if (data['type'] == 'unassigned') {
-            _clearPlayerSlot();
+          if (code != null && mounted) {
+            final baseMessage = _serverCodeText[code] ?? code;
+            final ownerName = data['ownerName'] as String?;
+            final text = ownerName != null && ownerName.isNotEmpty
+                ? '$baseMessage ($ownerName)'
+                : baseMessage;
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(text)));
           }
-
-          if (data['type'] == 'rumble') {
-            try {
-              final weak = (data['weak'] is num)
-                  ? (data['weak'] as num).toDouble()
-                  : double.parse('${data['weak'] ?? 0}');
-              final strong = (data['strong'] is num)
-                  ? (data['strong'] as num).toDouble()
-                  : double.parse('${data['strong'] ?? 0}');
-              debugPrint(
-                'ControllerScreen: received rumble weak=$weak strong=$strong',
-              );
-              HapticsManager.instance.onRumble(weak, strong);
-            } catch (e) {
-              debugPrint('ControllerScreen: rumble handling error: $e');
-            }
-          }
-
-          if (data['type'] == 'toggle_btn' && data['btn'] != null) {
+          break;
+        case 'unassigned':
+          _clearPlayerSlot();
+          break;
+        case 'rumble':
+          try {
+            final weak = (data['weak'] as num?)?.toDouble() ?? 0;
+            final strong = (data['strong'] as num?)?.toDouble() ?? 0;
+            HapticsManager.instance.onRumble(weak, strong);
+          } catch (_) {}
+          break;
+        case 'toggle_btn':
+          if (data['btn'] != null) {
             final id = 'btn${(data['btn'] as String).toUpperCase()}';
             final visible = data['visible'] != false;
-
             setState(() {
               visibleButtons[id] = visible;
             });
           }
-        }
-      } catch (_) {}
-    }
+          break;
+      }
+    } catch (_) {}
   }
 
   void _clearPlayerSlot() {
-    debugPrint('Player unassigned');
     setState(() {
       playerIndex = null;
       status = 'Em espera';
@@ -379,6 +408,52 @@ class _ControllerScreenState extends State<ControllerScreen>
     _send({'type': 'face_update', ...nextFace.toJson()});
   }
 
+  Future<void> _enterMouseMode() async {
+    setState(() {
+      editMode = false;
+      _mouseModeRequested = true;
+      _mouseModeOwnerName = null;
+    });
+    _send({'type': 'set_mouse_mode', 'active': true});
+  }
+
+  Future<void> _exitMouseMode({bool send = true}) async {
+    setState(() {
+      _mouseModeRequested = false;
+      _mouseModeOwned = false;
+      _mouseModeOwnerName = null;
+    });
+    if (send) {
+      _send({'type': 'set_mouse_mode', 'active': false});
+    }
+  }
+
+  void _enterEditMode() {
+    setState(() {
+      editMode = true;
+      _mouseModeRequested = false;
+      _mouseModeOwned = false;
+      _mouseModeOwnerName = null;
+    });
+    _send({'type': 'set_mouse_mode', 'active': false});
+  }
+
+  void _exitEditMode() {
+    setState(() {
+      editMode = false;
+    });
+  }
+
+  void _exitTemporaryMode() {
+    if (_isMouseModeVisible) {
+      _exitMouseMode();
+      return;
+    }
+    if (_isEditModeActive) {
+      _exitEditMode();
+    }
+  }
+
   Widget _buildPlayerIndicator() {
     final selectedIndex = playerIndex != null ? playerIndex! - 1 : null;
     return LayoutBuilder(
@@ -396,7 +471,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(rows, (rowIndex) {
-            int rowItemCount = (rowIndex == rows - 1)
+            final rowItemCount = (rowIndex == rows - 1)
                 ? totalSlots - (rowIndex * columns)
                 : columns;
             return Padding(
@@ -461,18 +536,45 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   void _onStickRelease() {
     _send({'type': 'stick', 'x': 0, 'y': 0});
-
     Future.delayed(const Duration(milliseconds: 40), () {
       _send({'type': 'stick', 'x': 0, 'y': 0});
     });
-
     Future.delayed(const Duration(milliseconds: 100), () {
       _send({'type': 'stick', 'x': 0, 'y': 0});
     });
   }
 
+  void _onMouseStickChanged(double x, double y) {
+    if (!_mouseModeOwned) return;
+    _send({'type': 'mouse_move', 'x': x, 'y': y});
+  }
+
+  void _onMouseStickRelease() {
+    if (!_mouseModeOwned) return;
+    _send({'type': 'mouse_move', 'x': 0, 'y': 0});
+  }
+
   void _sendButton(String xinputId, String state) {
     _send({'type': 'button', 'id': xinputId, 'state': state});
+  }
+
+  void _sendMouseButton(String button, String state) {
+    if (!_mouseModeOwned) return;
+    _send({'type': 'mouse_${button}_$state'});
+    if (state == 'down') {
+      HapticsManager.instance.softTap();
+    }
+  }
+
+  void _sendMouseScroll(double delta) {
+    if (!_mouseModeOwned) return;
+    _send({'type': 'mouse_scroll', 'delta': delta.clamp(-1.3, 1.3)});
+  }
+
+  void _toggleWindowVisibility() {
+    if (!_mouseModeOwned) return;
+    _send({'type': 'toggle_window_visibility'});
+    HapticsManager.instance.softTap();
   }
 
   void _showOptionsDialog() {
@@ -485,10 +587,8 @@ class _ControllerScreenState extends State<ControllerScreen>
             setState(() => dpadMode = value);
             PreferencesService.instance.setDpadMode(value);
           },
-          buttonVisibility: visibleButtons,
-          onButtonVisibilityChanged: _toggleButtonVisibility,
-          editMode: editMode,
-          onEditModeChanged: (value) => setState(() => editMode = value),
+          onEnterMouseMode: _enterMouseMode,
+          onEnterEditMode: _enterEditMode,
           currentTheme: _currentTheme,
           onThemeChanged: _onThemeChanged,
           onDisconnectRequested: _resetConnection,
@@ -516,35 +616,23 @@ class _ControllerScreenState extends State<ControllerScreen>
       AppColors.setTheme(_currentTheme);
       _playerFace = await prefs.getOrCreatePlayerFace();
       playerColor = _playerFace.color;
-
       dpadMode = await prefs.getDpadMode();
 
       final savedVisibility = await prefs.getButtonVisibility();
       if (savedVisibility != null) {
         visibleButtons.addAll(savedVisibility);
       }
-    } catch (e) {
+    } catch (_) {
       AppColors.setTheme(ColorTheme.blue);
     }
     if (mounted) setState(() {});
   }
 
   void _onRumbleTest() {
-    debugPrint('ControllerScreen: local rumble test triggered');
-    // Local immediate feedback
     try {
       HapticsManager.instance.onRumble(0.3, 0.7);
-    } catch (e) {
-      debugPrint('ControllerScreen: local rumble error: $e');
-    }
-
-    // Ask server to send a test pulse back
-    try {
-      _send({'type': 'rumble_test'});
-      debugPrint('ControllerScreen: sent rumble_test to server');
-    } catch (e) {
-      debugPrint('ControllerScreen: failed to send rumble_test: $e');
-    }
+    } catch (_) {}
+    _send({'type': 'rumble_test'});
   }
 
   void _onThemeChanged(ColorTheme theme) {
@@ -669,35 +757,410 @@ class _ControllerScreenState extends State<ControllerScreen>
           fontFamily: 'pico',
         ),
       );
-    } else if (_connectionState == ControllerConnectionState.connected) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (playerColor != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: PlayerFaceIndicator(
-                face: _playerFace,
-                size: 20,
-                roundedSquare: true,
-                borderColor: AppColors.textPrimary,
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (playerColor != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: PlayerFaceIndicator(
+              face: _playerFace,
+              size: 20,
+              roundedSquare: true,
+              borderColor: AppColors.textPrimary,
+            ),
+          ),
+        Text(
+          status,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 18,
+            color: AppColors.textPrimary,
+            fontFamily: 'pico',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeHub({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    bool pulse = false,
+    VoidCallback? onTap,
+  }) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 22,
+            color: AppColors.textPrimary,
+            fontFamily: 'pico',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TweenAnimationBuilder<double>(
+          tween: Tween<double>(
+            begin: 1,
+            end: pulse && _centerPulseExpanded ? 1.08 : 0.96,
+          ),
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeInOut,
+          onEnd: () {
+            if (!mounted || !pulse) return;
+            setState(() => _centerPulseExpanded = !_centerPulseExpanded);
+          },
+          builder: (context, scale, child) {
+            return Transform.scale(scale: scale, child: child);
+          },
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(26),
+            child: Ink(
+              width: 82,
+              height: 82,
+              decoration: BoxDecoration(
+                color: AppColors.highlightColor.withValues(alpha: 0.26),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(
+                  color: AppColors.textPrimary,
+                  width: AppColors.borderThickness,
+                ),
+              ),
+              child: Icon(icon, color: AppColors.textPrimary, size: 36),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.textPrimary.withValues(alpha: 0.75),
+            fontFamily: 'pico',
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(width: 96, child: _buildPlayerIndicator()),
+      ],
+    );
+  }
+
+  Widget _buildMouseLayout() {
+    final subtitle = _mouseModeOwned
+        ? 'toque para voltar ao controle'
+        : (_mouseModeOwnerName == null
+              ? 'pedindo acesso ao host...'
+              : 'ocupado por ${_mouseModeOwnerName!}');
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          flex: 4,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'cursor',
+                  style: TextStyle(
+                    fontFamily: 'pico',
+                    fontSize: 16,
+                    color: AppColors.textPrimary.withValues(alpha: 0.8),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Joystick(
+                  size: 250,
+                  onChanged: _onMouseStickChanged,
+                  onReleased: _onMouseStickRelease,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.center, 
+          children: [
+            Expanded(
+              flex: 2,
+              child: _buildModeHub(
+                icon: Icons.mouse_outlined,
+                title: 'mouse mode',
+                subtitle: subtitle,
+                pulse: true,
+                onTap: _exitTemporaryMode,
+              )
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.center,
+              child: ControlButton(
+                label: '',
+                width: 84,
+                height: 58,
+                icon: const Icon(
+                  Icons.fullscreen_exit_rounded,
+                  color: AppColors.textPrimary,
+                ),
+                onStateChange: (state) {
+                  if (state == 'up') {
+                    _toggleWindowVisibility();
+                  }
+                },
               ),
             ),
-          Text(
-            status,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 18,
-              color: AppColors.textPrimary,
+          ]
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 4,
+          child: Column(
+            children: [
+              Expanded(
+                flex: 5,
+                child: _MouseScrollStrip(onScroll: _sendMouseScroll),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                flex: 4,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ControlButton(
+                        label: 'LEFT',
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: BorderRadius.circular(28),
+                        onStateChange: (state) =>
+                            _sendMouseButton('left', state),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ControlButton(
+                        label: 'RIGHT',
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: BorderRadius.circular(28),
+                        onStateChange: (state) =>
+                            _sendMouseButton('right', state),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditControlsPanel() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundColor.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: AppColors.textPrimary,
+          width: AppColors.borderThickness,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'edit controls',
+            style: TextStyle(
               fontFamily: 'pico',
+              fontSize: 22,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Mostre, esconda e depois arraste os botoes no painel da direita.',
+            style: TextStyle(
+              fontFamily: 'pico',
+              fontSize: 12,
+              color: AppColors.textPrimary.withValues(alpha: 0.72),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: _editableButtons.map(_buildEditToggleTile).toList(),
+              ),
             ),
           ),
         ],
-      );
-    }
-    return const SizedBox.shrink();
+      ),
+    );
+  }
+
+  Widget _buildEditToggleTile(String buttonKey) {
+    final visible = visibleButtons[buttonKey] ?? true;
+    final label = buttonKey.replaceFirst('btn', '');
+
+    return GestureDetector(
+      onTap: () => _toggleButtonVisibility(buttonKey),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 96,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: visible
+              ? AppColors.highlightColor.withValues(alpha: 0.34)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.textPrimary,
+            width: visible ? 3 : 2,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'pico',
+                fontSize: 18,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              visible ? 'on' : 'off',
+              style: TextStyle(
+                fontFamily: 'pico',
+                fontSize: 11,
+                color: AppColors.textPrimary.withValues(alpha: 0.72),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditLayout() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 3, child: _buildEditControlsPanel()),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: _buildModeHub(
+            icon: Icons.tune_rounded,
+            title: 'edit mode',
+            subtitle: 'toque para voltar ao jogo',
+            onTap: _exitTemporaryMode,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 3,
+          child: ActionButtons(
+            visibleButtons: visibleButtons,
+            onButtonStateChanged: _sendButton,
+            editMode: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDefaultLayout() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          flex: 3,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: dpadMode
+                ? _buildDpad()
+                : Joystick(
+                    size: 220,
+                    onChanged: _onStickChanged,
+                    onReleased: _onStickRelease,
+                  ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Text(
+                'ma•net',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.normal,
+                  color: AppColors.textPrimary,
+                  fontFamily: 'pico',
+                ),
+              ),
+              const SizedBox(height: 10),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [_buildCenterStatus()],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildPlayerIndicator(),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              IconButton(
+                icon: const Icon(Icons.settings, size: 32),
+                onPressed: _showOptionsDialog,
+                tooltip: 'Options',
+              ),
+              const SizedBox(height: 18),
+              _buildCenterAction(),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 3,
+          child: ActionButtons(
+            visibleButtons: visibleButtons,
+            onButtonStateChanged: _sendButton,
+            editMode: false,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildMultipleHostsOverlay() {
@@ -804,95 +1267,119 @@ class _ControllerScreenState extends State<ControllerScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
+    final body = _isMouseModeVisible
+        ? _buildMouseLayout()
+        : (_isEditModeActive ? _buildEditLayout() : _buildDefaultLayout());
+
     return Scaffold(
-      body: Container(
-        color: AppColors.screenBackground,
+      body: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        decoration: BoxDecoration(
+          color: AppColors.screenBackground,
+          gradient: _isTemporaryModeActive
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.screenBackground,
+                    AppColors.highlightColor.withValues(alpha: 0.18),
+                    AppColors.screenBackground,
+                  ],
+                )
+              : null,
+        ),
         child: Stack(
           children: [
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: dpadMode
-                            ? _buildDpad()
-                            : Joystick(
-                                size: 220,
-                                onChanged: _onStickChanged,
-                                onReleased: _onStickRelease,
-                              ),
-                      ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: KeyedSubtree(
+                    key: ValueKey<String>(
+                      _isMouseModeVisible
+                          ? 'mouse'
+                          : (_isEditModeActive ? 'edit' : 'normal'),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          Text(
-                            'ma•net',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.normal,
-                              color: AppColors.textPrimary,
-                              fontFamily: 'pico',
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [_buildCenterStatus()],
-                                ),
-                                const SizedBox(height: 8),
-                                _buildPlayerIndicator(),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          IconButton(
-                            icon: const Icon(Icons.settings, size: 32),
-                            onPressed: _showOptionsDialog,
-                            tooltip: 'Options',
-                          ),
-                          const SizedBox(height: 18),
-                          _buildCenterAction(),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 3,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: ActionButtons(
-                              visibleButtons: visibleButtons,
-                              onButtonStateChanged: _sendButton,
-                              editMode: editMode,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    child: body,
+                  ),
                 ),
               ),
             ),
             if (_connectionState ==
                 ControllerConnectionState.multipleHostsFound)
               _buildMultipleHostsOverlay(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MouseScrollStrip extends StatelessWidget {
+  const _MouseScrollStrip({required this.onScroll});
+
+  final ValueChanged<double> onScroll;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (details) {
+        final dragDelta = details.primaryDelta ?? 0;
+        if (dragDelta.abs() < 1) return;
+        onScroll((-dragDelta / 32).clamp(-1.2, 1.2));
+      },
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: AppColors.backgroundColor.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: AppColors.textPrimary,
+            width: AppColors.borderThickness,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            const Icon(
+              Icons.keyboard_arrow_up_rounded,
+              color: AppColors.textPrimary,
+              size: 34,
+            ),
+            Text(
+              'scroll',
+              style: TextStyle(
+                fontFamily: 'pico',
+                fontSize: 16,
+                color: AppColors.textPrimary.withValues(alpha: 0.85),
+              ),
+            ),
+            Container(
+              width: 56,
+              height: 98,
+              decoration: BoxDecoration(
+                color: AppColors.highlightColor.withValues(alpha: 0.22),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.textPrimary.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.swap_vert_rounded,
+                color: AppColors.textPrimary,
+                size: 30,
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppColors.textPrimary,
+              size: 34,
+            ),
           ],
         ),
       ),

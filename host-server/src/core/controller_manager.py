@@ -13,6 +13,7 @@ class ControllerManager:
         self.device_colors: dict[str, str] = {}
         self.device_identities: dict[str, dict] = {}
         self.device_ws_map: dict[str, any] = {}
+        self.mouse_mode_owner_device_id: str | None = None
         self.main_loop = None
 
     def set_main_loop(self, loop):
@@ -42,6 +43,10 @@ class ControllerManager:
                 loop.create_task(ws.send_json(payload))
             except Exception:
                 pass
+
+    def broadcast_to_devices(self, payload):
+        for device_id in list(self.device_ws_map.keys()):
+            self.notify_device(device_id, payload)
 
     def cleanup_gamepads(self):
         for slot in self.slots:
@@ -78,6 +83,7 @@ class ControllerManager:
 
     def unregister_device(self, device_id):
         self.connected_devices.pop(device_id, None)
+        self.release_mouse_mode(device_id)
 
     def _create_empty_slot(self, index):
         gamepad, gp_type = create_gamepad(
@@ -249,6 +255,45 @@ class ControllerManager:
         if slot_index is None:
             return None
         return self.slots[slot_index]
+
+    def request_mouse_mode(self, device_id):
+        if self.mouse_mode_owner_device_id in (None, device_id):
+            self.mouse_mode_owner_device_id = device_id
+            return True
+        return False
+
+    def release_mouse_mode(self, device_id):
+        if self.mouse_mode_owner_device_id != device_id:
+            return False
+
+        self.mouse_mode_owner_device_id = None
+        return True
+
+    def is_mouse_mode_owner(self, device_id):
+        return self.mouse_mode_owner_device_id == device_id
+
+    def get_mouse_mode_owner_name(self):
+        owner_id = self.mouse_mode_owner_device_id
+        if owner_id is None:
+            return None
+
+        device = self.connected_devices.get(owner_id)
+        if device is None:
+            return None
+        return device.get("name") or owner_id
+
+    def build_mouse_mode_payload(self, device_id=None):
+        owner_id = self.mouse_mode_owner_device_id
+        return {
+            "type": "mouse_mode_status",
+            "active": owner_id is not None,
+            "owner": device_id is not None and owner_id == device_id,
+            "ownerName": self.get_mouse_mode_owner_name(),
+        }
+
+    def broadcast_mouse_mode_status(self):
+        for device_id in list(self.device_ws_map.keys()):
+            self.notify_device(device_id, self.build_mouse_mode_payload(device_id))
 
     def move_slot(self, from_index, to_index):
         if from_index >= len(self.slots) or to_index >= len(self.slots):

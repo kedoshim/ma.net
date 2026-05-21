@@ -18,7 +18,7 @@ class HapticsManager {
   Future<void> init() async {
     _enabled = await PreferencesService.instance.getRumbleEnabled();
     if (_isMobileOS) {
-      _hasAmplitudeControl = (await Vibration.hasAmplitudeControl()) ?? false;
+      _hasAmplitudeControl = await Vibration.hasAmplitudeControl();
     }
   }
 
@@ -114,5 +114,16 @@ class HapticsManager {
       debugPrint('HapticsManager: connectionPulse');
     } catch (_) {}
     Vibration.vibrate(duration: 100);
+  }
+
+  void softTap() {
+    if (!_enabled) return;
+    if (!_isMobileOS) return;
+
+    if (_hasAmplitudeControl) {
+      Vibration.vibrate(duration: 24, amplitude: 80);
+    } else {
+      Vibration.vibrate(duration: 24);
+    }
   }
 }

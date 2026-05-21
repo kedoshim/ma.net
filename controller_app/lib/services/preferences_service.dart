@@ -86,6 +86,11 @@ class PreferencesService {
   Future<bool> getDpadMode() async =>
       (await _getInstance).getBool('dpadMode') ?? false;
 
+  Future<void> setMouseModeEnabled(bool enabled) async =>
+      (await _getInstance).setBool('mouseModeEnabled', enabled);
+  Future<bool> getMouseModeEnabled() async =>
+      (await _getInstance).getBool('mouseModeEnabled') ?? false;
+
   Future<void> setButtonOrder(List<String> order) async =>
       (await _getInstance).setStringList('buttonOrder', order);
   Future<List<String>?> getButtonOrder() async =>

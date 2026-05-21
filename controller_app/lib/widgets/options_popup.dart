@@ -1,20 +1,19 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../theme/app_colors.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
+
 import '../models/player_face.dart';
-import '../services/preferences_service.dart';
-import 'player_face_indicator.dart';
 import '../services/haptics_manager.dart';
+import '../services/preferences_service.dart';
+import '../theme/app_colors.dart';
+import 'player_face_indicator.dart';
 
 class OptionsPopup extends StatefulWidget {
   final bool dpadMode;
   final ValueChanged<bool> onDpadModeChanged;
-  final Map<String, bool> buttonVisibility;
-  final ValueChanged<String> onButtonVisibilityChanged;
-  final bool editMode;
-  final ValueChanged<bool> onEditModeChanged;
+  final VoidCallback onEnterMouseMode;
+  final VoidCallback onEnterEditMode;
   final ColorTheme currentTheme;
   final ValueChanged<ColorTheme> onThemeChanged;
   final VoidCallback? onDisconnectRequested;
@@ -26,10 +25,8 @@ class OptionsPopup extends StatefulWidget {
     super.key,
     required this.dpadMode,
     required this.onDpadModeChanged,
-    required this.buttonVisibility,
-    required this.onButtonVisibilityChanged,
-    required this.editMode,
-    required this.onEditModeChanged,
+    required this.onEnterMouseMode,
+    required this.onEnterEditMode,
     required this.currentTheme,
     required this.onThemeChanged,
     this.onDisconnectRequested,
@@ -44,7 +41,6 @@ class OptionsPopup extends StatefulWidget {
 
 class _OptionsPopupState extends State<OptionsPopup> {
   late bool _dpadMode;
-  late bool _editMode;
   bool _rumbleEnabled = true;
   late ColorTheme _selectedTheme;
   late PlayerFaceData _playerFace;
@@ -55,7 +51,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
   void initState() {
     super.initState();
     _dpadMode = widget.dpadMode;
-    _editMode = widget.editMode;
     _selectedTheme = widget.currentTheme;
     _playerFace = widget.playerFace;
     _faceController = TextEditingController(text: widget.playerFace.faceText);
@@ -63,7 +58,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
     _faceFocusNode.addListener(() {
       setState(() {});
     });
-    // load rumble pref (default true)
     PreferencesService.instance
         .getRumbleEnabled()
         .then((v) {
@@ -136,7 +130,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: TextButton.styleFrom(
-                    minimumSize: const Size(40, 40),
+                    minimumSize: const Size(20, 20),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
                       vertical: 4,
@@ -204,6 +198,26 @@ class _OptionsPopupState extends State<OptionsPopup> {
           ),
         ),
         const SizedBox(height: 8),
+        _ModeActionTile(
+          icon: Icons.mouse_outlined,
+          title: 'Mouse Mode',
+          subtitle: 'Controle o desktop do sofa',
+          onTap: () {
+            Navigator.of(context).pop();
+            widget.onEnterMouseMode();
+          },
+        ),
+        const SizedBox(height: 10),
+        _ModeActionTile(
+          icon: Icons.tune_rounded,
+          title: 'Edit Controls',
+          subtitle: 'Arraste e mostre os botoes ao vivo',
+          onTap: () {
+            Navigator.of(context).pop();
+            widget.onEnterEditMode();
+          },
+        ),
+        const SizedBox(height: 10),
         SwitchListTile(
           title: const Text('Modo D-Pad', style: TextStyle(fontFamily: 'pico')),
           value: _dpadMode,
@@ -214,7 +228,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
           activeThumbColor: AppColors.switchActiveThumb,
           activeTrackColor: AppColors.highlightColor,
         ),
-        const SizedBox(height: 8),
         SwitchListTile(
           title: const Text(
             'Ativar vibracoes',
@@ -224,24 +237,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
           onChanged: (value) {
             setState(() => _rumbleEnabled = value);
             HapticsManager.instance.setEnabled(value);
-          },
-          activeThumbColor: AppColors.switchActiveThumb,
-          activeTrackColor: AppColors.highlightColor,
-        ),
-        const Divider(),
-        SwitchListTile(
-          title: const Text(
-            'Modo de Edicao',
-            style: TextStyle(fontFamily: 'pico'),
-          ),
-          subtitle: const Text(
-            'Reordenar botoes arrastando',
-            style: TextStyle(fontFamily: 'pico', fontSize: 12),
-          ),
-          value: _editMode,
-          onChanged: (value) {
-            setState(() => _editMode = value);
-            widget.onEditModeChanged(value);
           },
           activeThumbColor: AppColors.switchActiveThumb,
           activeTrackColor: AppColors.highlightColor,
@@ -257,17 +252,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
         ),
         const SizedBox(height: 8),
         _buildThemeSelector(),
-        const Divider(),
-        const Text(
-          'Botoes Visiveis',
-          style: TextStyle(
-            fontFamily: 'pico',
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ..._buildButtonToggles(),
         const Divider(),
         if (!kIsWeb)
           ListTile(
@@ -495,25 +479,6 @@ class _OptionsPopupState extends State<OptionsPopup> {
     );
   }
 
-  List<Widget> _buildButtonToggles() {
-    const buttons = ['A', 'B', 'X', 'Y', 'RB', 'RT', 'RS', 'LB', 'LT', 'LS'];
-
-    return buttons.map((button) {
-      final buttonKey = 'btn$button';
-      return SwitchListTile(
-        title: Text(button, style: const TextStyle(fontFamily: 'pico')),
-        value: widget.buttonVisibility[buttonKey] ?? true,
-        onChanged: (value) {
-          widget.onButtonVisibilityChanged(buttonKey);
-          setState(() {});
-        },
-        dense: true,
-        activeThumbColor: AppColors.switchActiveThumb,
-        activeTrackColor: AppColors.highlightColor,
-      );
-    }).toList();
-  }
-
   Widget _buildThemeSelector() {
     final themes = ColorTheme.values;
 
@@ -668,5 +633,84 @@ class _OptionsPopupState extends State<OptionsPopup> {
       _playerFace = nextFace;
     });
     widget.onPlayerFaceChanged(nextFace);
+  }
+}
+
+class _ModeActionTile extends StatelessWidget {
+  const _ModeActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Ink(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.highlightColor.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: AppColors.textPrimary.withValues(alpha: 0.2),
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppColors.backgroundColor.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.textPrimary.withValues(alpha: 0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(icon, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontFamily: 'pico',
+                      fontSize: 16,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: 'pico',
+                      fontSize: 11,
+                      color: AppColors.textPrimary.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              color: AppColors.textPrimary,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

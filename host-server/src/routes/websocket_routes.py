@@ -7,6 +7,7 @@ from aiohttp import WSMsgType, web
 import logging
 
 from src.input.input_handler import apply_button, apply_stick
+from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
 
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +20,7 @@ class WebSocketRoutes:
         self.admin_panel = admin_panel
         self.ws_endpoint = ws_endpoint
         self.connection_service = connection_service
+        self.mouse = MouseController()
 
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
@@ -74,6 +76,7 @@ class WebSocketRoutes:
                 "total_slots": len(self.manager.slots)
             })
 
+        await ws.send_json(self.manager.build_mouse_mode_payload(device_id))
         self.admin_panel.broadcast_update()
 
         try:
@@ -93,7 +96,11 @@ class WebSocketRoutes:
                 msg_type = data.get("type")
 
                 current_slot = self.manager.get_slot_by_device(device_id)
+                is_mouse_owner = self.manager.is_mouse_mode_owner(device_id)
                 if msg_type == "stick":
+                    if is_mouse_owner:
+                        continue
+
                     x = float(data.get("x", 0))
                     y = float(data.get("y", 0))
 
@@ -118,6 +125,9 @@ class WebSocketRoutes:
                             pass
 
                 elif msg_type == "button":
+                    if is_mouse_owner:
+                        continue
+
                     if current_slot:
                         apply_button(
                             current_slot,
@@ -146,6 +156,49 @@ class WebSocketRoutes:
                 elif msg_type == "face_update":
                     self.manager.update_device_identity(device_id, data)
                     self.admin_panel.broadcast_update()
+                elif msg_type == "set_mouse_mode":
+                    wants_active = data.get("active") == True
+
+                    if wants_active:
+                        if not self.manager.request_mouse_mode(device_id):
+                            await ws.send_json({
+                                "type": "error",
+                                "code": "mouse_mode_in_use",
+                                "ownerName": self.manager.get_mouse_mode_owner_name(),
+                            })
+                            continue
+                    else:
+                        self.manager.release_mouse_mode(device_id)
+
+                    self.manager.broadcast_mouse_mode_status()
+                elif msg_type == "mouse_move":
+                    if is_mouse_owner:
+                        self.mouse.move(
+                            float(data.get("x", 0)),
+                            -float(data.get("y", 0)),
+                        )
+                elif msg_type == "mouse_left_down":
+                    if is_mouse_owner:
+                        self.mouse.left_down()
+                elif msg_type == "mouse_left_up":
+                    if is_mouse_owner:
+                        self.mouse.left_up()
+                elif msg_type == "mouse_right_down":
+                    if is_mouse_owner:
+                        self.mouse.right_down()
+                elif msg_type == "mouse_right_up":
+                    if is_mouse_owner:
+                        self.mouse.right_up()
+                elif msg_type == "mouse_scroll":
+                    if is_mouse_owner:
+                        self.mouse.scroll(float(data.get("delta", 0)))
+                elif msg_type == "toggle_window_visibility":
+                    if is_mouse_owner:
+                        self.admin_panel.broadcast_event({
+                            "type": "window_action",
+                            "action": "toggle_visibility",
+                            "deviceId": device_id,
+                        })
                 elif msg_type == "rumble_test":
                     LOG.info("Received rumble_test from device %s", device_id)
 
@@ -178,6 +231,7 @@ class WebSocketRoutes:
 
             self.manager.unregister_device(device_id)
             self.manager.unregister_device_ws(device_id)
+            self.manager.broadcast_mouse_mode_status()
             self.admin_panel.broadcast_update()
 
             try:

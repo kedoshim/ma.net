@@ -7,6 +7,7 @@ import 'package:server_app/screens/home_page/gamepad_handler_widget.dart';
 
 import '../../theme/app_theme.dart';
 import '../../services/host_api_service.dart';
+import '../../services/host_window_service.dart';
 import '../../services/server_process_service.dart';
 import '../../services/sound_effect_service.dart';
 import '../../services/startup_connection_pipeline.dart';
@@ -45,6 +46,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   late final HostApiService _api;
+  late final HostWindowService _hostWindowService;
 
   late final StartupConnectionPipeline _startupPipeline;
   ColorTheme _currentTheme = ColorTheme.blue;
@@ -54,6 +56,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     super.initState();
     SoundEffectService.instance.init();
     _api = HostApiService(host: widget.host, port: widget.port);
+    _hostWindowService = HostWindowService(api: _api);
+    _hostWindowService.start();
     _startupPipeline = StartupConnectionPipeline(api: _api);
     _startupPipeline.state.addListener(_handlePipelineUpdate);
     _startupPipeline.initialize();
@@ -94,6 +98,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   @override
   void dispose() {
     _startupPipeline.state.removeListener(_handlePipelineUpdate);
+    _hostWindowService.dispose();
     _startupPipeline.dispose();
     super.dispose();
   }

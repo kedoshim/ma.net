@@ -6,11 +6,19 @@ typedef ButtonStateCallback = void Function(String state);
 class ControlButton extends StatefulWidget {
   final String label;
   final ButtonStateCallback onStateChange;
+  final double width;
+  final double? height;
+  final Widget? icon;
+  final BorderRadiusGeometry? borderRadius;
 
   const ControlButton({
     super.key,
     required this.label,
     required this.onStateChange,
+    this.width = 80,
+    this.height,
+    this.icon,
+    this.borderRadius,
   });
 
   @override
@@ -38,7 +46,9 @@ class _ControlButtonState extends State<ControlButton> {
     ].contains(widget.label);
 
     // Make SELECT and START shorter
-    final height = ['SELECT', 'START'].contains(widget.label) ? 40.0 : 80.0;
+    final height =
+        widget.height ??
+        (['SELECT', 'START'].contains(widget.label) ? 40.0 : 80.0);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -60,29 +70,31 @@ class _ControlButtonState extends State<ControlButton> {
           widget.onStateChange('up');
         },
         child: Container(
-          width: 80,
+          width: widget.width,
           height: height,
           alignment: Alignment.center,
           // margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius:
+                widget.borderRadius ?? BorderRadius.circular(16),
             border: Border.all(
               color: AppColors.textPrimary,
               width: AppColors.borderThickness,
             ),
           ),
-          child: showText
-              ? Text(
-                  widget.label,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                    fontFamily: 'pico',
-                  ),
-                )
-              : null,
+          child: widget.icon ??
+              (showText
+                  ? Text(
+                      widget.label,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                        fontFamily: 'pico',
+                      ),
+                    )
+                  : null),
         ),
       ),
     );
