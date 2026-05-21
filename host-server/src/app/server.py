@@ -10,6 +10,8 @@ from src.lifecycle.app_lifecycle import AppLifecycle
 from src.routes.register_routes import register_all_routes
 from src.bootstrap.dependencies import build_dependencies
 from src.cli.debug_cli import DebugCLI
+from src.services.connection_service import ConnectionService
+from src.services.network_diagnostics_service import NetworkDiagnosticsService
 
 import logging
 
@@ -22,6 +24,14 @@ logging.getLogger("aiohttp.server").setLevel(logging.WARNING)
 
 def create_app(config):
     manager, admin_panel, _ = build_dependencies(config)
+    connection_service = ConnectionService(
+        port=config.http_port,
+        ws_endpoint=config.ws_endpoint,
+    )
+    diagnostics_service = NetworkDiagnosticsService(
+        manager,
+        connection_service,
+    )
 
     app = web.Application()
 
@@ -38,13 +48,16 @@ def create_app(config):
         manager,
         admin_panel,
         config.http_port,
-        config.ws_endpoint
+        config.ws_endpoint,
+        connection_service,
+        diagnostics_service,
     )
 
     websocket_routes = WebSocketRoutes(
         config.ws_endpoint,
         manager,
-        admin_panel
+        admin_panel,
+        connection_service,
     )
 
     file_routes = FileRoutes()

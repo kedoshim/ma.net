@@ -1,4 +1,4 @@
-package com.example.ma_net
+package com.kedoshim.ma_net
 
 import io.flutter.embedding.android.FlutterActivity
 

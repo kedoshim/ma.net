@@ -148,12 +148,6 @@ Baixe aqui:
 Achou bug?  
 Abre uma issue.
 
-Quer melhorar alguma coisa?  
-Manda um PR.
-
-Quer fazer um rostinho amaldiçoado?  
-Apoiado.
-
 ---
 
 # Licença
@@ -176,3 +170,5 @@ Agora eu quero levar isso pra mais pessoas também.
 # Creditos
 
 Bubble Pops by Abacagi -- https://freesound.org/s/497198/ -- License: Attribution 4.0
+
+Mouth_45.wav by LittleRobotSoundFactory -- https://freesound.org/s/290524/ -- License: Attribution 4.0

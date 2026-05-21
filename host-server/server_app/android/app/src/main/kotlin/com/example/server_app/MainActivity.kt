@@ -1,4 +1,4 @@
-package com.example.server_app
+package com.kedoshim.server_app
 
 import io.flutter.embedding.android.FlutterActivity
 

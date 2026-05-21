@@ -31,15 +31,29 @@ class DragData {
 void _playHoverSound() => SoundEffectService.instance.playHover();
 
 class AdaptiveStageLayout extends StatelessWidget {
-  final ConnectionInfo? connectionInfo;
-  final String qrCodeUrl;
-  final bool isLoadingConnection;
+  final ConnectionSnapshot? connectionSnapshot;
+  final DiagnosticsSnapshot? diagnosticsSnapshot;
+  final ConnectionInfo? selectedConnection;
+  final String? qrEndpointUrl;
+  final ImageProvider? qrImage;
+  final HostApiService api;
+  final bool isLoadingConnections;
+  final bool isLoadingDiagnostics;
+  final Future<void> Function(String connectionId) onSelectConnection;
+  final Future<void> Function() onRefreshDiagnostics;
 
   const AdaptiveStageLayout({
     super.key,
-    required this.connectionInfo,
-    required this.qrCodeUrl,
-    required this.isLoadingConnection,
+    required this.connectionSnapshot,
+    required this.diagnosticsSnapshot,
+    required this.selectedConnection,
+    required this.qrEndpointUrl,
+    required this.qrImage,
+    required this.api,
+    required this.isLoadingConnections,
+    required this.isLoadingDiagnostics,
+    required this.onSelectConnection,
+    required this.onRefreshDiagnostics,
   });
 
   @override
@@ -49,15 +63,29 @@ class AdaptiveStageLayout extends StatelessWidget {
         final isWide = constraints.maxWidth / constraints.maxHeight > 1.2;
         if (isWide) {
           return WideStageLayout(
-            connectionInfo: connectionInfo,
-            qrCodeUrl: qrCodeUrl,
-            isLoadingConnection: isLoadingConnection,
+            connectionSnapshot: connectionSnapshot,
+            diagnosticsSnapshot: diagnosticsSnapshot,
+            selectedConnection: selectedConnection,
+            qrEndpointUrl: qrEndpointUrl,
+            qrImage: qrImage,
+            api: api,
+            isLoadingConnections: isLoadingConnections,
+            isLoadingDiagnostics: isLoadingDiagnostics,
+            onSelectConnection: onSelectConnection,
+            onRefreshDiagnostics: onRefreshDiagnostics,
           );
         } else {
           return CompactStageLayout(
-            connectionInfo: connectionInfo,
-            qrCodeUrl: qrCodeUrl,
-            isLoadingConnection: isLoadingConnection,
+            connectionSnapshot: connectionSnapshot,
+            diagnosticsSnapshot: diagnosticsSnapshot,
+            selectedConnection: selectedConnection,
+            qrEndpointUrl: qrEndpointUrl,
+            qrImage: qrImage,
+            api: api,
+            isLoadingConnections: isLoadingConnections,
+            isLoadingDiagnostics: isLoadingDiagnostics,
+            onSelectConnection: onSelectConnection,
+            onRefreshDiagnostics: onRefreshDiagnostics,
           );
         }
       },
@@ -66,15 +94,29 @@ class AdaptiveStageLayout extends StatelessWidget {
 }
 
 class WideStageLayout extends StatelessWidget {
-  final ConnectionInfo? connectionInfo;
-  final String qrCodeUrl;
-  final bool isLoadingConnection;
+  final ConnectionSnapshot? connectionSnapshot;
+  final DiagnosticsSnapshot? diagnosticsSnapshot;
+  final ConnectionInfo? selectedConnection;
+  final String? qrEndpointUrl;
+  final ImageProvider? qrImage;
+  final HostApiService api;
+  final bool isLoadingConnections;
+  final bool isLoadingDiagnostics;
+  final Future<void> Function(String connectionId) onSelectConnection;
+  final Future<void> Function() onRefreshDiagnostics;
 
   const WideStageLayout({
     super.key,
-    required this.connectionInfo,
-    required this.qrCodeUrl,
-    required this.isLoadingConnection,
+    required this.connectionSnapshot,
+    required this.diagnosticsSnapshot,
+    required this.selectedConnection,
+    required this.qrEndpointUrl,
+    required this.qrImage,
+    required this.api,
+    required this.isLoadingConnections,
+    required this.isLoadingDiagnostics,
+    required this.onSelectConnection,
+    required this.onRefreshDiagnostics,
   });
 
   @override
@@ -128,10 +170,17 @@ class WideStageLayout extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.only(left: scale.eighth),
                 child: QRCodePanel(
-                  connectionInfo: connectionInfo,
-                  qrCodeUrl: qrCodeUrl,
-                  isLoadingConnection: isLoadingConnection,
+                  connectionSnapshot: connectionSnapshot,
+                  diagnosticsSnapshot: diagnosticsSnapshot,
+                  selectedConnection: selectedConnection,
+                  qrEndpointUrl: qrEndpointUrl,
+                  qrImage: qrImage,
+                  api: api,
+                  isLoadingConnection: isLoadingConnections,
+                  isLoadingDiagnostics: isLoadingDiagnostics,
                   scale: scale,
+                  onSelectConnection: onSelectConnection,
+                  onRefreshDiagnostics: onRefreshDiagnostics,
                 ),
               ),
             ),
@@ -143,15 +192,29 @@ class WideStageLayout extends StatelessWidget {
 }
 
 class CompactStageLayout extends StatelessWidget {
-  final ConnectionInfo? connectionInfo;
-  final String qrCodeUrl;
-  final bool isLoadingConnection;
+  final ConnectionSnapshot? connectionSnapshot;
+  final DiagnosticsSnapshot? diagnosticsSnapshot;
+  final ConnectionInfo? selectedConnection;
+  final String? qrEndpointUrl;
+  final ImageProvider? qrImage;
+  final HostApiService api;
+  final bool isLoadingConnections;
+  final bool isLoadingDiagnostics;
+  final Future<void> Function(String connectionId) onSelectConnection;
+  final Future<void> Function() onRefreshDiagnostics;
 
   const CompactStageLayout({
     super.key,
-    required this.connectionInfo,
-    required this.qrCodeUrl,
-    required this.isLoadingConnection,
+    required this.connectionSnapshot,
+    required this.diagnosticsSnapshot,
+    required this.selectedConnection,
+    required this.qrEndpointUrl,
+    required this.qrImage,
+    required this.api,
+    required this.isLoadingConnections,
+    required this.isLoadingDiagnostics,
+    required this.onSelectConnection,
+    required this.onRefreshDiagnostics,
   });
 
   @override
@@ -183,10 +246,17 @@ class CompactStageLayout extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.only(bottom: scale.quarter),
                 child: QRCodePanel(
-                  connectionInfo: connectionInfo,
-                  qrCodeUrl: qrCodeUrl,
-                  isLoadingConnection: isLoadingConnection,
+                  connectionSnapshot: connectionSnapshot,
+                  diagnosticsSnapshot: diagnosticsSnapshot,
+                  selectedConnection: selectedConnection,
+                  qrEndpointUrl: qrEndpointUrl,
+                  qrImage: qrImage,
+                  api: api,
+                  isLoadingConnection: isLoadingConnections,
+                  isLoadingDiagnostics: isLoadingDiagnostics,
                   scale: scale,
+                  onSelectConnection: onSelectConnection,
+                  onRefreshDiagnostics: onRefreshDiagnostics,
                 ),
               ),
             ),

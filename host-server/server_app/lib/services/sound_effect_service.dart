@@ -42,7 +42,7 @@ class SoundEffectService {
   static const Map<ServerAppSound, ServerAppSoundConfig> _soundConfigs = {
     ServerAppSound.hover: ServerAppSoundConfig(
       assetPaths: ['audio/slot-click.mp3'],
-      volume: 0.8,
+      volume: 1,
       minimumInterval: Duration(milliseconds: 100),
       playerKey: 'hover',
     ),
@@ -74,9 +74,9 @@ class SoundEffectService {
       playerKey: 'uiClick',
     ),
     ServerAppSound.dropPlayer: ServerAppSoundConfig(
-      assetPaths: ['audio/pop1.wav'],
-      volume: 0.8,
-      playerKey: 'uiClick',
+      assetPaths: ['audio/drop1.wav'],
+      volume: 0.5,
+      playerKey: 'dropPlayer',
     ),
   };
 

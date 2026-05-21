@@ -74,6 +74,10 @@ class ConnectionManager {
 
 class _ControllerScreenState extends State<ControllerScreen>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
+  static const Map<String, String> _serverCodeText = {
+    'missing_device_id': 'Missing device id',
+  };
+
   WebSocketService? ws;
 
   ControllerConnectionState _connectionState =
@@ -295,6 +299,15 @@ class _ControllerScreenState extends State<ControllerScreen>
           if (data['type'] == 'slot_changed') {
             _updatePlayerSlot(data['slot'], colorHex: data['color']);
             _ingestFaceData(data);
+          }
+
+          if (data['type'] == 'error') {
+            final code = data['code'] as String?;
+            if (code != null && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(_serverCodeText[code] ?? code)),
+              );
+            }
           }
 
           if (data['type'] == 'unassigned') {

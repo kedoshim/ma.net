@@ -13,10 +13,10 @@ export 'start_page_model.dart';
 Future<bool> waitUntilServerReady(int port) async {
   final client = HttpClient();
 
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 20; i++) {
     try {
       final request = await client.getUrl(
-        Uri.parse('http://127.0.0.1:$port/api/server/status'),
+        Uri.parse('http://127.0.0.1:$port/api/server/connections'),
       );
 
       final response = await request.close();
@@ -31,14 +31,12 @@ Future<bool> waitUntilServerReady(int port) async {
 
 Future<bool> isServerRunning(int port) async {
   final client = HttpClient();
-  client.connectionTimeout = const Duration(milliseconds: 500);
+  client.connectionTimeout = const Duration(seconds: 2);
   try {
     final request = await client.getUrl(
       Uri.parse('http://127.0.0.1:$port/api/server/status'),
     );
-    final response = await request.close().timeout(
-      const Duration(milliseconds: 500),
-    );
+    final response = await request.close().timeout(const Duration(seconds: 2));
     return response.statusCode == 200;
   } catch (_) {
     return false;
@@ -58,9 +56,9 @@ Future<void> killExistingServer(int port) async {
       for (var line in lines) {
         if (line.contains('LISTENING')) {
           final parts = line.trim().split(RegExp(r'\s+'));
-          if (parts.isNotEmpty) {
+          if (parts.length >= 5 && parts[1].endsWith(':$port')) {
             final pid = parts.last;
-            await Process.run('taskkill', ['/F', '/PID', pid]);
+            await Process.run('taskkill', ['/F', '/T', '/PID', pid]);
           }
         }
       }
@@ -291,381 +289,405 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       child: Scaffold(
         key: scaffoldKey,
         backgroundColor: AppColors.screenBackground,
-        body: SafeArea(
-          top: true,
-          child: Align(
-            alignment: AlignmentDirectional(0.0, 0.0),
-            child: Container(
-              width: MediaQuery.sizeOf(context).width * 0.3,
-              decoration: BoxDecoration(),
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (_isLoading) return;
+        body: Container(
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3)),
+          child: SafeArea(
+            top: true,
+            child: Align(
+              alignment: AlignmentDirectional(0.0, 0.0),
+              child: Container(
+                width: MediaQuery.sizeOf(context).width * 0.3,
+                decoration: BoxDecoration(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (_isLoading) return;
 
-                      setState(() {
-                        _isLoading = true;
-                      });
+                        setState(() {
+                          _isLoading = true;
+                        });
 
-                      try {
-                        SoundEffectService.instance.playStartButton();
+                        try {
+                          SoundEffectService.instance.playStartButton();
 
-                        final slots = int.parse(_model.dropDownValue1 ?? '4');
-                        final fixed = _model.checkboxValue ?? false;
+                          final slots = int.parse(_model.dropDownValue1 ?? '4');
+                          final fixed = _model.checkboxValue ?? false;
 
-                        final modeMap = {
-                          'modo padrao': 'mixed',
-                          'd•input': 'ds4',
-                          'only x•input': 'x360',
-                        };
+                          final modeMap = {
+                            'modo padrao': 'mixed',
+                            'd•input': 'ds4',
+                            'only x•input': 'x360',
+                          };
 
-                        final mode =
-                            modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
+                          final mode =
+                              modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
 
-                        final port = int.tryParse(_portController.text) ?? 8765;
+                          final port =
+                              int.tryParse(_portController.text) ?? 8765;
 
-                        if (port < 1024 || port > 65535) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Porta inválida')),
-                          );
-                          return;
-                        }
+                          if (port < 1024 || port > 65535) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Porta inválida')),
+                            );
+                            return;
+                          }
 
-                        final running = await isServerRunning(port);
+                          final running = await isServerRunning(port);
 
-                        if (running) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Servidor anterior encontrado. Encerrando para reiniciar...',
+                          if (running) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Servidor anterior encontrado. Encerrando para reiniciar...',
+                                ),
+                                duration: const Duration(seconds: 2),
                               ),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                          await killExistingServer(port);
-                        } else {
+                            );
+                            await killExistingServer(port);
+                          }
+
+                          // Always check if the port is bound on ANY interface (0.0.0.0),
+                          // since the Python server binds to all interfaces for LAN access.
                           try {
-                            // Testa se a porta está ocupada por um processo desconhecido
                             final socket = await ServerSocket.bind(
-                              InternetAddress.loopbackIPv4,
+                              InternetAddress.anyIPv4,
                               port,
                             );
                             await socket.close();
                           } catch (e) {
-                            if (!mounted) return;
+                            // If it's still in use (e.g., a frozen python process that didn't respond to HTTP),
+                            // we try killing it forcefully.
+                            await killExistingServer(port);
+
+                            try {
+                              final socket2 = await ServerSocket.bind(
+                                InternetAddress.anyIPv4,
+                                port,
+                              );
+                              await socket2.close();
+                            } catch (e2) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'A porta $port já está em uso por outro programa!',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                          }
+
+                          await _serverService.startServer(
+                            port: port,
+                            slots: slots,
+                            fixed: fixed,
+                            controllerMode: mode,
+                          );
+                          final isReady = await waitUntilServerReady(port);
+
+                          if (!mounted) return;
+
+                          if (!isReady) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
+                              const SnackBar(
                                 content: Text(
-                                  'A porta $port já está em uso por outro programa!',
+                                  'Falha ao iniciar o servidor. O driver ViGEmBus pode estar ausente ou houve um erro interno.',
                                 ),
                               ),
                             );
-                            return;
+                            // Re-trigger the driver check to immediately pop up the dialog if missing
+                            await _checkDriverAndShowDialog();
+                            return; // DO NOT PROGRESS TO THE HOME PAGE
                           }
-                        }
 
-                        await _serverService.startServer(
-                          port: port,
-                          slots: slots,
-                          fixed: fixed,
-                          controllerMode: mode,
-                        );
-                        final isReady = await waitUntilServerReady(port);
-
-                        if (!mounted) return;
-
-                        if (!isReady) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Falha ao iniciar o servidor. O driver ViGEmBus pode estar ausente ou houve um erro interno.',
+                          Navigator.push(
+                            context,
+                            PageRouteBuilder(
+                              transitionDuration: const Duration(
+                                milliseconds: 500,
                               ),
+                              pageBuilder:
+                                  (context, animation, secondaryAnimation) =>
+                                      const HomePageScreen(
+                                        host: '127.0.0.1',
+                                        port: 8765,
+                                      ),
+                              transitionsBuilder:
+                                  (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                    child,
+                                  ) {
+                                    const begin = Offset(1.0, 0.0);
+                                    const end = Offset.zero;
+                                    const curve = Curves.easeInOut;
+                                    var tween = Tween(
+                                      begin: begin,
+                                      end: end,
+                                    ).chain(CurveTween(curve: curve));
+                                    return SlideTransition(
+                                      position: animation.drive(tween),
+                                      child: child,
+                                    );
+                                  },
                             ),
                           );
-                          // Re-trigger the driver check to immediately pop up the dialog if missing
-                          await _checkDriverAndShowDialog();
-                          return; // DO NOT PROGRESS TO THE HOME PAGE
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _isLoading = false;
+                            });
+                          }
                         }
-
-                        Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            pageBuilder:
-                                (context, animation, secondaryAnimation) =>
-                                    const HomePageScreen(
-                                      host: '127.0.0.1',
-                                      port: 8765,
-                                    ),
-                            transitionsBuilder:
-                                (
-                                  context,
-                                  animation,
-                                  secondaryAnimation,
-                                  child,
-                                ) {
-                                  const begin = Offset(1.0, 0.0);
-                                  const end = Offset.zero;
-                                  const curve = Curves.easeInOutCubic;
-                                  var tween = Tween(
-                                    begin: begin,
-                                    end: end,
-                                  ).chain(CurveTween(curve: curve));
-                                  return SlideTransition(
-                                    position: animation.drive(tween),
-                                    child: child,
-                                  );
-                                },
-                          ),
-                        );
-                      } finally {
-                        if (mounted) {
-                          setState(() {
-                            _isLoading = false;
-                          });
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.screenBackground,
-                      foregroundColor: AppColors.textPrimary,
-                      side: BorderSide(
-                        color: AppColors.textPrimary,
-                        width: 3.0,
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.screenBackground,
+                        foregroundColor: AppColors.textPrimary,
+                        side: BorderSide(
+                          color: AppColors.textPrimary,
+                          width: 3.0,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                        minimumSize: const Size(double.infinity, 60.0),
+                        elevation: 0.0,
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      minimumSize: const Size(double.infinity, 60.0),
-                      elevation: 0.0,
+                      child: _isLoading
+                          ? SizedBox(
+                              width: 24.0,
+                              height: 24.0,
+                              child: CircularProgressIndicator(
+                                color: AppColors.textPrimary,
+                                strokeWidth: 3.0,
+                              ),
+                            )
+                          : Text(
+                              'iniciar',
+                              style: AppTheme.titleSmall.copyWith(
+                                fontFamily: 'pico',
+                                letterSpacing: 0.0,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
                     ),
-                    child: _isLoading
-                        ? SizedBox(
-                            width: 24.0,
-                            height: 24.0,
-                            child: CircularProgressIndicator(
-                              color: AppColors.textPrimary,
-                              strokeWidth: 3.0,
-                            ),
-                          )
-                        : Text(
-                            'iniciar',
-                            style: AppTheme.titleSmall.copyWith(
-                              fontFamily: 'pico',
-                              letterSpacing: 0.0,
-                              color: AppColors.textPrimary,
+                    Row(
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            decoration: BoxDecoration(),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.max,
+                              children: [
+                                Container(
+                                  width: 140,
+                                  height: 50.0,
+                                  decoration: BoxDecoration(),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      Flexible(
+                                        flex: 2,
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.max,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Flexible(
+                                              child: Container(
+                                                width: 40,
+                                                decoration: BoxDecoration(),
+                                                child:
+                                                    DropdownButtonFormField<
+                                                      String
+                                                    >(
+                                                      dropdownColor: AppColors
+                                                          .screenBackground,
+                                                      initialValue:
+                                                          _model
+                                                              .dropDownValue1 ??
+                                                          '4',
+                                                      items:
+                                                          [
+                                                                '1',
+                                                                '2',
+                                                                '3',
+                                                                '4',
+                                                                '5',
+                                                                '6',
+                                                                '7',
+                                                                '8',
+                                                              ]
+                                                              .map(
+                                                                (e) =>
+                                                                    DropdownMenuItem(
+                                                                      value: e,
+                                                                      child:
+                                                                          Text(
+                                                                            e,
+                                                                          ),
+                                                                    ),
+                                                              )
+                                                              .toList(),
+                                                      onChanged: (val) {
+                                                        setState(() {
+                                                          _model.dropDownValue1 =
+                                                              val;
+                                                        });
+                                                      },
+                                                      decoration:
+                                                          const InputDecoration(
+                                                            border: InputBorder
+                                                                .none,
+                                                          ),
+                                                      style: AppTheme.bodyMedium
+                                                          .copyWith(
+                                                            fontFamily: 'pico',
+                                                            letterSpacing: 0.0,
+                                                            color: AppColors
+                                                                .textPrimary,
+                                                          ),
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          'jogadores',
+                                          style: AppTheme.bodyMedium.copyWith(
+                                            fontFamily: 'pico',
+                                            letterSpacing: 0.0,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  width: 100.0,
+                                  height: 50.0,
+                                  decoration: BoxDecoration(),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      Theme(
+                                        data: ThemeData(
+                                          checkboxTheme: CheckboxThemeData(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(4.0),
+                                            ),
+                                          ),
+                                          unselectedWidgetColor:
+                                              AppColors.textPrimary,
+                                        ),
+                                        child: Checkbox(
+                                          value: _model.checkboxValue ??= false,
+                                          onChanged: (newValue) {
+                                            setState(() {
+                                              _model.checkboxValue = newValue;
+                                            });
+                                          },
+                                          side: BorderSide(
+                                            width: 2,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                          activeColor: AppColors.textPrimary,
+                                          checkColor:
+                                              AppColors.screenBackground,
+                                        ),
+                                      ),
+                                      Text(
+                                        'fixo',
+                                        style: AppTheme.bodyMedium.copyWith(
+                                          fontFamily: 'pico',
+                                          letterSpacing: 0.0,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        width: 0,
+                                        child: TextFormField(
+                                          controller: _portController,
+                                          keyboardType: TextInputType.number,
+                                          style: AppTheme.bodyMedium.copyWith(
+                                            fontFamily: 'pico',
+                                            letterSpacing: 0.0,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.max,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Container(
+                        ),
+                        Container(
+                          width: 130,
+                          height: 50.0,
                           decoration: BoxDecoration(),
-                          child: Row(
+                          child: Column(
                             mainAxisSize: MainAxisSize.max,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Container(
-                                width: 140,
-                                height: 50.0,
+                                width: 230,
                                 decoration: BoxDecoration(),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    Flexible(
-                                      flex: 2,
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.max,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Flexible(
-                                            child: Container(
-                                              width: 40,
-                                              decoration: BoxDecoration(),
-                                              child:
-                                                  DropdownButtonFormField<
-                                                    String
-                                                  >(
-                                                    dropdownColor: AppColors
-                                                        .screenBackground,
-                                                    initialValue:
-                                                        _model.dropDownValue1 ??
-                                                        '4',
-                                                    items:
-                                                        [
-                                                              '1',
-                                                              '2',
-                                                              '3',
-                                                              '4',
-                                                              '5',
-                                                              '6',
-                                                              '7',
-                                                              '8',
-                                                            ]
-                                                            .map(
-                                                              (e) =>
-                                                                  DropdownMenuItem(
-                                                                    value: e,
-                                                                    child: Text(
-                                                                      e,
-                                                                    ),
-                                                                  ),
-                                                            )
-                                                            .toList(),
-                                                    onChanged: (val) {
-                                                      setState(() {
-                                                        _model.dropDownValue1 =
-                                                            val;
-                                                      });
-                                                    },
-                                                    decoration:
-                                                        const InputDecoration(
-                                                          border:
-                                                              InputBorder.none,
-                                                        ),
-                                                    style: AppTheme.bodyMedium
-                                                        .copyWith(
-                                                          fontFamily: 'pico',
-                                                          letterSpacing: 0.0,
-                                                          color: AppColors
-                                                              .textPrimary,
-                                                        ),
-                                                  ),
+                                child: DropdownButtonFormField<String>(
+                                  dropdownColor: AppColors.screenBackground,
+                                  initialValue:
+                                      _model.dropDownValue2 ?? 'modo padrao',
+                                  items:
+                                      ['modo padrao', 'd•input', 'only x•input']
+                                          .map(
+                                            (e) => DropdownMenuItem(
+                                              value: e,
+                                              child: Text(e),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                        'jogadores',
-                                        style: AppTheme.bodyMedium.copyWith(
-                                          fontFamily: 'pico',
-                                          letterSpacing: 0.0,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                width: 100.0,
-                                height: 50.0,
-                                decoration: BoxDecoration(),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    Theme(
-                                      data: ThemeData(
-                                        checkboxTheme: CheckboxThemeData(
-                                          visualDensity: VisualDensity.compact,
-                                          materialTapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              4.0,
-                                            ),
-                                          ),
-                                        ),
-                                        unselectedWidgetColor:
-                                            AppColors.textPrimary,
-                                      ),
-                                      child: Checkbox(
-                                        value: _model.checkboxValue ??= false,
-                                        onChanged: (newValue) {
-                                          setState(() {
-                                            _model.checkboxValue = newValue;
-                                          });
-                                        },
-                                        side: BorderSide(
-                                          width: 2,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                        activeColor: AppColors.textPrimary,
-                                        checkColor: AppColors.screenBackground,
-                                      ),
-                                    ),
-                                    Text(
-                                      'fixo',
-                                      style: AppTheme.bodyMedium.copyWith(
-                                        fontFamily: 'pico',
-                                        letterSpacing: 0.0,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: 0,
-                                      child: TextFormField(
-                                        controller: _portController,
-                                        keyboardType: TextInputType.number,
-                                        style: AppTheme.bodyMedium.copyWith(
-                                          fontFamily: 'pico',
-                                          letterSpacing: 0.0,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                          )
+                                          .toList(),
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _model.dropDownValue2 = val;
+                                    });
+                                  },
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                  ),
+                                  style: AppTheme.bodyMedium.copyWith(
+                                    fontFamily: 'pico',
+                                    letterSpacing: 0.0,
+                                    color: AppColors.textPrimary,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      Container(
-                        width: 130,
-                        height: 50.0,
-                        decoration: BoxDecoration(),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Container(
-                              width: 230,
-                              decoration: BoxDecoration(),
-                              child: DropdownButtonFormField<String>(
-                                dropdownColor: AppColors.screenBackground,
-                                initialValue:
-                                    _model.dropDownValue2 ?? 'modo padrao',
-                                items:
-                                    ['modo padrao', 'd•input', 'only x•input']
-                                        .map(
-                                          (e) => DropdownMenuItem(
-                                            value: e,
-                                            child: Text(e),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged: (val) {
-                                  setState(() {
-                                    _model.dropDownValue2 = val;
-                                  });
-                                },
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                ),
-                                style: AppTheme.bodyMedium.copyWith(
-                                  fontFamily: 'pico',
-                                  letterSpacing: 0.0,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

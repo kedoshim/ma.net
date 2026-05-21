@@ -78,13 +78,172 @@ class AssignementStat {
 }
 
 class ConnectionInfo {
+  final String id;
   final String url;
   final String wsUrl;
+  final String ip;
+  final String displayNameKey;
+  final String kind;
+  final bool recommended;
+  final bool selected;
+  final bool preferred;
+  final bool lastSuccessful;
 
-  ConnectionInfo({required this.url, required this.wsUrl});
+  ConnectionInfo({
+    required this.id,
+    required this.url,
+    required this.wsUrl,
+    required this.ip,
+    required this.displayNameKey,
+    required this.kind,
+    required this.recommended,
+    required this.selected,
+    required this.preferred,
+    required this.lastSuccessful,
+  });
 
   factory ConnectionInfo.fromJson(Map<String, dynamic> json) {
-    return ConnectionInfo(url: json['url'], wsUrl: json['wsUrl']);
+    return ConnectionInfo(
+      id: json['id'] ?? 'default',
+      url: json['url'],
+      wsUrl: json['wsUrl'],
+      ip: json['ip'] ?? '',
+      displayNameKey: json['displayNameKey'] ?? 'connection_label_backup',
+      kind: json['kind'] ?? 'unknown',
+      recommended: json['recommended'] == true,
+      selected: json['selected'] == true,
+      preferred: json['preferred'] == true,
+      lastSuccessful: json['lastSuccessful'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'url': url,
+      'wsUrl': wsUrl,
+      'ip': ip,
+      'displayNameKey': displayNameKey,
+      'kind': kind,
+      'recommended': recommended,
+      'selected': selected,
+      'preferred': preferred,
+      'lastSuccessful': lastSuccessful,
+    };
+  }
+}
+
+class ConnectionSnapshot {
+  final ConnectionInfo selectedConnection;
+  final List<ConnectionInfo> connections;
+
+  ConnectionSnapshot({
+    required this.selectedConnection,
+    required this.connections,
+  });
+
+  factory ConnectionSnapshot.fromJson(Map<String, dynamic> json) {
+    final selectedJson =
+        json['selectedConnection'] as Map<String, dynamic>? ??
+        const <String, dynamic>{};
+    final list = (json['connections'] as List<dynamic>? ?? const [])
+        .map((item) => ConnectionInfo.fromJson(item as Map<String, dynamic>))
+        .toList();
+
+    return ConnectionSnapshot(
+      selectedConnection: ConnectionInfo.fromJson(selectedJson),
+      connections: list,
+    );
+  }
+}
+
+class DiagnosticCheck {
+  final String id;
+  final String level;
+  final String icon;
+  final String titleKey;
+  final String bodyKey;
+  final List<String> actionIds;
+
+  DiagnosticCheck({
+    required this.id,
+    required this.level,
+    required this.icon,
+    required this.titleKey,
+    required this.bodyKey,
+    required this.actionIds,
+  });
+
+  factory DiagnosticCheck.fromJson(Map<String, dynamic> json) {
+    return DiagnosticCheck(
+      id: json['id'] ?? 'unknown_check',
+      level: json['level'] ?? 'ok',
+      icon: json['icon'] ?? 'info',
+      titleKey: json['titleKey'] ?? 'diag_title_unknown',
+      bodyKey: json['bodyKey'] ?? 'diag_body_unknown',
+      actionIds: (json['actionIds'] as List<dynamic>? ?? const [])
+          .map((item) => '$item')
+          .toList(),
+    );
+  }
+}
+
+class DiagnosticQuickAction {
+  final String id;
+  final String labelKey;
+  final String icon;
+  final String kind;
+
+  DiagnosticQuickAction({
+    required this.id,
+    required this.labelKey,
+    required this.icon,
+    required this.kind,
+  });
+
+  factory DiagnosticQuickAction.fromJson(Map<String, dynamic> json) {
+    return DiagnosticQuickAction(
+      id: json['id'] ?? 'unknown_action',
+      labelKey: json['labelKey'] ?? 'diag_action_unknown',
+      icon: json['icon'] ?? 'help_outline',
+      kind: json['kind'] ?? 'client',
+    );
+  }
+}
+
+class DiagnosticsSnapshot {
+  final String health;
+  final bool attentionNeeded;
+  final int attentionCount;
+  final int connectedClientCount;
+  final List<DiagnosticCheck> checks;
+  final List<DiagnosticQuickAction> quickActions;
+
+  DiagnosticsSnapshot({
+    required this.health,
+    required this.attentionNeeded,
+    required this.attentionCount,
+    required this.connectedClientCount,
+    required this.checks,
+    required this.quickActions,
+  });
+
+  factory DiagnosticsSnapshot.fromJson(Map<String, dynamic> json) {
+    return DiagnosticsSnapshot(
+      health: json['health'] ?? 'healthy',
+      attentionNeeded: json['attentionNeeded'] == true,
+      attentionCount: json['attentionCount'] as int? ?? 0,
+      connectedClientCount: json['connectedClientCount'] as int? ?? 0,
+      checks: (json['checks'] as List<dynamic>? ?? const [])
+          .map((item) => DiagnosticCheck.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      quickActions: (json['quickActions'] as List<dynamic>? ?? const [])
+          .map(
+            (item) =>
+                DiagnosticQuickAction.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+    );
   }
 }
 
@@ -171,6 +330,60 @@ class HostApiService {
     });
   }
 
+  Future<ConnectionSnapshot> fetchConnections() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/server/connections'),
+    );
+
+    if (response.statusCode == 200) {
+      return ConnectionSnapshot.fromJson(json.decode(response.body));
+    } else {
+      throw Exception('Failed to fetch connections');
+    }
+  }
+
+  Future<DiagnosticsSnapshot> fetchDiagnostics() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/server/diagnostics'),
+    );
+
+    if (response.statusCode == 200) {
+      return DiagnosticsSnapshot.fromJson(json.decode(response.body));
+    } else {
+      throw Exception('Failed to fetch diagnostics');
+    }
+  }
+
+  Future<void> runDiagnosticsAction(String actionId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/server/diagnostics/actions'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'actionId': actionId}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to run diagnostics action');
+    }
+  }
+
+  Future<ConnectionInfo> selectConnection(String connectionId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/server/connections/select'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'connectionId': connectionId}),
+    );
+
+    if (response.statusCode == 200) {
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      final selectedConnection =
+          body['selectedConnection'] as Map<String, dynamic>? ??
+          const <String, dynamic>{};
+      return ConnectionInfo.fromJson(selectedConnection);
+    } else {
+      throw Exception('Failed to select connection');
+    }
+  }
+
   Future<ConnectionInfo> fetchConnectionInfo() async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/server/connection'),
@@ -183,7 +396,11 @@ class HostApiService {
     }
   }
 
-  String getQrCodeUrl() {
-    return '$baseUrl/api/server/qrcode';
+  String getQrCodeUrl([String? connectionId]) {
+    final uri = Uri.parse('$baseUrl/api/server/qrcode');
+    if (connectionId == null || connectionId.isEmpty) {
+      return uri.toString();
+    }
+    return uri.replace(queryParameters: {'id': connectionId}).toString();
   }
 }

@@ -4,8 +4,9 @@ from io import BytesIO
 from aiohttp import web
 
 from src.services.qr_service import generate_qr_code_image
+from src.services.connection_service import ConnectionService
+from src.services.network_diagnostics_service import NetworkDiagnosticsService
 from src.core.slot_handler import notify_device_slot, notify_device_unassigned
-from src.utils.network import get_best_access_url, get_local_ipv4_addresses
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -13,19 +14,28 @@ LOG = logging.getLogger("http_routes")
 
 
 class HTTPRoutes:
-    def __init__(self, manager, admin_panel, port, ws_endpoint):
+    def __init__(
+        self,
+        manager,
+        admin_panel,
+        port,
+        ws_endpoint,
+        connection_service: ConnectionService,
+        diagnostics_service: NetworkDiagnosticsService,
+    ):
         self.manager = manager
         self.admin_panel = admin_panel
         self.port = port
         self.ws_endpoint = ws_endpoint
+        self.connection_service = connection_service
+        self.diagnostics_service = diagnostics_service
 
 
     async def server_status_handler(self, request):
-        addrs = get_local_ipv4_addresses()
-        ip = addrs[0][1] if addrs else '127.0.0.1'
+        info = self.connection_service.get_connection_info_payload()
         return web.json_response({
             'running': True,
-            'ip': ip,
+            'ip': info['ip'],
             'port': self.port
         })
 
@@ -41,18 +51,65 @@ class HTTPRoutes:
 
 
     async def connection_info_handler(self, request):
-        url = get_best_access_url(self.port)
+        payload = self.connection_service.get_connection_info_payload()
+        return web.json_response({
+            "success": True,
+            "url": payload["url"],
+            "wsUrl": payload["wsUrl"],
+            "ip": payload["ip"],
+            "kind": payload["kind"],
+        })
+
+
+    async def connections_handler(self, request):
+        return web.json_response(self.connection_service.get_connections_payload())
+
+
+    async def diagnostics_handler(self, request):
+        return web.json_response(self.diagnostics_service.build_payload())
+
+
+    async def diagnostics_action_handler(self, request):
+        data = await request.json()
+        action_id = data.get("actionId")
+        if not action_id:
+            return web.json_response(
+                {"success": False, "code": "missing_action_id"},
+                status=400,
+            )
+
+        result = self.diagnostics_service.run_action(action_id)
+        status = 200 if result.success else 400
+        return web.json_response(result.to_payload(), status=status)
+
+
+    async def select_connection_handler(self, request):
+        data = await request.json()
+        connection_id = data.get("connectionId")
+        if not connection_id:
+            return web.json_response(
+                {"success": False, "code": "missing_connection_id"},
+                status=400,
+            )
+
+        try:
+            option = self.connection_service.set_preferred_connection(connection_id)
+        except Exception as exc:
+            LOG.error("Failed to select connection: %s", exc)
+            return web.json_response(
+                {"success": False, "code": "select_connection_failed"},
+                status=400,
+            )
 
         return web.json_response({
             "success": True,
-            "url": url,
-            "wsUrl": url.replace("http", "ws") + self.ws_endpoint
+            "selectedConnection": option.to_payload(self.port, self.ws_endpoint),
         })
 
 
     async def qr_code_handler(self, request):
-
-        url = get_best_access_url(self.port)
+        connection_id = request.query.get("id")
+        url = self.connection_service.get_qr_url_for_id(connection_id)
 
         try:
             img = generate_qr_code_image(url)
@@ -68,7 +125,7 @@ class HTTPRoutes:
         except Exception as e:
             LOG.error("Failed to generate QR code: %s", e)
             return web.json_response(
-                {"success": False, "error": "Failed to generate QR code"},
+                {"success": False, "code": "qr_generation_failed"},
                 status=500
             )
 

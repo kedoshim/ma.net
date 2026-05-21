@@ -14,16 +14,19 @@ LOG = logging.getLogger("websocket")
 
 
 class WebSocketRoutes:
-    def __init__(self, ws_endpoint, manager, admin_panel):
+    def __init__(self, ws_endpoint, manager, admin_panel, connection_service):
         self.manager = manager
         self.admin_panel = admin_panel
         self.ws_endpoint = ws_endpoint
+        self.connection_service = connection_service
 
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
         peer = request.remote
+        sockname = request.transport.get_extra_info("sockname")
+        local_ip = sockname[0] if isinstance(sockname, tuple) and sockname else None
 
         device_id = request.query.get("deviceId")
         player_name = request.query.get("name")
@@ -37,11 +40,12 @@ class WebSocketRoutes:
         if not device_id:
             await ws.send_json({
                 "type": "error",
-                "msg": "missing_device_id"
+                "code": "missing_device_id"
             })
             await ws.close()
             return ws
 
+        self.connection_service.mark_success_for_ip(local_ip)
         self.manager.register_device(device_id, player_name, customization)
         self.manager.register_device_ws(device_id, ws)
         slot = self.manager.assign_slot(device_id, player_name)

@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../services/host_api_service.dart';
 import '../../services/server_process_service.dart';
 import '../../services/sound_effect_service.dart';
+import '../../services/startup_connection_pipeline.dart';
 import '../start_page/start_page_widget.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/server_options_popup.dart';
@@ -45,8 +46,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
   late final HostApiService _api;
 
-  ConnectionInfo? connectionInfo;
-  bool isLoadingConnection = true;
+  late final StartupConnectionPipeline _startupPipeline;
   ColorTheme _currentTheme = ColorTheme.blue;
 
   @override
@@ -54,7 +54,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     super.initState();
     SoundEffectService.instance.init();
     _api = HostApiService(host: widget.host, port: widget.port);
-    loadConnectionInfo();
+    _startupPipeline = StartupConnectionPipeline(api: _api);
+    _startupPipeline.state.addListener(_handlePipelineUpdate);
+    _startupPipeline.initialize();
     _loadTheme();
   }
 
@@ -76,27 +78,23 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     } catch (_) {}
   }
 
-  Future<void> loadConnectionInfo() async {
-    try {
-      final info = await _api.fetchConnectionInfo();
+  void _handlePipelineUpdate() {
+    if (!mounted) return;
+    setState(() {});
+  }
 
-      if (!mounted) return;
+  Future<void> _selectConnection(String connectionId) async {
+    await _startupPipeline.selectConnection(connectionId);
+  }
 
-      setState(() {
-        connectionInfo = info;
-        isLoadingConnection = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isLoadingConnection = false;
-      });
-    }
+  Future<void> _refreshDiagnostics() async {
+    await _startupPipeline.refreshDiagnostics();
   }
 
   @override
   void dispose() {
+    _startupPipeline.state.removeListener(_handlePipelineUpdate);
+    _startupPipeline.dispose();
     super.dispose();
   }
 
@@ -243,9 +241,34 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             children: [
                               Expanded(
                                 child: AdaptiveStageLayout(
-                                  connectionInfo: connectionInfo,
-                                  qrCodeUrl: _api.getQrCodeUrl(),
-                                  isLoadingConnection: isLoadingConnection,
+                                  connectionSnapshot: _startupPipeline
+                                      .state
+                                      .value
+                                      .connectionSnapshot,
+                                  diagnosticsSnapshot: _startupPipeline
+                                      .state
+                                      .value
+                                      .diagnosticsSnapshot,
+                                  selectedConnection: _startupPipeline
+                                      .state
+                                      .value
+                                      .selectedConnection,
+                                  qrEndpointUrl: _startupPipeline
+                                      .state
+                                      .value
+                                      .qrEndpointUrl,
+                                  qrImage: _startupPipeline.state.value.qrImage,
+                                  api: _api,
+                                  isLoadingConnections: _startupPipeline
+                                      .state
+                                      .value
+                                      .isLoadingConnections,
+                                  isLoadingDiagnostics: _startupPipeline
+                                      .state
+                                      .value
+                                      .isLoadingDiagnostics,
+                                  onSelectConnection: _selectConnection,
+                                  onRefreshDiagnostics: _refreshDiagnostics,
                                 ),
                               ),
                             ],
