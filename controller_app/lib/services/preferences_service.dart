@@ -119,4 +119,10 @@ class PreferencesService {
 
   Future<bool> getRumbleEnabled() async =>
       (await _getInstance).getBool('rumbleEnabled') ?? true;
+
+  Future<void> setTapHapticsEnabled(bool enabled) async =>
+      (await _getInstance).setBool('tapHapticsEnabled', enabled);
+
+  Future<bool> getTapHapticsEnabled() async =>
+      (await _getInstance).getBool('tapHapticsEnabled') ?? true;
 }

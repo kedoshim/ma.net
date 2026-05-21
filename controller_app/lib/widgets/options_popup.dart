@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/player_face.dart';
@@ -10,137 +11,150 @@ import '../theme/app_colors.dart';
 import 'player_face_indicator.dart';
 
 class OptionsPopup extends StatefulWidget {
+  final PlayerFaceData playerFace;
   final bool dpadMode;
   final ValueChanged<bool> onDpadModeChanged;
   final VoidCallback onEnterMouseMode;
   final VoidCallback onEnterEditMode;
+  final VoidCallback onEnterFaceMode;
   final ColorTheme currentTheme;
   final ValueChanged<ColorTheme> onThemeChanged;
   final VoidCallback? onDisconnectRequested;
   final VoidCallback? onRumbleTest;
-  final PlayerFaceData playerFace;
-  final ValueChanged<PlayerFaceData> onPlayerFaceChanged;
 
   const OptionsPopup({
     super.key,
+    required this.playerFace,
     required this.dpadMode,
     required this.onDpadModeChanged,
     required this.onEnterMouseMode,
     required this.onEnterEditMode,
+    required this.onEnterFaceMode,
     required this.currentTheme,
     required this.onThemeChanged,
     this.onDisconnectRequested,
     this.onRumbleTest,
-    required this.playerFace,
-    required this.onPlayerFaceChanged,
   });
 
   @override
   State<OptionsPopup> createState() => _OptionsPopupState();
 }
 
-class _OptionsPopupState extends State<OptionsPopup> {
-  late bool _dpadMode;
+class _OptionsPopupState extends State<OptionsPopup>
+    with SingleTickerProviderStateMixin {
   bool _rumbleEnabled = true;
   late ColorTheme _selectedTheme;
-  late PlayerFaceData _playerFace;
-  late TextEditingController _faceController;
-  late FocusNode _faceFocusNode;
+  late AnimationController _bounceController;
+  late Animation<double> _bounceAnimation;
+  bool _showWebHint = false;
+  Timer? _webHintTimer;
 
   @override
   void initState() {
     super.initState();
-    _dpadMode = widget.dpadMode;
     _selectedTheme = widget.currentTheme;
-    _playerFace = widget.playerFace;
-    _faceController = TextEditingController(text: widget.playerFace.faceText);
-    _faceFocusNode = FocusNode();
-    _faceFocusNode.addListener(() {
-      setState(() {});
+
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+
+    _bounceAnimation = TweenSequence([
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.0,
+          end: 1.25,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.25,
+          end: 0.9,
+        ).chain(CurveTween(curve: Curves.easeIn)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.9,
+          end: 1.05,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.05,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
+        weight: 20,
+      ),
+    ]).animate(_bounceController);
+
+    PreferencesService.instance.getRumbleEnabled().then((v) {
+      if (mounted) setState(() => _rumbleEnabled = v);
     });
-    PreferencesService.instance
-        .getRumbleEnabled()
-        .then((v) {
-          setState(() => _rumbleEnabled = v);
-        })
-        .catchError((_) {
-          setState(() => _rumbleEnabled = true);
-        });
   }
 
   @override
   void dispose() {
-    _faceController.dispose();
-    _faceFocusNode.dispose();
+    _webHintTimer?.cancel();
+    _bounceController.dispose();
     super.dispose();
+  }
+
+  void _toggleRumble() {
+    if (kIsWeb) {
+      setState(() => _showWebHint = true);
+      _webHintTimer?.cancel();
+      _webHintTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() => _showWebHint = false);
+        }
+      });
+      _bounceController.forward(from: 0.0);
+      return;
+    }
+
+    final newValue = !_rumbleEnabled;
+    setState(() => _rumbleEnabled = newValue);
+    HapticsManager.instance.setEnabled(newValue);
+    if (newValue) {
+      widget.onRumbleTest?.call();
+    }
+  }
+
+  void _toggleDpad() {
+    widget.onDpadModeChanged(!widget.dpadMode);
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isTypingFace = _faceFocusNode.hasFocus;
-
-    return AlertDialog(
+    return Dialog(
       backgroundColor: AppColors.screenBackground,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
+        borderRadius: BorderRadius.circular(28),
+        side: const BorderSide(
           color: AppColors.textPrimary,
           width: AppColors.borderThickness,
         ),
       ),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      titlePadding: isTypingFace ? EdgeInsets.zero : null,
-      title: isTypingFace
-          ? const SizedBox.shrink()
-          : Row(
-              children: [
-                const Text(
-                  'Opcoes',
-                  style: TextStyle(
-                    fontFamily: 'pico',
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                if (kIsWeb)
-                  TextButton.icon(
-                    onPressed: () async {
-                      final url = Uri.base.resolve('/apk');
-                      try {
-                        await launchUrl(url, webOnlyWindowName: '_blank');
-                      } catch (e) {
-                        debugPrint('Could not launch download URL: $e');
-                      }
-                    },
-                    icon: const Icon(
-                      Icons.android,
-                      size: 18,
-                      color: AppColors.textPrimary,
-                    ),
-                    label: const Text(
-                      'Baixar App Android',
-                      style: TextStyle(
-                        fontFamily: 'pico',
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(20, 20),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'X',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(
+                left: 24,
+                top: 16,
+                right: 16,
+                bottom: 8,
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    'Opcoes',
                     style: TextStyle(
                       fontFamily: 'pico',
                       fontSize: 20,
@@ -148,334 +162,198 @@ class _OptionsPopupState extends State<OptionsPopup> {
                       color: AppColors.textPrimary,
                     ),
                   ),
-                ),
-              ],
-            ),
-      content: SingleChildScrollView(
-        child: SizedBox(
-          width: 920,
-          child: Row(
-            crossAxisAlignment: isTypingFace
-                ? CrossAxisAlignment.center
-                : CrossAxisAlignment.start,
-            children: [
-              if (!isTypingFace) ...[
-                Expanded(
-                  key: const ValueKey('settings'),
-                  child: _buildSettingsColumn(),
-                ),
-                const SizedBox(width: 20),
-                Container(
-                  width: 1,
-                  height: 540,
-                  color: AppColors.textPrimary.withValues(alpha: 0.12),
-                ),
-                const SizedBox(width: 20),
-              ],
-              Expanded(
-                key: const ValueKey('face'),
-                child: _buildFaceColumn(isTypingFace),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingsColumn() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Controle',
-          style: TextStyle(
-            fontFamily: 'pico',
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _ModeActionTile(
-          icon: Icons.mouse_outlined,
-          title: 'Mouse Mode',
-          subtitle: 'Controle o desktop do sofa',
-          onTap: () {
-            Navigator.of(context).pop();
-            widget.onEnterMouseMode();
-          },
-        ),
-        const SizedBox(height: 10),
-        _ModeActionTile(
-          icon: Icons.tune_rounded,
-          title: 'Edit Controls',
-          subtitle: 'Arraste e mostre os botoes ao vivo',
-          onTap: () {
-            Navigator.of(context).pop();
-            widget.onEnterEditMode();
-          },
-        ),
-        const SizedBox(height: 10),
-        SwitchListTile(
-          title: const Text('Modo D-Pad', style: TextStyle(fontFamily: 'pico')),
-          value: _dpadMode,
-          onChanged: (value) {
-            setState(() => _dpadMode = value);
-            widget.onDpadModeChanged(value);
-          },
-          activeThumbColor: AppColors.switchActiveThumb,
-          activeTrackColor: AppColors.highlightColor,
-        ),
-        SwitchListTile(
-          title: const Text(
-            'Ativar vibracoes',
-            style: TextStyle(fontFamily: 'pico'),
-          ),
-          value: _rumbleEnabled,
-          onChanged: (value) {
-            setState(() => _rumbleEnabled = value);
-            HapticsManager.instance.setEnabled(value);
-          },
-          activeThumbColor: AppColors.switchActiveThumb,
-          activeTrackColor: AppColors.highlightColor,
-        ),
-        const Divider(),
-        const Text(
-          'Tema de Cores',
-          style: TextStyle(
-            fontFamily: 'pico',
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _buildThemeSelector(),
-        const Divider(),
-        if (!kIsWeb)
-          ListTile(
-            leading: const Icon(Icons.link_off, color: AppColors.textPrimary),
-            title: const Text(
-              'Desconectar',
-              style: TextStyle(
-                fontFamily: 'pico',
-                color: AppColors.textPrimary,
-              ),
-            ),
-            onTap: () {
-              Navigator.of(context).pop();
-              widget.onDisconnectRequested?.call();
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildFaceColumn(bool isTypingFace) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!isTypingFace) ...[
-          const Text(
-            'Rostinhos',
-            style: TextStyle(
-              fontFamily: 'pico',
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Deixe com a sua cara :)',
-            style: TextStyle(
-              fontFamily: 'pico',
-              fontSize: 12,
-              color: AppColors.textPrimary.withValues(alpha: 0.65),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.highlightColor.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: AppColors.textPrimary.withValues(alpha: 0.2),
-                width: 2,
-              ),
-            ),
-            child: Column(
-              children: [
-                PlayerFaceIndicator(
-                  face: _playerFace,
-                  size: 120,
-                  roundedSquare: true,
-                  borderColor: AppColors.textPrimary,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _playerFace.presetId ?? 'custom',
-                  style: const TextStyle(
-                    fontFamily: 'pico',
-                    fontSize: 12,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Cores',
-            style: TextStyle(
-              fontFamily: 'pico',
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: playerFacePalette.map(_buildColorSwatch).toList(),
-          ),
-          const SizedBox(height: 14),
-        ],
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              key: const ValueKey('faceInput'),
-              child: Column(
-                crossAxisAlignment: isTypingFace
-                    ? CrossAxisAlignment.center
-                    : CrossAxisAlignment.start,
-                children: [
-                  if (!isTypingFace) ...[
-                    const Text(
-                      'Rosto',
-                      style: TextStyle(
-                        fontFamily: 'pico',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  SizedBox(
-                    width: isTypingFace ? 240 : null,
-                    child: TextField(
-                      focusNode: _faceFocusNode,
-                      controller: _faceController,
-                      textAlign: TextAlign.center,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.deny(RegExp(r'[\r\n\t]')),
-                      ],
-                      style: TextStyle(
-                        fontFamily: 'monomaniac',
-                        fontSize: isTypingFace ? 48 : 22,
-                        color: AppColors.textPrimary,
-                      ),
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _faceFocusNode.unfocus(),
-                      onTapOutside: (_) => _faceFocusNode.unfocus(),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: isTypingFace ? 20 : 12,
-                          vertical: isTypingFace ? 24 : 12,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            isTypingFace ? 20 : 14,
-                          ),
-                          borderSide: BorderSide(
-                            color: AppColors.textPrimary,
-                            width: isTypingFace ? 3 : 2,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            isTypingFace ? 20 : 14,
-                          ),
-                          borderSide: BorderSide(
-                            color: isTypingFace
-                                ? AppColors.highlightColor
-                                : AppColors.textPrimary,
-                            width: isTypingFace ? 4 : 2,
-                          ),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        final sanitized = sanitizeFaceText(value);
-                        if (sanitized != value) {
-                          _faceController.value = TextEditingValue(
-                            text: sanitized,
-                            selection: TextSelection.collapsed(
-                              offset: sanitized.length,
-                            ),
-                          );
-                        }
-                        _updateFace(
-                          _playerFace.copyWith(
-                            faceText: sanitized,
-                            clearPreset: true,
-                          ),
+                  const Spacer(),
+                  if (kIsWeb)
+                    AnimatedBuilder(
+                      animation: _bounceAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _bounceAnimation.value,
+                          child: child,
                         );
                       },
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          backgroundColor: AppColors.highlightColor.withValues(
+                            alpha: 0.2,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.android_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary,
+                        ),
+                        label: const Text(
+                          'Baixar App',
+                          style: TextStyle(
+                            fontFamily: 'pico',
+                            fontSize: 12,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        onPressed: () async {
+                          final url = Uri.base.resolve('/apk');
+                          try {
+                            await launchUrl(url, webOnlyWindowName: '_blank');
+                          } catch (e) {
+                            debugPrint('Could not launch download URL: $e');
+                          }
+                        },
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.close,
+                      size: 24,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ],
               ),
             ),
-            if (!isTypingFace) ...[
-              const SizedBox(width: 14),
-              Expanded(
-                key: const ValueKey('spinInput'),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Rotacao',
-                      style: TextStyle(
-                        fontFamily: 'pico',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: constraints.maxWidth,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _OptionButton(
+                                    icon: widget.dpadMode
+                                        ? Icons.gamepad_outlined
+                                        : Icons.control_camera_rounded,
+                                    label: widget.dpadMode
+                                        ? 'Analogico'
+                                        : 'D-Pad',
+                                    onTap: _toggleDpad,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _OptionButton(
+                                    icon: _rumbleEnabled
+                                        ? Icons.vibration_rounded
+                                        : Icons.mobile_off_rounded,
+                                    label: 'Vibracao',
+                                    isActive: _rumbleEnabled,
+                                    onTap: _toggleRumble,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _OptionButton(
+                                    customIcon: PlayerFaceIndicator(
+                                      face: widget.playerFace,
+                                      size: 38,
+                                      roundedSquare: true,
+                                      borderColor: Colors.transparent,
+                                    ),
+                                    label: 'Rostinho',
+                                    onTap: () {
+                                      Navigator.of(context).pop();
+                                      widget.onEnterFaceMode();
+                                    },
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _OptionButton(
+                                    icon: Icons.tune_rounded,
+                                    label: 'Botoes',
+                                    onTap: () {
+                                      Navigator.of(context).pop();
+                                      widget.onEnterEditMode();
+                                    },
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _OptionButton(
+                                    icon: Icons.mouse_outlined,
+                                    label: 'Mouse',
+                                    onTap: () {
+                                      Navigator.of(context).pop();
+                                      widget.onEnterMouseMode();
+                                    },
+                                  ),
+                                  if (!kIsWeb) const SizedBox(width: 12),
+                                  if (!kIsWeb)
+                                    _OptionButton(
+                                      icon: Icons.link_off_rounded,
+                                      label: 'Sair',
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        widget.onDisconnectRequested?.call();
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: PlayerFaceRotation.values
-                          .map(_buildRotationButton)
-                          .toList(),
-                    ),
-                  ],
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                        child: _showWebHint
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline_rounded,
+                                      size: 14,
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Vibracao apenas no app Android!',
+                                      style: TextStyle(
+                                        fontFamily: 'pico',
+                                        fontSize: 12,
+                                        color: AppColors.textPrimary.withValues(
+                                          alpha: 0.7,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      const SizedBox(height: 32),
+                      const Text(
+                        'Tema de Cores',
+                        style: TextStyle(
+                          fontFamily: 'pico',
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildThemeSelector(),
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ],
         ),
-        const Text(
-          'Presets',
-          style: TextStyle(
-            fontFamily: 'pico',
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: playerFacePresets.map(_buildPresetChip).toList(),
-        ),
-        const SizedBox(height: 14),
-      ],
+      ),
     );
   }
 
@@ -483,7 +361,7 @@ class _OptionsPopupState extends State<OptionsPopup> {
     final themes = ColorTheme.values;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(themes.length, (index) {
         final theme = themes[index];
         final themeColor = AppColors.getTheme(theme);
@@ -491,224 +369,103 @@ class _OptionsPopupState extends State<OptionsPopup> {
 
         return GestureDetector(
           onTap: () {
-            setState(() {
-              _selectedTheme = theme;
-            });
+            setState(() => _selectedTheme = theme);
             AppColors.setTheme(theme);
             widget.onThemeChanged(theme);
           },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: themeColor.background,
-                  border: Border.all(
-                    color: AppColors.textPrimary,
-                    width: isSelected ? 3 : AppColors.borderThickness,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            width: isSelected ? 48 : 40,
+            height: isSelected ? 48 : 40,
+            decoration: BoxDecoration(
+              color: themeColor.background,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: isSelected ? 4 : 2,
               ),
-              const SizedBox(height: 4),
-            ],
+            ),
           ),
         );
       }),
     );
   }
-
-  Widget _buildPresetChip(PlayerFacePreset preset) {
-    final isSelected = _playerFace.presetId == preset.id;
-    return GestureDetector(
-      onTap: () {
-        final nextFace = _playerFace.applyPreset(preset);
-        _faceController.text = nextFace.faceText;
-        _faceController.selection = TextSelection.collapsed(
-          offset: nextFace.faceText.length,
-        );
-        _updateFace(nextFace);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? preset.color.withValues(alpha: 0.35)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.textPrimary
-                : AppColors.textPrimary.withValues(alpha: 0.25),
-            width: 2,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            PlayerFaceIndicator(
-              face: _playerFace.applyPreset(preset),
-              size: 28,
-              roundedSquare: true,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              preset.label,
-              style: const TextStyle(
-                fontFamily: 'pico',
-                fontSize: 12,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildColorSwatch(Color color) {
-    final isSelected = color.toARGB32() == _playerFace.color.toARGB32();
-    return GestureDetector(
-      onTap: () =>
-          _updateFace(_playerFace.copyWith(color: color, clearPreset: true)),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.textPrimary,
-            width: isSelected ? 3 : 1.5,
-          ),
-        ),
-        child: isSelected
-            ? const Icon(Icons.check, size: 18, color: Colors.black87)
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildRotationButton(PlayerFaceRotation rotation) {
-    final isSelected = _playerFace.rotation == rotation;
-
-    return GestureDetector(
-      onTap: () => _updateFace(
-        _playerFace.copyWith(rotation: rotation, clearPreset: true),
-      ),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.highlightColor.withValues(alpha: 0.35)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.textPrimary
-                : AppColors.textPrimary.withValues(alpha: 0.25),
-            width: 2,
-          ),
-        ),
-        child: Center(
-          child: PlayerFaceIndicator(
-            face: _playerFace.copyWith(rotation: rotation),
-            size: 34,
-            roundedSquare: true,
-            borderColor: Colors.transparent,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _updateFace(PlayerFaceData nextFace) {
-    setState(() {
-      _playerFace = nextFace;
-    });
-    widget.onPlayerFaceChanged(nextFace);
-  }
 }
 
-class _ModeActionTile extends StatelessWidget {
-  const _ModeActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
+class _OptionButton extends StatefulWidget {
+  final IconData? icon;
+  final Widget? customIcon;
+  final String label;
+  final bool isActive;
   final VoidCallback onTap;
+
+  const _OptionButton({
+    this.icon,
+    this.customIcon,
+    required this.label,
+    this.isActive = true,
+    required this.onTap,
+  }) : assert(icon != null || customIcon != null);
+
+  @override
+  State<_OptionButton> createState() => _OptionButtonState();
+}
+
+class _OptionButtonState extends State<_OptionButton> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Ink(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.highlightColor.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: AppColors.textPrimary.withValues(alpha: 0.2),
-            width: 2,
+    final bgColor = widget.isActive
+        ? AppColors.highlightColor.withValues(alpha: 0.3)
+        : AppColors.textPrimary.withValues(alpha: 0.05);
+
+    final fgColor = widget.isActive
+        ? AppColors.textPrimary
+        : AppColors.textPrimary.withValues(alpha: 0.5);
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: widget.isActive
+                  ? AppColors.textPrimary
+                  : AppColors.textPrimary.withValues(alpha: 0.2),
+              width: AppColors.borderThickness,
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: AppColors.backgroundColor.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: AppColors.textPrimary.withValues(alpha: 0.2),
-                  width: 1.5,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              widget.customIcon ?? Icon(widget.icon, size: 32, color: fgColor),
+              const SizedBox(height: 8),
+              Text(
+                widget.label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'pico',
+                  fontSize: 12,
+                  color: fgColor,
                 ),
               ),
-              child: Icon(icon, color: AppColors.textPrimary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontFamily: 'pico',
-                      fontSize: 16,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontFamily: 'pico',
-                      fontSize: 11,
-                      color: AppColors.textPrimary.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_rounded,
-              color: AppColors.textPrimary,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
