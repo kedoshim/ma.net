@@ -125,4 +125,10 @@ class PreferencesService {
 
   Future<bool> getTapHapticsEnabled() async =>
       (await _getInstance).getBool('tapHapticsEnabled') ?? true;
+
+  Future<void> setHasSeenEditTutorial(bool seen) async =>
+      (await _getInstance).setBool('hasSeenEditTutorial', seen);
+
+  Future<bool> getHasSeenEditTutorial() async =>
+      (await _getInstance).getBool('hasSeenEditTutorial') ?? false;
 }

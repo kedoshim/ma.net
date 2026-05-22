@@ -591,9 +591,9 @@ class _ControllerScreenState extends State<ControllerScreen>
     );
   }
 
-  void _toggleButtonVisibility(String buttonKey) {
+  void _setButtonVisibility(String buttonKey, bool visible) {
     setState(() {
-      visibleButtons[buttonKey] = !(visibleButtons[buttonKey] ?? true);
+      visibleButtons[buttonKey] = visible;
     });
     PreferencesService.instance.setButtonVisibility(visibleButtons);
   }
@@ -669,7 +669,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onTapHapticsToggled: _toggleTapHaptics,
           editableButtons: _editableButtons,
           visibleButtons: visibleButtons,
-          onButtonVisibilityToggled: _toggleButtonVisibility,
+          onSetButtonVisibility: _setButtonVisibility,
           onGameButtonStateChanged: _sendButton,
           onExit: _exitTemporaryMode,
           totalSlots: totalSlots,
