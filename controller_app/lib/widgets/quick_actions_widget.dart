@@ -19,6 +19,7 @@ class QuickActionsMenu extends StatelessWidget {
     if (!enabled) return;
     showDialog(
       context: context,
+      useRootNavigator: false,
       builder: (context) => _QuickActionsDialog(onAction: onAction),
     );
   }

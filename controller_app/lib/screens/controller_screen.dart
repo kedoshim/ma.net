@@ -62,6 +62,10 @@ class _ControllerScreenState extends State<ControllerScreen>
   };
 
   WebSocketService? ws;
+  final GlobalKey<NavigatorState> _controllerNavigatorKey =
+      GlobalKey<NavigatorState>();
+  final GlobalKey<ScaffoldMessengerState> _controllerMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   late final NetworkDiscoveryService _discoveryService;
   StreamSubscription? _discoverySubscription;
   late final TextEditingController _faceController;
@@ -366,7 +370,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         ? '$baseMessage ($ownerName)'
         : baseMessage;
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    _showControllerSnackBar(SnackBar(content: Text(text)));
   }
 
   void _handleRumble(Map<String, dynamic> data) {
@@ -571,8 +575,11 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _showOptionsDialog() {
+    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+
     showDialog(
-      context: context,
+      context: dialogContext,
+      useRootNavigator: false,
       builder: (context) {
         return OptionsPopup(
           playerFace: _playerFace,
@@ -593,6 +600,18 @@ class _ControllerScreenState extends State<ControllerScreen>
         );
       },
     );
+  }
+
+  void _showControllerSnackBar(SnackBar snackBar) {
+    final messenger = _controllerMessengerKey.currentState;
+    if (messenger != null) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(snackBar);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 
   void _setButtonVisibility(String buttonKey, bool visible) {
@@ -729,6 +748,81 @@ class _ControllerScreenState extends State<ControllerScreen>
     }
   }
 
+  Widget _buildControllerSurface() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 240),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: KeyedSubtree(
+        key: ValueKey(_activeMode.name),
+        child: _buildCurrentView(),
+      ),
+    );
+  }
+
+  Widget _buildControllerCanvas() {
+    return ScaffoldMessenger(
+      key: _controllerMessengerKey,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            _buildControllerSurface(),
+            if (_connectionState ==
+                ControllerConnectionState.multipleHostsFound)
+              MultipleHostsOverlay(
+                hosts: _discoveredHosts,
+                onHostSelected: (host) {
+                  _autoConnectEnabled = true;
+                  _connectToHost(host);
+                },
+                onOpenQrScanner: kIsWeb ? null : _openQRScanner,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControllerNavigator() {
+    return Navigator(
+      key: _controllerNavigatorKey,
+      onDidRemovePage: (page) {},
+      pages: [
+        MaterialPage<void>(
+          key: const ValueKey('controller-canvas'),
+          child: _buildControllerCanvas(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResponsiveControllerFrame() {
+    final minimumPadding = kIsWeb ? 8.0 : 12.0;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.all(minimumPadding),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final size = constraints.biggest;
+            final isPortrait = size.height > size.width;
+
+            if (!kIsWeb || !isPortrait) {
+              return _buildControllerNavigator();
+            }
+
+            return _RotatedLandscapeViewport(
+              mediaQuery: MediaQuery.of(context),
+              viewportSize: size,
+              child: _buildControllerNavigator(),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -751,34 +845,57 @@ class _ControllerScreenState extends State<ControllerScreen>
               : null,
         ),
         child: Stack(
-          children: [
-            SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 240),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: KeyedSubtree(
-                    key: ValueKey(_activeMode.name),
-                    child: _buildCurrentView(),
-                  ),
-                ),
-              ),
-            ),
-            if (_connectionState ==
-                ControllerConnectionState.multipleHostsFound)
-              MultipleHostsOverlay(
-                hosts: _discoveredHosts,
-                onHostSelected: (host) {
-                  _autoConnectEnabled = true;
-                  _connectToHost(host);
-                },
-                onOpenQrScanner: kIsWeb ? null : _openQRScanner,
-              ),
-          ],
+          children: [_buildResponsiveControllerFrame()],
         ),
       ),
+    );
+  }
+}
+
+class _RotatedLandscapeViewport extends StatelessWidget {
+  const _RotatedLandscapeViewport({
+    required this.mediaQuery,
+    required this.viewportSize,
+    required this.child,
+  });
+
+  final MediaQueryData mediaQuery;
+  final Size viewportSize;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final landscapeWidth = viewportSize.height;
+    final landscapeHeight = viewportSize.width;
+    final landscapeMediaQuery = mediaQuery.copyWith(
+      size: Size(landscapeWidth, landscapeHeight),
+      padding: EdgeInsets.zero,
+      viewPadding: EdgeInsets.zero,
+      viewInsets: _rotateInsetsClockwise(mediaQuery.viewInsets),
+      systemGestureInsets: EdgeInsets.zero,
+    );
+
+    return SizedBox(
+      width: viewportSize.width,
+      height: viewportSize.height,
+      child: ClipRect(
+        child: RotatedBox(
+          quarterTurns: 1,
+          child: MediaQuery(
+            data: landscapeMediaQuery,
+            child: SizedBox.expand(child: child),
+          ),
+        ),
+      ),
+    );
+  }
+
+  EdgeInsets _rotateInsetsClockwise(EdgeInsets insets) {
+    return EdgeInsets.fromLTRB(
+      insets.bottom,
+      insets.left,
+      insets.top,
+      insets.right,
     );
   }
 }
