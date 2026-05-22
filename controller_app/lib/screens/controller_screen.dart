@@ -292,6 +292,10 @@ class _ControllerScreenState extends State<ControllerScreen>
     ws?.send(payload);
   }
 
+  void _sendQuickAction(String actionId) {
+    _send({'type': 'quick_action', 'action': actionId});
+  }
+
   void _handleWebSocketMessage(dynamic message) {
     if (message is! String) {
       return;
@@ -657,6 +661,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onScroll: _sendMouseScroll,
           onToggleWindowVisibility: _toggleWindowVisibility,
           onExit: _exitTemporaryMode,
+          onQuickAction: _sendQuickAction,
           totalSlots: totalSlots,
           playerIndex: playerIndex,
           status: status,

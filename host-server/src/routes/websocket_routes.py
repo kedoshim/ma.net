@@ -7,6 +7,7 @@ from aiohttp import WSMsgType, web
 import logging
 
 from src.input.input_handler import apply_button, apply_stick
+from src.input.keyboard_controller import KeyboardController
 from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
 
@@ -21,6 +22,7 @@ class WebSocketRoutes:
         self.ws_endpoint = ws_endpoint
         self.connection_service = connection_service
         self.mouse = MouseController()
+        self.keyboard = KeyboardController()
 
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
@@ -199,6 +201,11 @@ class WebSocketRoutes:
                             "action": "toggle_visibility",
                             "deviceId": device_id,
                         })
+                elif msg_type == "quick_action":
+                    if is_mouse_owner:
+                        action_id = data.get("action")
+                        if isinstance(action_id, str):
+                            self.keyboard.perform_action(action_id)
                 elif msg_type == "rumble_test":
                     LOG.info("Received rumble_test from device %s", device_id)
 

@@ -5,6 +5,7 @@ import '../../models/player_face.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/control_button.dart';
 import 'controller_screen_widgets.dart';
+import '../../widgets/quick_actions_widget.dart';
 
 typedef MouseButtonStateCallback = void Function(String button, String state);
 
@@ -19,6 +20,7 @@ class ControllerMouseView extends StatelessWidget {
     required this.onScroll,
     required this.onToggleWindowVisibility,
     required this.onExit,
+    required this.onQuickAction,
     required this.totalSlots,
     required this.playerIndex,
     required this.status,
@@ -35,6 +37,7 @@ class ControllerMouseView extends StatelessWidget {
   final ValueChanged<double> onScroll;
   final VoidCallback onToggleWindowVisibility;
   final VoidCallback onExit;
+  final ValueChanged<String> onQuickAction;
   final int totalSlots;
   final int? playerIndex;
   final String status;
@@ -76,19 +79,29 @@ class ControllerMouseView extends StatelessWidget {
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.center,
-              child: ControlButton(
-                label: '',
-                width: 84,
-                height: 58,
-                icon: const Icon(
-                  Icons.fullscreen_exit_rounded,
-                  color: AppColors.textPrimary,
-                ),
-                onStateChange: (state) {
-                  if (state == 'up') {
-                    onToggleWindowVisibility();
-                  }
-                },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  QuickActionsMenu(
+                    enabled: mouseModeOwned,
+                    onAction: onQuickAction,
+                  ),
+                  const SizedBox(height: 12),
+                  ControlButton(
+                    label: '',
+                    width: 84,
+                    height: 58,
+                    icon: const Icon(
+                      Icons.fullscreen_exit_rounded,
+                      color: AppColors.textPrimary,
+                    ),
+                    onStateChange: (state) {
+                      if (state == 'up') {
+                        onToggleWindowVisibility();
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
           ],
@@ -248,6 +261,15 @@ class _TouchpadSurfaceState extends State<_TouchpadSurface> {
                   : AppColors.textPrimary.withValues(alpha: 0.5),
               width: AppColors.borderThickness,
             ),
+            boxShadow: _isPressed
+                ? [
+                    BoxShadow(
+                      color: AppColors.highlightColor.withValues(alpha: 0.4),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : [],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(36),
@@ -315,74 +337,108 @@ class _TouchpadSurfaceState extends State<_TouchpadSurface> {
   }
 }
 
-class _MouseScrollStrip extends StatelessWidget {
+class _MouseScrollStrip extends StatefulWidget {
   const _MouseScrollStrip({required this.onScroll});
 
   final ValueChanged<double> onScroll;
 
   @override
+  State<_MouseScrollStrip> createState() => _MouseScrollStripState();
+}
+
+class _MouseScrollStripState extends State<_MouseScrollStrip> {
+  bool _isScrolling = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      onVerticalDragStart: (_) => setState(() => _isScrolling = true),
       onVerticalDragUpdate: (details) {
         final dragDelta = details.primaryDelta ?? 0;
         if (dragDelta.abs() < 1) {
           return;
         }
-        onScroll((-dragDelta / 32).clamp(-1.2, 1.2));
+        widget.onScroll((-dragDelta / 32).clamp(-1.2, 1.2));
       },
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: AppColors.backgroundColor.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: AppColors.textPrimary,
-            width: AppColors.borderThickness,
+      onVerticalDragEnd: (_) => setState(() => _isScrolling = false),
+      onVerticalDragCancel: () => setState(() => _isScrolling = false),
+      child: AnimatedScale(
+        scale: _isScrolling ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: _isScrolling
+                ? AppColors.highlightColor.withValues(alpha: 0.12)
+                : AppColors.backgroundColor.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: _isScrolling
+                  ? AppColors.highlightColor.withValues(alpha: 0.8)
+                  : AppColors.textPrimary.withValues(alpha: 0.5),
+              width: AppColors.borderThickness,
+            ),
+            boxShadow: _isScrolling
+                ? [
+                    BoxShadow(
+                      color: AppColors.highlightColor.withValues(alpha: 0.4),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : [],
           ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            const Icon(
-              Icons.keyboard_arrow_up_rounded,
-              color: AppColors.textPrimary,
-              size: 34,
-            ),
-            Text(
-              'scroll',
-              style: TextStyle(
-                fontFamily: 'pico',
-                fontSize: 16,
-                color: AppColors.textPrimary.withValues(alpha: 0.85),
-              ),
-            ),
-            Flexible(
-              child: Container(
-                width: 56,
-                height: 98,
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.highlightColor.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: AppColors.textPrimary.withValues(alpha: 0.25),
-                    width: 1.5,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: _isScrolling ? 0.4 : 1.0,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                const Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  color: AppColors.textPrimary,
+                  size: 34,
+                ),
+                Text(
+                  'scroll',
+                  style: TextStyle(
+                    fontFamily: 'pico',
+                    fontSize: 16,
+                    color: AppColors.textPrimary.withValues(alpha: 0.85),
                   ),
                 ),
-                child: const Icon(
-                  Icons.swap_vert_rounded,
-                  color: AppColors.textPrimary,
-                  size: 30,
+                Flexible(
+                  child: Container(
+                    width: 56,
+                    height: 98,
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.highlightColor.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: AppColors.textPrimary.withValues(alpha: 0.25),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.swap_vert_rounded,
+                      color: AppColors.textPrimary,
+                      size: 30,
+                    ),
+                  ),
                 ),
-              ),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.textPrimary,
+                  size: 34,
+                ),
+              ],
             ),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: AppColors.textPrimary,
-              size: 34,
-            ),
-          ],
+          ),
         ),
       ),
     );
