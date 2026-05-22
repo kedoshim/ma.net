@@ -91,7 +91,7 @@ class ControllerFaceView extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: AppColors.backgroundColor.withValues(alpha: 0.6),
+              color: AppColors.backgroundColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(28),
               border: Border.all(
                 color: AppColors.textPrimary,

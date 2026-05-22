@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
@@ -49,14 +50,18 @@ class _JoystickState extends State<Joystick> {
     _heartbeatTimer = null;
   }
 
-  void _updateStick(Offset localPosition) {
-    final center = Offset(widget.size / 2, widget.size / 2);
+  void _updateStick(Offset localPosition, Size bounds) {
+    final center = Offset(24.0 + widget.size / 2, bounds.height - 8.0 - widget.size / 2);
 
     final dx = (localPosition.dx - center.dx) / (widget.size / 2);
     final dy = (localPosition.dy - center.dy) / (widget.size / 2);
 
-    final clampedX = dx.clamp(-1.0, 1.0);
-    final clampedY = dy.clamp(-1.0, 1.0);
+    double distance = Offset(dx, dy).distance;
+    double clampedDistance = distance.clamp(0.0, 1.0);
+    final direction = Offset(dx, dy).direction;
+
+    final clampedX = math.cos(direction) * clampedDistance;
+    final clampedY = math.sin(direction) * clampedDistance;
 
     _currentX = clampedX;
     _currentY = -clampedY;
@@ -92,59 +97,69 @@ class _JoystickState extends State<Joystick> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanStart: (details) {
-          _active = true;
-          _updateStick(details.localPosition);
-          _lastSentX = _currentX;
-          _lastSentY = _currentY;
-          widget.onChanged(_currentX, _currentY);
-          _startHeartbeat();
-        },
-        onPanUpdate: (details) {
-          if (_active) {
-            _updateStick(details.localPosition);
-          }
-        },
-        onPanEnd: (_) => _resetStick(),
-        onPanCancel: _resetStick,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanDown: (details) {
+            _active = true;
+            _updateStick(details.localPosition, constraints.biggest);
+            _lastSentX = _currentX;
+            _lastSentY = _currentY;
+            widget.onChanged(_currentX, _currentY);
+            _startHeartbeat();
+          },
+          onPanUpdate: (details) {
+            if (_active) {
+              _updateStick(details.localPosition, constraints.biggest);
+            }
+          },
+          onPanEnd: (_) => _resetStick(),
+          onPanCancel: _resetStick,
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            alignment: Alignment.bottomLeft,
+            padding: const EdgeInsets.only(left: 24.0, bottom: 8.0),
+            child: SizedBox(
               width: widget.size,
               height: widget.size,
-              decoration: BoxDecoration(
-                color: AppColors.backgroundColor,
-                borderRadius: BorderRadius.circular(36),
-                border: Border.all(
-                  color: AppColors.textPrimary,
-                  width: AppColors.borderThickness,
-                ),
-              ),
-            ),
-            Transform.translate(
-              offset: _stickOffset,
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.lightColor,
-                    width: AppColors.borderThickness,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: widget.size,
+                    height: widget.size,
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundColor,
+                      borderRadius: BorderRadius.circular(36),
+                      border: Border.all(
+                        color: AppColors.textPrimary,
+                        width: AppColors.borderThickness,
+                      ),
+                    ),
                   ),
-                ),
+                  Transform.translate(
+                    offset: _stickOffset,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.textPrimary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.lightColor,
+                          width: AppColors.borderThickness,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -215,7 +230,7 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     _heartbeatTimer = null;
   }
 
-  void _handlePanStart(DragStartDetails details, Size bounds) {
+  void _handlePanDown(DragDownDetails details, Size bounds) {
     _active = true;
     final touchPos = details.localPosition;
 
@@ -321,7 +336,7 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onPanStart: (d) => _handlePanStart(d, bounds),
+          onPanDown: (d) => _handlePanDown(d, bounds),
           onPanUpdate: (d) => _handlePanUpdate(d, bounds),
           onPanEnd: _handlePanEnd,
           onPanCancel: _handlePanCancel,
