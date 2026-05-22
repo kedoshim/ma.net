@@ -359,7 +359,7 @@ class _MouseScrollStripState extends State<_MouseScrollStrip> {
         if (dragDelta.abs() < 1) {
           return;
         }
-        widget.onScroll((-dragDelta / 32).clamp(-1.2, 1.2));
+        widget.onScroll((dragDelta / 32).clamp(-1.2, 1.2));
       },
       onVerticalDragEnd: (_) => setState(() => _isScrolling = false),
       onVerticalDragCancel: () => setState(() => _isScrolling = false),
