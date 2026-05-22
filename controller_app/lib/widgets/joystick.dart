@@ -37,7 +37,6 @@ class _JoystickState extends State<Joystick> {
 
     _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
       if (!_active) return;
-      if (_currentX == _lastSentX && _currentY == _lastSentY) return;
 
       _lastSentX = _currentX;
       _lastSentY = _currentY;
@@ -205,7 +204,6 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
       if (!_active) return;
-      if (_currentX == _lastSentX && _currentY == _lastSentY) return;
       _lastSentX = _currentX;
       _lastSentY = _currentY;
       widget.onChanged(_currentX, _currentY);
@@ -262,13 +260,20 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
 
     // Drag the base along with the finger when reaching the limit
     if (distance > maxDistance) {
-      Offset proposedBase = touchPos - Offset.fromDirection(direction, maxDistance);
+      Offset proposedBase =
+          touchPos - Offset.fromDirection(direction, maxDistance);
 
       // Clamp base to securely stay within the left region bounds
       double paddingX = baseSize / 2;
       double paddingY = baseSize / 2;
-      double clampedX = proposedBase.dx.clamp(paddingX, bounds.width - paddingX);
-      double clampedY = proposedBase.dy.clamp(paddingY, bounds.height - paddingY);
+      double clampedX = proposedBase.dx.clamp(
+        paddingX,
+        bounds.width - paddingX,
+      );
+      double clampedY = proposedBase.dy.clamp(
+        paddingY,
+        bounds.height - paddingY,
+      );
       _baseOffset = Offset(clampedX, clampedY);
 
       // Recalculate delta using the clamped base offset
@@ -311,7 +316,8 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     return LayoutBuilder(
       builder: (context, constraints) {
         final bounds = constraints.biggest;
-        final effectiveBaseOffset = _baseOffset ?? Offset(bounds.width / 2, bounds.height / 2);
+        final effectiveBaseOffset =
+            _baseOffset ?? Offset(bounds.width / 2, bounds.height * 0.7);
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -366,7 +372,8 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
                                 ? Duration.zero
                                 : const Duration(milliseconds: 300),
                             curve: _active ? Curves.linear : Curves.elasticOut,
-                            left: baseSize / 2 - stickSize / 2 + _stickOffset.dx,
+                            left:
+                                baseSize / 2 - stickSize / 2 + _stickOffset.dx,
                             top: baseSize / 2 - stickSize / 2 + _stickOffset.dy,
                             child: Container(
                               width: stickSize,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/player_face.dart';
+import '../../theme/app_colors.dart';
 import '../../widgets/action_buttons.dart';
 import '../../widgets/control_button.dart' hide ButtonStateCallback;
 import '../../widgets/joystick.dart';
@@ -51,21 +52,24 @@ class ControllerDefaultView extends StatelessWidget {
       children: [
         Expanded(
           flex: 3,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: movementMode == MovementMode.dpad
-                ? _ControllerDpad(onButtonStateChanged: onButtonStateChanged)
-                : movementMode == MovementMode.adaptiveJoystick
-                ? AdaptiveJoystick(
-                    onChanged: (x, y) => onStickChanged(Offset(x, y)),
-                    onReleased: onStickRelease,
-                  )
-                : Joystick(
-                    size: 220,
-                    onChanged: (x, y) => onStickChanged(Offset(x, y)),
-                    onReleased: onStickRelease,
+          child: movementMode == MovementMode.dpad
+              ? _ControllerDpad(onButtonStateChanged: onButtonStateChanged)
+              : Padding(
+                  padding: const EdgeInsets.only(left: 24.0, bottom: 8.0),
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: movementMode == MovementMode.adaptiveJoystick
+                        ? AdaptiveJoystick(
+                            onChanged: (x, y) => onStickChanged(Offset(x, y)),
+                            onReleased: onStickRelease,
+                          )
+                        : Joystick(
+                            size: 220,
+                            onChanged: (x, y) => onStickChanged(Offset(x, y)),
+                            onReleased: onStickRelease,
+                          ),
                   ),
-          ),
+                ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -136,38 +140,151 @@ class ControllerDefaultView extends StatelessWidget {
   }
 }
 
-class _ControllerDpad extends StatelessWidget {
+class _ControllerDpad extends StatefulWidget {
   const _ControllerDpad({required this.onButtonStateChanged});
 
   final ControllerButtonStateCallback onButtonStateChanged;
 
   @override
+  State<_ControllerDpad> createState() => _ControllerDpadState();
+}
+
+class _ControllerDpadState extends State<_ControllerDpad> {
+  String? _activeDirection;
+
+  void _updateDirection(Offset localPosition, Size size) {
+    // The D-pad covers the whole left area, but visually is anchored bottom-left.
+    // With 24.0 left padding and 8.0 bottom padding, the center of the 240x258 D-pad is:
+    // x = 24.0 + (240 / 2) = 144.0
+    // y = size.height - 8.0 - (258 / 2) = size.height - 137.0
+    final center = Offset(144.0, size.height - 137.0);
+    final delta = localPosition - center;
+
+    // Generous extended bound check allowing inputs well outside the visual area
+    if (localPosition.dx < -50 ||
+        localPosition.dx > size.width + 50 ||
+        localPosition.dy < -50 ||
+        localPosition.dy > size.height + 50) {
+      _releaseDirection();
+      return;
+    }
+
+    // Deadzone in the center
+    if (delta.distance < 25) {
+      _releaseDirection();
+      return;
+    }
+
+    String newDirection;
+    if (delta.dx.abs() > delta.dy.abs()) {
+      newDirection = delta.dx > 0 ? 'RIGHT' : 'LEFT';
+    } else {
+      newDirection = delta.dy > 0 ? 'DOWN' : 'UP';
+    }
+
+    if (_activeDirection != newDirection) {
+      if (_activeDirection != null) {
+        widget.onButtonStateChanged(_activeDirection!, 'up');
+      }
+      _activeDirection = newDirection;
+      widget.onButtonStateChanged(_activeDirection!, 'down');
+      setState(() {});
+    }
+  }
+
+  void _releaseDirection() {
+    if (_activeDirection != null) {
+      widget.onButtonStateChanged(_activeDirection!, 'up');
+      setState(() {
+        _activeDirection = null;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      height: 258,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _gridButton('up', 'UP'),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _gridButton('left', 'LEFT'),
-              _gridButton('right', 'RIGHT'),
-            ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanStart: (details) {
+        final RenderBox box = context.findRenderObject() as RenderBox;
+        _updateDirection(details.localPosition, box.size);
+      },
+      onPanUpdate: (details) {
+        final RenderBox box = context.findRenderObject() as RenderBox;
+        _updateDirection(details.localPosition, box.size);
+      },
+      onPanEnd: (_) => _releaseDirection(),
+      onPanCancel: () => _releaseDirection(),
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 24.0, bottom: 8.0),
+          child: SizedBox(
+            width: 240,
+            height: 258,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _DPadButton(label: '', isActive: _activeDirection == 'UP'),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _DPadButton(
+                      label: '',
+                      isActive: _activeDirection == 'LEFT',
+                    ),
+                    _DPadButton(
+                      label: '',
+                      isActive: _activeDirection == 'RIGHT',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _DPadButton(label: '', isActive: _activeDirection == 'DOWN'),
+              ],
+            ),
           ),
-          _gridButton('down', 'DOWN'),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Widget _gridButton(String action, String label) {
-    return ControlButton(
-      label: label,
-      onStateChange: (state) =>
-          onButtonStateChanged(action.toUpperCase(), state),
+class _DPadButton extends StatelessWidget {
+  final String label;
+  final bool isActive;
+
+  const _DPadButton({required this.label, required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    final background = isActive
+        ? AppColors.highlightColor
+        : AppColors.backgroundColor;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 80),
+      width: 76,
+      height: 76,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.textPrimary,
+          width: AppColors.borderThickness,
+        ),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+          fontFamily: 'pico',
+        ),
+      ),
     );
   }
 }
