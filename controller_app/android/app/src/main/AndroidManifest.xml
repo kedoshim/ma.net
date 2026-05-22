@@ -5,7 +5,8 @@
     <application
         android:label="ma-net"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:isGame="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

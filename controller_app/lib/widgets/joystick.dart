@@ -183,7 +183,6 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
   static const double baseSize = 150.0;
   static const double stickSize = 50.0;
   static const double maxDistance = baseSize / 2;
-  static const double jumpThreshold = 120.0;
 
   @override
   void initState() {
@@ -222,15 +221,8 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     _active = true;
     final touchPos = details.localPosition;
 
-    if (_baseOffset == null) {
-      _baseOffset = Offset(bounds.width / 2, bounds.height / 2);
-    }
-
-    final distance = (touchPos - _baseOffset!).distance;
-    if (distance > jumpThreshold) {
-      _baseOffset = touchPos;
-      _appearController.forward(from: 0.0);
-    }
+    _baseOffset = touchPos;
+    _appearController.forward(from: 0.0);
 
     // Clamp the initial spawn position to ensure it stays within widget bounds
     double paddingX = baseSize / 2;
