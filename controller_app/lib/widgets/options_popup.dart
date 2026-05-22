@@ -360,7 +360,7 @@ class _OptionsPopupState extends State<OptionsPopup>
                       ),
                       const SizedBox(height: 32),
                       const Text(
-                        'Tema de Cores',
+                        'Cores do ma.net',
                         style: TextStyle(
                           fontFamily: 'pico',
                           fontSize: 14,

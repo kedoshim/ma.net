@@ -73,7 +73,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Tema de Cores',
+            'Cores do ma.net',
             style: TextStyle(
               fontFamily: 'pico',
               fontWeight: FontWeight.bold,
