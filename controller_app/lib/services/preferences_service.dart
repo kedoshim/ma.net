@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/player_face.dart';
 
+enum MovementMode { dpad, fixedJoystick, adaptiveJoystick }
+
 class PreferencesService {
   PreferencesService._();
   static final PreferencesService instance = PreferencesService._();
@@ -81,10 +83,23 @@ class PreferencesService {
       (await _getInstance).getInt('selectedTheme') ?? 0;
 
   // --- Controls & Layout ---
-  Future<void> setDpadMode(bool mode) async =>
-      (await _getInstance).setBool('dpadMode', mode);
-  Future<bool> getDpadMode() async =>
-      (await _getInstance).getBool('dpadMode') ?? false;
+  Future<void> setMovementMode(int modeIndex) async =>
+      (await _getInstance).setInt('movementMode', modeIndex);
+
+  Future<int> getMovementMode() async {
+    final p = await _getInstance;
+    if (p.containsKey('movementMode')) {
+      return p.getInt('movementMode') ?? 1; // Default to 1 (fixedJoystick)
+    }
+    final dpad = p.getBool('dpadMode') ?? false;
+    return dpad ? 0 : 1;
+  }
+
+  @Deprecated('Use setMovementMode instead')
+  Future<void> setDpadMode(bool mode) async => setMovementMode(mode ? 0 : 1);
+
+  @Deprecated('Use getMovementMode instead')
+  Future<bool> getDpadMode() async => (await getMovementMode()) == 0;
 
   Future<void> setMouseModeEnabled(bool enabled) async =>
       (await _getInstance).setBool('mouseModeEnabled', enabled);

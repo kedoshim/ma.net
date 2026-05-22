@@ -4,6 +4,7 @@ import '../../models/player_face.dart';
 import '../../widgets/action_buttons.dart';
 import '../../widgets/control_button.dart' hide ButtonStateCallback;
 import '../../widgets/joystick.dart';
+import '../../services/preferences_service.dart';
 import 'controller_screen_types.dart';
 import 'controller_screen_widgets.dart';
 
@@ -12,7 +13,7 @@ typedef ControllerButtonStateCallback = void Function(String id, String state);
 class ControllerDefaultView extends StatelessWidget {
   const ControllerDefaultView({
     super.key,
-    required this.dpadMode,
+    required this.movementMode,
     required this.onStickChanged,
     required this.onStickRelease,
     required this.onButtonStateChanged,
@@ -28,7 +29,7 @@ class ControllerDefaultView extends StatelessWidget {
     required this.visibleButtons,
   });
 
-  final bool dpadMode;
+  final MovementMode movementMode;
   final ValueChanged<Offset> onStickChanged;
   final VoidCallback onStickRelease;
   final ControllerButtonStateCallback onButtonStateChanged;
@@ -52,8 +53,13 @@ class ControllerDefaultView extends StatelessWidget {
           flex: 3,
           child: Align(
             alignment: Alignment.centerLeft,
-            child: dpadMode
+            child: movementMode == MovementMode.dpad
                 ? _ControllerDpad(onButtonStateChanged: onButtonStateChanged)
+                : movementMode == MovementMode.adaptiveJoystick
+                ? AdaptiveJoystick(
+                    onChanged: (x, y) => onStickChanged(Offset(x, y)),
+                    onReleased: onStickRelease,
+                  )
                 : Joystick(
                     size: 220,
                     onChanged: (x, y) => onStickChanged(Offset(x, y)),
@@ -160,7 +166,8 @@ class _ControllerDpad extends StatelessWidget {
   Widget _gridButton(String action, String label) {
     return ControlButton(
       label: label,
-      onStateChange: (state) => onButtonStateChanged(action.toUpperCase(), state),
+      onStateChange: (state) =>
+          onButtonStateChanged(action.toUpperCase(), state),
     );
   }
 }

@@ -74,7 +74,7 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   String status = 'Conectando...';
   int? playerIndex;
-  bool dpadMode = false;
+  MovementMode _movementMode = MovementMode.fixedJoystick;
   bool _mouseModeOwned = false;
   String? _mouseModeOwnerName;
   bool _centerPulseExpanded = false;
@@ -572,10 +572,10 @@ class _ControllerScreenState extends State<ControllerScreen>
       builder: (context) {
         return OptionsPopup(
           playerFace: _playerFace,
-          dpadMode: dpadMode,
-          onDpadModeChanged: (value) {
-            setState(() => dpadMode = value);
-            PreferencesService.instance.setDpadMode(value);
+          movementMode: _movementMode,
+          onMovementModeChanged: (value) {
+            setState(() => _movementMode = value);
+            PreferencesService.instance.setMovementMode(value.index);
           },
           onEnterMouseMode: () {
             unawaited(_enterMouseMode());
@@ -616,7 +616,8 @@ class _ControllerScreenState extends State<ControllerScreen>
       _playerFace = await prefs.getOrCreatePlayerFace();
       _faceController.text = _playerFace.faceText;
       playerColor = _playerFace.color;
-      dpadMode = await prefs.getDpadMode();
+      final modeIndex = await prefs.getMovementMode();
+      _movementMode = MovementMode.values[modeIndex];
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
 
       final savedVisibility = await prefs.getButtonVisibility();
@@ -686,7 +687,9 @@ class _ControllerScreenState extends State<ControllerScreen>
           faceFocusNode: _faceFocusNode,
           onFaceChanged: _handleFaceTextChanged,
           onColorSelected: (color) {
-            _updatePlayerFace(_playerFace.copyWith(color: color, clearPreset: true));
+            _updatePlayerFace(
+              _playerFace.copyWith(color: color, clearPreset: true),
+            );
           },
           onRotationSelected: (rotation) {
             _updatePlayerFace(
@@ -703,7 +706,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         );
       case ControllerScreenMode.gameplay:
         return ControllerDefaultView(
-          dpadMode: dpadMode,
+          movementMode: _movementMode,
           onStickChanged: _onStickChanged,
           onStickRelease: _onStickRelease,
           onButtonStateChanged: _sendButton,
@@ -758,7 +761,8 @@ class _ControllerScreenState extends State<ControllerScreen>
                 ),
               ),
             ),
-            if (_connectionState == ControllerConnectionState.multipleHostsFound)
+            if (_connectionState ==
+                ControllerConnectionState.multipleHostsFound)
               MultipleHostsOverlay(
                 hosts: _discoveredHosts,
                 onHostSelected: (host) {

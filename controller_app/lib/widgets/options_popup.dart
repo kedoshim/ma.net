@@ -12,8 +12,8 @@ import 'player_face_indicator.dart';
 
 class OptionsPopup extends StatefulWidget {
   final PlayerFaceData playerFace;
-  final bool dpadMode;
-  final ValueChanged<bool> onDpadModeChanged;
+  final MovementMode movementMode;
+  final ValueChanged<MovementMode> onMovementModeChanged;
   final VoidCallback onEnterMouseMode;
   final VoidCallback onEnterEditMode;
   final VoidCallback onEnterFaceMode;
@@ -25,8 +25,8 @@ class OptionsPopup extends StatefulWidget {
   const OptionsPopup({
     super.key,
     required this.playerFace,
-    required this.dpadMode,
-    required this.onDpadModeChanged,
+    required this.movementMode,
+    required this.onMovementModeChanged,
     required this.onEnterMouseMode,
     required this.onEnterEditMode,
     required this.onEnterFaceMode,
@@ -123,9 +123,34 @@ class _OptionsPopupState extends State<OptionsPopup>
     }
   }
 
-  void _toggleDpad() {
-    widget.onDpadModeChanged(!widget.dpadMode);
+  void _toggleMovementMode() {
+    final nextIndex =
+        (widget.movementMode.index + 1) % MovementMode.values.length;
+    final nextMode = MovementMode.values[nextIndex];
+    widget.onMovementModeChanged(nextMode);
     Navigator.of(context).pop();
+  }
+
+  String _getNextModeLabel(MovementMode mode) {
+    switch (mode) {
+      case MovementMode.dpad:
+        return 'Fixo';
+      case MovementMode.fixedJoystick:
+        return 'Adaptavel';
+      case MovementMode.adaptiveJoystick:
+        return 'D-Pad';
+    }
+  }
+
+  IconData _getNextModeIcon(MovementMode mode) {
+    switch (mode) {
+      case MovementMode.dpad:
+        return Icons.control_camera_rounded;
+      case MovementMode.fixedJoystick:
+        return Icons.touch_app_rounded;
+      case MovementMode.adaptiveJoystick:
+        return Icons.gamepad_outlined;
+    }
   }
 
   @override
@@ -238,13 +263,11 @@ class _OptionsPopupState extends State<OptionsPopup>
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   _OptionButton(
-                                    icon: widget.dpadMode
-                                        ? Icons.gamepad_outlined
-                                        : Icons.control_camera_rounded,
-                                    label: widget.dpadMode
-                                        ? 'Analogico'
-                                        : 'D-Pad',
-                                    onTap: _toggleDpad,
+                                    icon: _getNextModeIcon(widget.movementMode),
+                                    label: _getNextModeLabel(
+                                      widget.movementMode,
+                                    ),
+                                    onTap: _toggleMovementMode,
                                   ),
                                   const SizedBox(width: 12),
                                   _OptionButton(
