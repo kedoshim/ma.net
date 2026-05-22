@@ -34,7 +34,6 @@ class ActionButtons extends StatefulWidget {
 class _ActionButtonsState extends State<ActionButtons> {
   late List<String> _buttonOrder;
   bool _isLoading = true;
-  String? _backgroundActiveBtn;
 
   // Default button order
   static const List<String> _defaultButtonOrder = [
@@ -148,7 +147,6 @@ class _ActionButtonsState extends State<ActionButtons> {
 
     return _GameButton(
       label: btnConfig.label,
-      isExternallyActive: _backgroundActiveBtn == btnId,
       onStateChange: (state) =>
           widget.onButtonStateChanged(btnConfig.xinput, state),
     );
@@ -203,42 +201,6 @@ class _ActionButtonsState extends State<ActionButtons> {
     }
   }
 
-  void _handleBackgroundTouch(Offset pos, Size size, List<List<String>> columns) {
-    if (widget.editMode) return;
-
-    double minDistance = double.infinity;
-    String? nearestBtn;
-
-    for (int col = 0; col < columns.length; col++) {
-      double cx = (col == 0) ? (size.width * 0.25) : (size.width * 0.75);
-      for (int row = 0; row < columns[col].length; row++) {
-        double cy = (row + 0.5) * size.height / columns[col].length;
-        double dist = (pos.dx - cx) * (pos.dx - cx) + (pos.dy - cy) * (pos.dy - cy);
-        if (dist < minDistance) {
-          minDistance = dist;
-          nearestBtn = columns[col][row];
-        }
-      }
-    }
-
-    if (nearestBtn != null && _backgroundActiveBtn != nearestBtn) {
-      if (_backgroundActiveBtn != null) {
-        widget.onButtonStateChanged(_getButtonConfig(_backgroundActiveBtn!).xinput, 'up');
-      }
-      _backgroundActiveBtn = nearestBtn;
-      widget.onButtonStateChanged(_getButtonConfig(nearestBtn).xinput, 'down');
-      setState(() {});
-    }
-  }
-
-  void _handleBackgroundEnd() {
-    if (_backgroundActiveBtn != null) {
-      widget.onButtonStateChanged(_getButtonConfig(_backgroundActiveBtn!).xinput, 'up');
-      _backgroundActiveBtn = null;
-      setState(() {});
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -263,28 +225,12 @@ class _ActionButtonsState extends State<ActionButtons> {
 
     final columns = _splitIntoColumns(visible);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanDown: (details) => _handleBackgroundTouch(details.localPosition, constraints.biggest, columns),
-          onPanUpdate: (details) => _handleBackgroundTouch(details.localPosition, constraints.biggest, columns),
-          onPanEnd: (_) => _handleBackgroundEnd(),
-          onPanCancel: () => _handleBackgroundEnd(),
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: Colors.transparent,
-            child: Row(
-              children: [
-                _buildColumn(columns[0]),
-                const SizedBox(width: 8),
-                _buildColumn(columns[1]),
-              ],
-            ),
-          ),
-        );
-      },
+    return Row(
+      children: [
+        _buildColumn(columns[0]),
+        const SizedBox(width: 8),
+        _buildColumn(columns[1]),
+      ],
     );
   }
 }
@@ -299,14 +245,9 @@ class _ButtonConfig {
 
 class _GameButton extends StatefulWidget {
   final String label;
-  final bool isExternallyActive;
   final void Function(String state) onStateChange;
 
-  const _GameButton({
-    required this.label, 
-    this.isExternallyActive = false, 
-    required this.onStateChange,
-  });
+  const _GameButton({required this.label, required this.onStateChange});
 
   @override
   State<_GameButton> createState() => _GameButtonState();
@@ -315,36 +256,65 @@ class _GameButton extends StatefulWidget {
 class _GameButtonState extends State<_GameButton> {
   bool _hovered = false;
   bool _pressed = false;
+  int? _pointerId;
+
+  static const double _retentionMargin = 32.0;
 
   void _setPressed(bool value) {
+    if (_pressed == value) return;
     setState(() => _pressed = value);
+    widget.onStateChange(value ? 'down' : 'up');
   }
 
   void _setHovered(bool value) {
+    if (_hovered == value) return;
     setState(() => _hovered = value);
+  }
+
+  bool _isInsideRetention(Offset localPosition, Size size) {
+    return localPosition.dx >= -_retentionMargin &&
+           localPosition.dx <= size.width + _retentionMargin &&
+           localPosition.dy >= -_retentionMargin &&
+           localPosition.dy <= size.height + _retentionMargin;
   }
 
   @override
   Widget build(BuildContext context) {
-    final background = (_hovered || _pressed || widget.isExternallyActive)
+    final background = (_hovered || _pressed)
         ? AppColors.highlightColor
         : AppColors.backgroundColor;
 
     return MouseRegion(
       onEnter: (_) => _setHovered(true),
       onExit: (_) => _setHovered(false),
-      child: GestureDetector(
-        onTapDown: (_) {
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (event) {
+          if (_pointerId != null) return;
+          _pointerId = event.pointer;
           _setPressed(true);
-          widget.onStateChange('down');
         },
-        onTapUp: (_) {
-          _setPressed(false);
-          widget.onStateChange('up');
+        onPointerMove: (event) {
+          if (event.pointer != _pointerId) return;
+          final RenderBox box = context.findRenderObject() as RenderBox;
+          final isInside = _isInsideRetention(event.localPosition, box.size);
+          if (_pressed && !isInside) {
+            _setPressed(false);
+          } else if (!_pressed && isInside) {
+            _setPressed(true);
+          }
         },
-        onTapCancel: () {
-          _setPressed(false);
-          widget.onStateChange('up');
+        onPointerUp: (event) {
+          if (event.pointer == _pointerId) {
+            _pointerId = null;
+            _setPressed(false);
+          }
+        },
+        onPointerCancel: (event) {
+          if (event.pointer == _pointerId) {
+            _pointerId = null;
+            _setPressed(false);
+          }
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 80),
