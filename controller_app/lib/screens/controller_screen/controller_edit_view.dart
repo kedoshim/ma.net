@@ -162,7 +162,7 @@ class _ControllerEditViewState extends State<ControllerEditView>
                   return Container(
                     decoration: BoxDecoration(
                       color: isTarget
-                          ? AppColors.dragTargetGreen.withOpacity(0.3)
+                          ? AppColors.dragTargetGreen.withValues(alpha: 0.3)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(28),
                     ),
@@ -280,7 +280,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: isTarget ? AppColors.highlightColor.withValues(alpha: 0.5) : AppColors.backgroundColor.withValues(alpha: 0.4),
+            color: isTarget ? AppColors.highlightColor.withValues(alpha: 0.5) : AppColors.backgroundColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
               color: isTarget ? AppColors.highlightColor : AppColors.textPrimary,
@@ -295,7 +295,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'pico',
                   fontSize: 22,
-                  color: AppColors.textPrimary.withOpacity(isTarget ? 1.0 : 0.8),
+                  color: AppColors.textPrimary.withValues(alpha: isTarget ? 1.0 : 0.8),
                 ),
               ),
               const SizedBox(height: 8),
@@ -311,7 +311,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
                         onDragStarted: onDragStarted,
                         onDragEnded: onDragEnded,
                         tapHapticsEnabled: tapHapticsEnabled,
-                        baseColor: AppColors.backgroundColor.withValues(alpha: 0.4),
+                        baseColor: AppColors.backgroundColor.withValues(alpha: 0.2),
                       );
                     }).toList(),
                   ),

@@ -177,7 +177,7 @@ class _MouseScrollStrip extends StatelessWidget {
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: AppColors.backgroundColor.withValues(alpha: 0.7),
+          color: AppColors.backgroundColor.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(28),
           border: Border.all(
             color: AppColors.textPrimary,
