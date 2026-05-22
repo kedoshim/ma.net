@@ -1,9 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../models/player_face.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/control_button.dart';
-import '../../widgets/joystick.dart';
 import 'controller_screen_widgets.dart';
 
 typedef MouseButtonStateCallback = void Function(String button, String state);
@@ -49,28 +49,9 @@ class ControllerMouseView extends StatelessWidget {
       children: [
         Expanded(
           flex: 4,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'cursor',
-                  style: TextStyle(
-                    fontFamily: 'pico',
-                    fontSize: 16,
-                    color: AppColors.textPrimary.withValues(alpha: 0.8),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Joystick(
-                  size: 250,
-                  onChanged: (x, y) => onPointerMoved(Offset(x, y)),
-                  onReleased: onPointerReleased,
-                ),
-              ],
-            ),
+          child: _TouchpadSurface(
+            onPointerMoved: onPointerMoved,
+            onPointerReleased: onPointerReleased,
           ),
         ),
         const SizedBox(width: 12),
@@ -117,10 +98,7 @@ class ControllerMouseView extends StatelessWidget {
           flex: 4,
           child: Column(
             children: [
-              Expanded(
-                flex: 5,
-                child: _MouseScrollStrip(onScroll: onScroll),
-              ),
+              Expanded(flex: 5, child: _MouseScrollStrip(onScroll: onScroll)),
               const SizedBox(height: 16),
               Expanded(
                 flex: 4,
@@ -154,6 +132,185 @@ class ControllerMouseView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TouchpadSurface extends StatefulWidget {
+  const _TouchpadSurface({
+    required this.onPointerMoved,
+    required this.onPointerReleased,
+  });
+
+  final ValueChanged<Offset> onPointerMoved;
+  final VoidCallback onPointerReleased;
+
+  @override
+  State<_TouchpadSurface> createState() => _TouchpadSurfaceState();
+}
+
+class _TouchpadSurfaceState extends State<_TouchpadSurface> {
+  bool _isPressed = false;
+  Offset? _fingerPosition;
+  Timer? _stopTimer;
+  Offset _lastSent = Offset.zero;
+
+  // Adjust this value to change the touchpad sensitivity.
+  // Lower values make the cursor slower, higher values make it faster.
+  // (The previous default was equivalent to 1.0).
+  final double _sensitivity = 0.5;
+
+  void _sendVelocity(Offset velocity) {
+    if (_lastSent == velocity) return;
+    _lastSent = velocity;
+    widget.onPointerMoved(velocity);
+  }
+
+  void _handlePanStart(DragStartDetails details) {
+    setState(() {
+      _isPressed = true;
+      _fingerPosition = details.localPosition;
+    });
+  }
+
+  void _handlePanUpdate(DragUpdateDetails details) {
+    setState(() {
+      _fingerPosition = details.localPosition;
+    });
+
+    // Convert raw drag delta to a continuous movement equivalent velocity.
+    // The base divisor (3.0) smooths it, and _sensitivity fine-tunes the speed.
+    // Y is inverted (-details.delta.dy) to mimic standard gamepad logic
+    // where UP typically yields a positive vector.
+    final vx = (details.delta.dx / 3.0) * _sensitivity;
+    final vy = (-details.delta.dy / 3.0) * _sensitivity;
+
+    _sendVelocity(Offset(vx, vy));
+
+    // Start a tiny timer to snap velocity to zero if the finger stops moving.
+    _stopTimer?.cancel();
+    _stopTimer = Timer(const Duration(milliseconds: 45), () {
+      _sendVelocity(Offset.zero);
+    });
+  }
+
+  void _handlePanEnd(DragEndDetails details) {
+    _stopTimer?.cancel();
+    _sendVelocity(Offset.zero);
+    setState(() {
+      _isPressed = false;
+      _fingerPosition = null;
+    });
+    widget.onPointerReleased();
+  }
+
+  void _handlePanCancel() {
+    _stopTimer?.cancel();
+    _sendVelocity(Offset.zero);
+    setState(() {
+      _isPressed = false;
+      _fingerPosition = null;
+    });
+    widget.onPointerReleased();
+  }
+
+  @override
+  void dispose() {
+    _stopTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanStart: _handlePanStart,
+      onPanUpdate: _handlePanUpdate,
+      onPanEnd: _handlePanEnd,
+      onPanCancel: _handlePanCancel,
+      child: AnimatedScale(
+        scale: _isPressed ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            color: _isPressed
+                ? AppColors.highlightColor.withValues(alpha: 0.12)
+                : AppColors.backgroundColor.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(36),
+            border: Border.all(
+              color: _isPressed
+                  ? AppColors.highlightColor.withValues(alpha: 0.8)
+                  : AppColors.textPrimary.withValues(alpha: 0.5),
+              width: AppColors.borderThickness,
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(36),
+            child: Stack(
+              children: [
+                Center(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: _isPressed ? 0.3 : 0.7,
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.touch_app_rounded,
+                          color: AppColors.textPrimary,
+                          size: 48,
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'touchpad',
+                          style: TextStyle(
+                            fontFamily: 'pico',
+                            fontSize: 18,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_fingerPosition != null)
+                  Positioned(
+                    left: _fingerPosition!.dx - 40,
+                    top: _fingerPosition!.dy - 40,
+                    child: AnimatedScale(
+                      scale: _isPressed ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOutBack,
+                      child: AnimatedOpacity(
+                        opacity: _isPressed ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 150),
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: AppColors.highlightColor.withValues(
+                              alpha: 0.25,
+                            ),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.highlightColor,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
