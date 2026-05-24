@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../models/player_face.dart';
@@ -30,6 +29,7 @@ class ControllerDefaultView extends StatelessWidget {
     required this.playerIndex,
     required this.totalSlots,
     required this.visibleButtons,
+    required this.buttonOrder,
   });
 
   final MovementMode movementMode;
@@ -46,6 +46,7 @@ class ControllerDefaultView extends StatelessWidget {
   final int? playerIndex;
   final int totalSlots;
   final Map<String, bool> visibleButtons;
+  final List<String> buttonOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -56,16 +57,16 @@ class ControllerDefaultView extends StatelessWidget {
           flex: 3,
           child: movementMode == MovementMode.dpad
               ? _ControllerDpad(onButtonStateChanged: onButtonStateChanged)
-              : movementMode == MovementMode.adaptiveJoystick
-                  ? AdaptiveJoystick(
-                      onChanged: (x, y) => onStickChanged(Offset(x, y)),
-                      onReleased: onStickRelease,
-                    )
-                  : Joystick(
-                      size: 220,
-                      onChanged: (x, y) => onStickChanged(Offset(x, y)),
-                      onReleased: onStickRelease,
-                    ),
+              : movementMode == MovementMode.floatingJoystick
+              ? AdaptiveJoystick(
+                  onChanged: (x, y) => onStickChanged(Offset(x, y)),
+                  onReleased: onStickRelease,
+                )
+              : Joystick(
+                  size: 220,
+                  onChanged: (x, y) => onStickChanged(Offset(x, y)),
+                  onReleased: onStickRelease,
+                ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -127,6 +128,7 @@ class ControllerDefaultView extends StatelessWidget {
           flex: 3,
           child: ActionButtons(
             visibleButtons: visibleButtons,
+            buttonOrder: buttonOrder,
             onButtonStateChanged: onButtonStateChanged,
             editMode: false,
           ),
@@ -166,11 +168,11 @@ class _ControllerDpadState extends State<_ControllerDpad> {
 
     if (!_activeDirections.contains(newDir) || _activeDirections.length > 1) {
       _releaseDirection();
-      
+
       _activeDirections = [newDir];
       // Trigger vibration strictly when a new cardinal direction is established
       HapticsManager.instance.softTap();
-      
+
       widget.onButtonStateChanged(newDir, 'down');
       setState(() {});
     }
@@ -212,7 +214,10 @@ class _ControllerDpadState extends State<_ControllerDpad> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _DPadButton(label: '', isActive: _activeDirections.contains('UP')),
+              _DPadButton(
+                label: '',
+                isActive: _activeDirections.contains('UP'),
+              ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -228,7 +233,10 @@ class _ControllerDpadState extends State<_ControllerDpad> {
                 ],
               ),
               const SizedBox(height: 8),
-              _DPadButton(label: '', isActive: _activeDirections.contains('DOWN')),
+              _DPadButton(
+                label: '',
+                isActive: _activeDirections.contains('DOWN'),
+              ),
             ],
           ),
         ),
@@ -291,7 +299,7 @@ class _CenterAction extends StatelessWidget {
             width: 56,
             height: 56,
             child: ControlButton(
-              label: '',
+              label: '⧉',
               onStateChange: (state) => onButtonStateChanged('SELECT', state),
             ),
           ),
@@ -300,7 +308,7 @@ class _CenterAction extends StatelessWidget {
             width: 56,
             height: 56,
             child: ControlButton(
-              label: '',
+              label: '≡',
               onStateChange: (state) => onButtonStateChanged('START', state),
             ),
           ),

@@ -16,7 +16,9 @@ class ControllerEditView extends StatefulWidget {
     required this.onTapHapticsToggled,
     required this.editableButtons,
     required this.visibleButtons,
+    required this.buttonOrder,
     required this.onSetButtonVisibility,
+    required this.onButtonOrderChanged,
     required this.onGameButtonStateChanged,
     required this.onExit,
     required this.totalSlots,
@@ -31,7 +33,9 @@ class ControllerEditView extends StatefulWidget {
   final VoidCallback onTapHapticsToggled;
   final List<String> editableButtons;
   final Map<String, bool> visibleButtons;
+  final List<String> buttonOrder;
   final void Function(String, bool) onSetButtonVisibility;
+  final void Function(List<String>) onButtonOrderChanged;
   final ButtonStateCallback onGameButtonStateChanged;
   final VoidCallback onExit;
   final int totalSlots;
@@ -168,11 +172,13 @@ class _ControllerEditViewState extends State<ControllerEditView>
                     ),
                     child: ActionButtons(
                       visibleButtons: widget.visibleButtons,
+                      buttonOrder: widget.buttonOrder,
                       onButtonStateChanged: widget.onGameButtonStateChanged,
                       editMode: true,
                       tapHapticsEnabled: widget.tapHapticsEnabled,
                       onDragStarted: () => setState(() => _isDragging = true),
                       onDragEnded: () => setState(() => _isDragging = false),
+                      onButtonOrderChanged: widget.onButtonOrderChanged,
                     ),
                   );
                 },
@@ -221,16 +227,15 @@ class _ControllerEditViewState extends State<ControllerEditView>
                 decoration: BoxDecoration(
                   color: AppColors.highlightColor,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.textPrimary,
-                    width: 2,
-                  ),
+                  border: Border.all(color: AppColors.textPrimary, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.textPrimary.withValues(alpha: 0.3 * lift),
+                      color: AppColors.textPrimary.withValues(
+                        alpha: 0.3 * lift,
+                      ),
                       blurRadius: 16 * lift,
                       offset: Offset(0, 12 * lift),
-                    )
+                    ),
                   ],
                 ),
                 child: const Center(
@@ -280,10 +285,14 @@ class _AvailableButtonsPanel extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: isTarget ? AppColors.highlightColor.withValues(alpha: 0.5) : AppColors.backgroundColor.withValues(alpha: 0.1),
+            color: isTarget
+                ? AppColors.highlightColor.withValues(alpha: 0.5)
+                : AppColors.backgroundColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: isTarget ? AppColors.highlightColor : AppColors.textPrimary,
+              color: isTarget
+                  ? AppColors.highlightColor
+                  : AppColors.textPrimary,
               width: AppColors.borderThickness,
             ),
           ),
@@ -295,7 +304,9 @@ class _AvailableButtonsPanel extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'pico',
                   fontSize: 22,
-                  color: AppColors.textPrimary.withValues(alpha: isTarget ? 1.0 : 0.8),
+                  color: AppColors.textPrimary.withValues(
+                    alpha: isTarget ? 1.0 : 0.8,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -311,7 +322,9 @@ class _AvailableButtonsPanel extends StatelessWidget {
                         onDragStarted: onDragStarted,
                         onDragEnded: onDragEnded,
                         tapHapticsEnabled: tapHapticsEnabled,
-                        baseColor: AppColors.backgroundColor.withValues(alpha: 0.2),
+                        baseColor: AppColors.backgroundColor.withValues(
+                          alpha: 0.2,
+                        ),
                       );
                     }).toList(),
                   ),

@@ -3,7 +3,32 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/player_face.dart';
 
-enum MovementMode { dpad, fixedJoystick, adaptiveJoystick }
+enum MovementMode { dpad, fixedJoystick, floatingJoystick }
+
+MovementMode movementModeFromWire(String? value) {
+  switch (value) {
+    case 'dpad':
+      return MovementMode.dpad;
+    case 'fixedJoystick':
+      return MovementMode.fixedJoystick;
+    case 'adaptiveJoystick':
+    case 'floatingJoystick':
+      return MovementMode.floatingJoystick;
+    default:
+      return MovementMode.floatingJoystick;
+  }
+}
+
+String movementModeToWire(MovementMode value) {
+  switch (value) {
+    case MovementMode.dpad:
+      return 'dpad';
+    case MovementMode.fixedJoystick:
+      return 'fixedJoystick';
+    case MovementMode.floatingJoystick:
+      return 'floatingJoystick';
+  }
+}
 
 class PreferencesService {
   PreferencesService._();
@@ -89,10 +114,10 @@ class PreferencesService {
   Future<int> getMovementMode() async {
     final p = await _getInstance;
     if (p.containsKey('movementMode')) {
-      return p.getInt('movementMode') ?? 1; // Default to 1 (fixedJoystick)
+      return p.getInt('movementMode') ?? 2;
     }
     final dpad = p.getBool('dpadMode') ?? false;
-    return dpad ? 0 : 1;
+    return dpad ? 0 : 2;
   }
 
   @Deprecated('Use setMovementMode instead')

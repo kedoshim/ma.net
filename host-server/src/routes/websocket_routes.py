@@ -79,6 +79,7 @@ class WebSocketRoutes:
             })
 
         await ws.send_json(self.manager.build_mouse_mode_payload(device_id))
+        await ws.send_json(self.manager.build_active_layout_payload())
         self.admin_panel.broadcast_update()
 
         try:

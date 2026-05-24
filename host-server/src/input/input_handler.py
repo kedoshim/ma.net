@@ -47,6 +47,21 @@ def apply_button(slot, btn, state):
         gp.update()
         return
 
+    if btn in {"RT", "LT"}:
+        if btn == "RT":
+            if state == "down":
+                gp.right_trigger_float(1.0)
+            else:
+                gp.right_trigger_float(0.0)
+        else:
+            if state == "down":
+                gp.left_trigger_float(1.0)
+            else:
+                gp.left_trigger_float(0.0)
+
+        gp.update()
+        return
+
     if btn not in XINPUT_BUTTON_MAP:
         return
 

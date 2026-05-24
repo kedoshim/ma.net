@@ -13,6 +13,7 @@ import '../../services/sound_effect_service.dart';
 import '../../services/startup_connection_pipeline.dart';
 import '../start_page/start_page_widget.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/preset_selector_dialog.dart';
 import '../../widgets/server_options_popup.dart';
 
 class HomePageScreen extends StatelessWidget {
@@ -146,6 +147,37 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               fontFamily: 'pico',
                               fontSize: 40.0,
                               letterSpacing: 0.0,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) =>
+                                  PresetSelectorDialog(api: _api),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.gamepad_outlined,
+                            color: AppColors.textPrimary,
+                          ),
+                          label: const Text(
+                            'Presets',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontFamily: 'pico',
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                              color: AppColors.textPrimary,
+                              width: AppColors.borderThickness,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 14,
                             ),
                           ),
                         ),

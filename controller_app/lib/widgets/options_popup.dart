@@ -134,10 +134,10 @@ class _OptionsPopupState extends State<OptionsPopup>
   String _getNextModeLabel(MovementMode mode) {
     switch (mode) {
       case MovementMode.dpad:
-        return 'Fixo';
+        return 'Joystick Fixo';
       case MovementMode.fixedJoystick:
-        return 'Adaptavel';
-      case MovementMode.adaptiveJoystick:
+        return 'Joystick Flutuante';
+      case MovementMode.floatingJoystick:
         return 'D-Pad';
     }
   }
@@ -148,7 +148,7 @@ class _OptionsPopupState extends State<OptionsPopup>
         return Icons.control_camera_rounded;
       case MovementMode.fixedJoystick:
         return Icons.touch_app_rounded;
-      case MovementMode.adaptiveJoystick:
+      case MovementMode.floatingJoystick:
         return Icons.gamepad_outlined;
     }
   }

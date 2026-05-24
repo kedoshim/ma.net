@@ -2,6 +2,7 @@ import time
 from src.models.models import PlayerSlot
 from src.core.gamepad_factory import create_gamepad
 from src.core.player_identity import normalize_identity
+from src.core.controller_presets import ControllerPresetStore
 
 
 class ControllerManager:
@@ -15,6 +16,7 @@ class ControllerManager:
         self.device_ws_map: dict[str, any] = {}
         self.mouse_mode_owner_device_id: str | None = None
         self.main_loop = None
+        self.preset_store = ControllerPresetStore()
 
     def set_main_loop(self, loop):
         self.main_loop = loop
@@ -47,6 +49,16 @@ class ControllerManager:
     def broadcast_to_devices(self, payload):
         for device_id in list(self.device_ws_map.keys()):
             self.notify_device(device_id, payload)
+
+    def build_active_layout_payload(self):
+        preset = self.preset_store.get_active_preset()
+        return {
+            "type": "layout_preset",
+            "preset": preset,
+        }
+
+    def broadcast_active_layout(self):
+        self.broadcast_to_devices(self.build_active_layout_payload())
 
     def cleanup_gamepads(self):
         for slot in self.slots:

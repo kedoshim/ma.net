@@ -116,7 +116,8 @@ class ControllerFaceView extends StatelessWidget {
                             (color) => _ColorSwatch(
                               color: color,
                               isSelected:
-                                  color.toARGB32() == playerFace.color.toARGB32(),
+                                  color.toARGB32() ==
+                                  playerFace.color.toARGB32(),
                               onTap: () => onColorSelected(color),
                             ),
                           )
@@ -209,7 +210,8 @@ class ControllerFaceView extends StatelessWidget {
                                     (rotation) => _RotationButton(
                                       face: playerFace,
                                       rotation: rotation,
-                                      isSelected: playerFace.rotation == rotation,
+                                      isSelected:
+                                          playerFace.rotation == rotation,
                                       onTap: () => onRotationSelected(rotation),
                                     ),
                                   )

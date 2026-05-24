@@ -247,6 +247,131 @@ class DiagnosticsSnapshot {
   }
 }
 
+class ControllerPresetLayout {
+  final String movementMode;
+  final Map<String, bool> visibleButtons;
+  final List<String> buttonOrder;
+
+  ControllerPresetLayout({
+    required this.movementMode,
+    required this.visibleButtons,
+    required this.buttonOrder,
+  });
+
+  factory ControllerPresetLayout.fromJson(Map<String, dynamic> json) {
+    final rawVisibility =
+        json['visibleButtons'] as Map<String, dynamic>? ??
+        const <String, dynamic>{};
+
+    return ControllerPresetLayout(
+      movementMode: json['movementMode'] as String? ?? 'floatingJoystick',
+      visibleButtons: rawVisibility.map(
+        (key, value) => MapEntry(key, value == true),
+      ),
+      buttonOrder: (json['buttonOrder'] as List<dynamic>? ?? const [])
+          .map((item) => '$item')
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'movementMode': movementMode,
+      'visibleButtons': visibleButtons,
+      'buttonOrder': buttonOrder,
+    };
+  }
+}
+
+class ControllerPreset {
+  final String id;
+  final String name;
+  final String description;
+  final String bestFor;
+  final String pros;
+  final String cons;
+  final String category;
+  final bool isBuiltIn;
+  final ControllerPresetLayout layout;
+
+  ControllerPreset({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.bestFor,
+    required this.pros,
+    required this.cons,
+    required this.category,
+    required this.isBuiltIn,
+    required this.layout,
+  });
+
+  factory ControllerPreset.fromJson(Map<String, dynamic> json) {
+    return ControllerPreset(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? 'Preset',
+      description: json['description'] as String? ?? '',
+      bestFor: json['bestFor'] as String? ?? '',
+      pros: json['pros'] as String? ?? '',
+      cons: json['cons'] as String? ?? '',
+      category: json['category'] as String? ?? 'builtin',
+      isBuiltIn: json['isBuiltIn'] == true,
+      layout: ControllerPresetLayout.fromJson(
+        json['layout'] as Map<String, dynamic>? ?? const <String, dynamic>{},
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'bestFor': bestFor,
+      'pros': pros,
+      'cons': cons,
+      'category': category,
+      'isBuiltIn': isBuiltIn,
+      'layout': layout.toJson(),
+    };
+  }
+}
+
+class PresetCatalog {
+  final String activePresetId;
+  final ControllerPreset activePreset;
+  final List<ControllerPreset> builtInPresets;
+  final List<ControllerPreset> gamePresets;
+  final List<ControllerPreset> customPresets;
+
+  PresetCatalog({
+    required this.activePresetId,
+    required this.activePreset,
+    required this.builtInPresets,
+    required this.gamePresets,
+    required this.customPresets,
+  });
+
+  factory PresetCatalog.fromJson(Map<String, dynamic> json) {
+    List<ControllerPreset> parseList(String key) {
+      return (json[key] as List<dynamic>? ?? const [])
+          .map((item) => ControllerPreset.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+
+    return PresetCatalog(
+      activePresetId: json['activePresetId'] as String? ?? '',
+      activePreset: ControllerPreset.fromJson(
+        json['activePreset'] as Map<String, dynamic>? ??
+            const <String, dynamic>{},
+      ),
+      builtInPresets: parseList('builtInPresets'),
+      gamePresets: parseList('gamePresets'),
+      customPresets: parseList('customPresets'),
+    );
+  }
+}
+
 class HostApiService {
   final String baseUrl;
 
@@ -402,5 +527,102 @@ class HostApiService {
       return uri.toString();
     }
     return uri.replace(queryParameters: {'id': connectionId}).toString();
+  }
+
+  Future<PresetCatalog> fetchPresets() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/presets'));
+
+    if (response.statusCode == 200) {
+      return PresetCatalog.fromJson(json.decode(response.body));
+    }
+    throw Exception('Failed to fetch presets');
+  }
+
+  Future<ControllerPreset> selectPreset(String presetId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/presets/select'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'presetId': presetId}),
+    );
+
+    if (response.statusCode == 200) {
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      return ControllerPreset.fromJson(
+        body['activePreset'] as Map<String, dynamic>? ??
+            const <String, dynamic>{},
+      );
+    }
+    throw Exception('Failed to select preset');
+  }
+
+  Future<ControllerPreset> createCustomPreset({
+    required String name,
+    required String description,
+    required String bestFor,
+    required String pros,
+    required String cons,
+    required ControllerPresetLayout layout,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/presets/custom'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'name': name,
+        'description': description,
+        'bestFor': bestFor,
+        'pros': pros,
+        'cons': cons,
+        'layout': layout.toJson(),
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      return ControllerPreset.fromJson(
+        body['preset'] as Map<String, dynamic>? ?? const <String, dynamic>{},
+      );
+    }
+    throw Exception('Failed to create preset');
+  }
+
+  Future<ControllerPreset> updateCustomPreset({
+    required String presetId,
+    required String name,
+    required String description,
+    required String bestFor,
+    required String pros,
+    required String cons,
+    required ControllerPresetLayout layout,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/api/presets/custom/$presetId'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'name': name,
+        'description': description,
+        'bestFor': bestFor,
+        'pros': pros,
+        'cons': cons,
+        'layout': layout.toJson(),
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      return ControllerPreset.fromJson(
+        body['preset'] as Map<String, dynamic>? ?? const <String, dynamic>{},
+      );
+    }
+    throw Exception('Failed to update preset');
+  }
+
+  Future<void> deleteCustomPreset(String presetId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/api/presets/custom/$presetId'),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete preset');
+    }
   }
 }

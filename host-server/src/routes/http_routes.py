@@ -1,5 +1,6 @@
 
 from io import BytesIO
+import uuid
 
 from aiohttp import web
 
@@ -128,6 +129,81 @@ class HTTPRoutes:
                 {"success": False, "code": "qr_generation_failed"},
                 status=500
             )
+
+    async def presets_handler(self, request):
+        return web.json_response(self.manager.preset_store.list_payload())
+
+    async def select_preset_handler(self, request):
+        data = await request.json()
+        preset_id = data.get("presetId")
+        if not preset_id:
+            return web.json_response(
+                {"success": False, "code": "missing_preset_id"},
+                status=400,
+            )
+
+        try:
+            preset = self.manager.preset_store.set_active_preset(preset_id)
+        except KeyError:
+            return web.json_response(
+                {"success": False, "code": "preset_not_found"},
+                status=404,
+            )
+
+        self.manager.broadcast_active_layout()
+        return web.json_response({"success": True, "activePreset": preset})
+
+    async def create_preset_handler(self, request):
+        data = await request.json()
+        payload = {
+            "id": f"user-{uuid.uuid4().hex}",
+            "name": data.get("name"),
+            "description": data.get("description"),
+            "bestFor": data.get("bestFor"),
+            "pros": data.get("pros"),
+            "cons": data.get("cons"),
+            "layout": data.get("layout") or {},
+        }
+        preset = self.manager.preset_store.create_custom_preset(payload)
+        return web.json_response({"success": True, "preset": preset})
+
+    async def update_preset_handler(self, request):
+        preset_id = request.match_info.get("preset_id")
+        data = await request.json()
+
+        try:
+            preset = self.manager.preset_store.update_custom_preset(
+                preset_id,
+                {
+                    "name": data.get("name"),
+                    "description": data.get("description"),
+                    "bestFor": data.get("bestFor"),
+                    "pros": data.get("pros"),
+                    "cons": data.get("cons"),
+                    "layout": data.get("layout") or {},
+                },
+            )
+        except KeyError:
+            return web.json_response(
+                {"success": False, "code": "preset_not_found"},
+                status=404,
+            )
+
+        return web.json_response({"success": True, "preset": preset})
+
+    async def delete_preset_handler(self, request):
+        preset_id = request.match_info.get("preset_id")
+
+        try:
+            active_preset = self.manager.preset_store.delete_custom_preset(preset_id)
+        except KeyError:
+            return web.json_response(
+                {"success": False, "code": "preset_not_found"},
+                status=404,
+            )
+
+        self.manager.broadcast_active_layout()
+        return web.json_response({"success": True, "activePreset": active_preset})
 
 
     async def slots_handler(self, request):

@@ -76,14 +76,14 @@ class _ControlButtonState extends State<ControlButton> {
           // margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: background,
-            borderRadius:
-                widget.borderRadius ?? BorderRadius.circular(16),
+            borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
             border: Border.all(
               color: AppColors.textPrimary,
               width: AppColors.borderThickness,
             ),
           ),
-          child: widget.icon ??
+          child:
+              widget.icon ??
               (showText
                   ? Text(
                       widget.label,

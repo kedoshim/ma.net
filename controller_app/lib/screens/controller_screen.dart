@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/controller_layout_preset.dart';
 import '../models/player_face.dart';
 import '../services/controller_connection_manager.dart';
 import '../services/haptics_manager.dart';
@@ -48,6 +49,19 @@ class _ControllerScreenState extends State<ControllerScreen>
     'btnRS',
   ];
 
+  static const List<String> _defaultButtonOrder = [
+    'btnY',
+    'btnB',
+    'btnX',
+    'btnA',
+    'btnRB',
+    'btnRT',
+    'btnLB',
+    'btnLT',
+    'btnRS',
+    'btnLS',
+  ];
+
   final Map<String, bool> visibleButtons = {
     'btnA': true,
     'btnB': true,
@@ -60,6 +74,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     'btnLT': false,
     'btnLS': false,
   };
+  List<String> _buttonOrder = List<String>.from(_defaultButtonOrder);
 
   WebSocketService? ws;
   final GlobalKey<NavigatorState> _controllerNavigatorKey =
@@ -349,6 +364,9 @@ class _ControllerScreenState extends State<ControllerScreen>
         case 'toggle_btn':
           _handleButtonVisibilityUpdate(data);
           break;
+        case 'layout_preset':
+          _handleLayoutPresetUpdate(data);
+          break;
       }
     } catch (_) {}
   }
@@ -391,6 +409,31 @@ class _ControllerScreenState extends State<ControllerScreen>
     setState(() {
       visibleButtons[id] = visible;
     });
+  }
+
+  void _handleLayoutPresetUpdate(Map<String, dynamic> data) {
+    final presetData = data['preset'];
+    if (presetData is! Map<String, dynamic>) {
+      return;
+    }
+
+    final preset = ControllerLayoutPreset.fromJson(presetData);
+    final nextVisibility = Map<String, bool>.from(visibleButtons);
+    nextVisibility.addAll(preset.visibleButtons);
+
+    setState(() {
+      _movementMode = preset.movementMode;
+      visibleButtons
+        ..clear()
+        ..addAll(nextVisibility);
+      if (preset.buttonOrder.isNotEmpty) {
+        _buttonOrder = List<String>.from(preset.buttonOrder);
+      }
+    });
+
+    PreferencesService.instance.setMovementMode(_movementMode.index);
+    PreferencesService.instance.setButtonVisibility(visibleButtons);
+    PreferencesService.instance.setButtonOrder(_buttonOrder);
   }
 
   void _clearPlayerSlot() {
@@ -621,6 +664,13 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setButtonVisibility(visibleButtons);
   }
 
+  void _setButtonOrder(List<String> order) {
+    setState(() {
+      _buttonOrder = List<String>.from(order);
+    });
+    PreferencesService.instance.setButtonOrder(_buttonOrder);
+  }
+
   void _toggleTapHaptics() {
     setState(() => tapHapticsEnabled = !tapHapticsEnabled);
     PreferencesService.instance.setTapHapticsEnabled(tapHapticsEnabled);
@@ -646,6 +696,10 @@ class _ControllerScreenState extends State<ControllerScreen>
       final savedVisibility = await prefs.getButtonVisibility();
       if (savedVisibility != null) {
         visibleButtons.addAll(savedVisibility);
+      }
+      final savedOrder = await prefs.getButtonOrder();
+      if (savedOrder != null && savedOrder.isNotEmpty) {
+        _buttonOrder = List<String>.from(savedOrder);
       }
     } catch (_) {
       AppColors.setTheme(ColorTheme.blue);
@@ -694,7 +748,9 @@ class _ControllerScreenState extends State<ControllerScreen>
           onTapHapticsToggled: _toggleTapHaptics,
           editableButtons: _editableButtons,
           visibleButtons: visibleButtons,
+          buttonOrder: _buttonOrder,
           onSetButtonVisibility: _setButtonVisibility,
+          onButtonOrderChanged: _setButtonOrder,
           onGameButtonStateChanged: _sendButton,
           onExit: _exitTemporaryMode,
           totalSlots: totalSlots,
@@ -744,6 +800,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           playerIndex: playerIndex,
           totalSlots: totalSlots,
           visibleButtons: visibleButtons,
+          buttonOrder: _buttonOrder,
         );
     }
   }

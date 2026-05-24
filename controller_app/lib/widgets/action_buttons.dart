@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../services/haptics_manager.dart';
-import '../services/preferences_service.dart';
 import '../theme/app_colors.dart';
 
 int _failedDragTaps = 0;
@@ -11,20 +10,24 @@ typedef ButtonStateCallback = void Function(String xinputId, String state);
 
 class ActionButtons extends StatefulWidget {
   final Map<String, bool> visibleButtons;
+  final List<String> buttonOrder;
   final ButtonStateCallback onButtonStateChanged;
   final bool editMode;
   final VoidCallback? onDragStarted;
   final VoidCallback? onDragEnded;
   final bool tapHapticsEnabled;
+  final void Function(List<String> order)? onButtonOrderChanged;
 
   const ActionButtons({
     super.key,
     required this.visibleButtons,
+    required this.buttonOrder,
     required this.onButtonStateChanged,
     required this.editMode,
     this.onDragStarted,
     this.onDragEnded,
     this.tapHapticsEnabled = false,
+    this.onButtonOrderChanged,
   });
 
   @override
@@ -33,7 +36,6 @@ class ActionButtons extends StatefulWidget {
 
 class _ActionButtonsState extends State<ActionButtons> {
   late List<String> _buttonOrder;
-  bool _isLoading = true;
 
   // Default button order
   static const List<String> _defaultButtonOrder = [
@@ -52,31 +54,30 @@ class _ActionButtonsState extends State<ActionButtons> {
   @override
   void initState() {
     super.initState();
-    _loadButtonOrder();
+    _buttonOrder = _normalizeOrder(widget.buttonOrder);
   }
 
-  Future<void> _loadButtonOrder() async {
-    try {
-      final savedOrder = await PreferencesService.instance.getButtonOrder();
-
-      setState(() {
-        _buttonOrder = savedOrder ?? _defaultButtonOrder.toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _buttonOrder = _defaultButtonOrder.toList();
-        _isLoading = false;
-      });
+  @override
+  void didUpdateWidget(covariant ActionButtons oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.buttonOrder != widget.buttonOrder) {
+      _buttonOrder = _normalizeOrder(widget.buttonOrder);
     }
   }
 
-  Future<void> _saveButtonOrder() async {
-    try {
-      await PreferencesService.instance.setButtonOrder(_buttonOrder);
-    } catch (e) {
-      debugPrint('Error saving button order: $e');
+  List<String> _normalizeOrder(List<String> input) {
+    final sanitized = <String>[];
+    for (final item in input) {
+      if (_defaultButtonOrder.contains(item) && !sanitized.contains(item)) {
+        sanitized.add(item);
+      }
     }
+    for (final item in _defaultButtonOrder) {
+      if (!sanitized.contains(item)) {
+        sanitized.add(item);
+      }
+    }
+    return sanitized;
   }
 
   void _reorderButtons(String draggedId, String targetId) {
@@ -94,7 +95,7 @@ class _ActionButtonsState extends State<ActionButtons> {
     _buttonOrder[targetIndex] = temp;
 
     setState(() {});
-    _saveButtonOrder();
+    widget.onButtonOrderChanged?.call(List<String>.from(_buttonOrder));
   }
 
   List<String> _getVisibleButtons() {
@@ -190,8 +191,8 @@ class _ActionButtonsState extends State<ActionButtons> {
       _ButtonConfig('btnRT', 'RT', 'RT'),
       _ButtonConfig('btnLB', 'LB', 'LB'),
       _ButtonConfig('btnLT', 'LT', 'LT'),
-      _ButtonConfig('btnRS', 'RS', 'RS'),
-      _ButtonConfig('btnLS', 'LS', 'LS'),
+      _ButtonConfig('btnRS', 'RSB', 'RSB'),
+      _ButtonConfig('btnLS', 'LSB', 'LSB'),
     ];
 
     try {
@@ -203,10 +204,6 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     final visible = _getVisibleButtons();
     if (visible.isEmpty) {
       return Center(
@@ -273,9 +270,9 @@ class _GameButtonState extends State<_GameButton> {
 
   bool _isInsideRetention(Offset localPosition, Size size) {
     return localPosition.dx >= -_retentionMargin &&
-           localPosition.dx <= size.width + _retentionMargin &&
-           localPosition.dy >= -_retentionMargin &&
-           localPosition.dy <= size.height + _retentionMargin;
+        localPosition.dx <= size.width + _retentionMargin &&
+        localPosition.dy >= -_retentionMargin &&
+        localPosition.dy <= size.height + _retentionMargin;
   }
 
   @override

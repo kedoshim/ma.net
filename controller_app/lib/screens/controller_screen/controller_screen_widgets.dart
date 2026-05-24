@@ -23,15 +23,16 @@ class ControllerPlayerIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedIndex =
-        selectedPlayerIndex != null ? selectedPlayerIndex! - 1 : null;
+    final selectedIndex = selectedPlayerIndex != null
+        ? selectedPlayerIndex! - 1
+        : null;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = totalSlots <= 4 ? (totalSlots > 0 ? totalSlots : 1) : 4;
         final rows = (totalSlots / columns).ceil();
-        final squareSize =
-            ((constraints.maxWidth - (columns * 8)) / columns).clamp(12.0, 22.0);
+        final squareSize = ((constraints.maxWidth - (columns * 8)) / columns)
+            .clamp(12.0, 22.0);
 
         return Column(
           mainAxisSize: MainAxisSize.min,
