@@ -50,19 +50,13 @@ class ControllerFaceView extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              PlayerFaceIndicator(
-                face: playerFace,
-                size: 160,
-                roundedSquare: true,
-                borderColor: AppColors.textPrimary,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                playerFace.presetId ?? 'custom',
-                style: const TextStyle(
-                  fontFamily: 'pico',
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
+              GestureDetector(
+                onTap: () => faceFocusNode.requestFocus(),
+                child: PlayerFaceIndicator(
+                  face: playerFace,
+                  size: 160,
+                  roundedSquare: true,
+                  borderColor: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -73,7 +67,7 @@ class ControllerFaceView extends StatelessWidget {
           Expanded(
             flex: 2,
             child: ControllerModeHub(
-              icon: Icons.face_retouching_natural_rounded,
+              icon: Icons.close_rounded,
               title: 'rostinho',
               onTap: onExit,
               totalSlots: totalSlots,
@@ -125,24 +119,29 @@ class ControllerFaceView extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                   ],
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Wrap(
+                    spacing: 24,
+                    runSpacing: 16,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (!isTyping) ...[
-                              const Text(
-                                'rosto',
-                                style: TextStyle(
-                                  fontFamily: 'pico',
-                                  fontSize: 16,
-                                ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!isTyping) ...[
+                            const Text(
+                              'rosto',
+                              style: TextStyle(
+                                fontFamily: 'pico',
+                                fontSize: 16,
                               ),
-                              const SizedBox(height: 8),
-                            ],
-                            TextField(
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          Container(
+                            constraints: BoxConstraints(
+                              minWidth: 120,
+                              maxWidth: isTyping ? 320 : 200,
+                            ),
+                            child: TextField(
                               focusNode: faceFocusNode,
                               controller: faceController,
                               textAlign: TextAlign.center,
@@ -186,11 +185,10 @@ class ControllerFaceView extends StatelessWidget {
                               ),
                               onChanged: onFaceChanged,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      if (!isTyping) ...[
-                        const SizedBox(width: 16),
+                      if (!isTyping)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -219,7 +217,6 @@ class ControllerFaceView extends StatelessWidget {
                             ),
                           ],
                         ),
-                      ],
                     ],
                   ),
                   if (!isTyping) ...[

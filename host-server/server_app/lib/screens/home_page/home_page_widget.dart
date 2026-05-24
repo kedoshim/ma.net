@@ -51,6 +51,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
   late final StartupConnectionPipeline _startupPipeline;
   ColorTheme _currentTheme = ColorTheme.blue;
+  PresetCatalog? _presetCatalog;
 
   @override
   void initState() {
@@ -63,6 +64,25 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _startupPipeline.state.addListener(_handlePipelineUpdate);
     _startupPipeline.initialize();
     _loadTheme();
+    _loadPresets();
+  }
+
+  Future<void> _loadPresets() async {
+    try {
+      final catalog = await _api.fetchPresets();
+      if (mounted) {
+        setState(() {
+          _presetCatalog = catalog;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _selectPreset(String presetId) async {
+    try {
+      await _api.selectPreset(presetId);
+      await _loadPresets();
+    } catch (_) {}
   }
 
   Future<void> _loadTheme() async {
@@ -151,36 +171,77 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                           ),
                         ),
                         const Spacer(),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) =>
-                                  PresetSelectorDialog(api: _api),
-                            );
-                          },
-                          icon: const Icon(
-                            Icons.gamepad_outlined,
-                            color: AppColors.textPrimary,
-                          ),
-                          label: const Text(
-                            'Presets',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontFamily: 'pico',
+                        if (_presetCatalog != null)
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.backgroundColor.withValues(
+                                alpha: 0.12,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.2,
+                                ),
+                              ),
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _PresetChip(
+                                  label: 'Simple + Shoulder',
+                                  isSelected:
+                                      _presetCatalog!.activePresetId ==
+                                      'builtin-simple-shoulder',
+                                  onTap: () =>
+                                      _selectPreset('builtin-simple-shoulder'),
+                                ),
+                                _PresetChip(
+                                  label: 'Simple + Trigger',
+                                  isSelected:
+                                      _presetCatalog!.activePresetId ==
+                                      'builtin-simple-trigger',
+                                  onTap: () =>
+                                      _selectPreset('builtin-simple-trigger'),
+                                ),
+                                _PresetChip(
+                                  label: 'Complete',
+                                  isSelected:
+                                      _presetCatalog!.activePresetId ==
+                                      'builtin-full',
+                                  onTap: () => _selectPreset('builtin-full'),
+                                ),
+                                const SizedBox(width: 4),
+                                InkWell(
+                                  onTap: () async {
+                                    await showDialog(
+                                      context: context,
+                                      builder: (context) =>
+                                          PresetSelectorDialog(api: _api),
+                                    );
+                                    _loadPresets();
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(16),
+                                      color: AppColors.backgroundColor
+                                          .withValues(alpha: 0.2),
+                                    ),
+                                    child: const Icon(
+                                      Icons.add_rounded,
+                                      size: 20,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                              color: AppColors.textPrimary,
-                              width: AppColors.borderThickness,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 14,
-                            ),
-                          ),
-                        ),
                         const Spacer(),
                         IconButton(
                           iconSize: 30.0,
@@ -317,6 +378,47 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PresetChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _PresetChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.highlightColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'pico',
+              color: isSelected
+                  ? AppColors.backgroundColor
+                  : AppColors.textPrimary,
+            ),
           ),
         ),
       ),

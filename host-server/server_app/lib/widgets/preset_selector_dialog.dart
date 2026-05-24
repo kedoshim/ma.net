@@ -55,10 +55,8 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
   Future<void> _openEditor({ControllerPreset? preset}) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => _PresetEditorDialog(
-        api: widget.api,
-        preset: preset,
-      ),
+      builder: (context) =>
+          _PresetEditorDialog(api: widget.api, preset: preset),
     );
 
     if (result == true) {
@@ -134,11 +132,6 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Escolha um layout pronto para abrir e jogar.',
-                          style: TextStyle(color: AppColors.textPrimary),
-                        ),
                       ],
                     ),
                   ),
@@ -161,7 +154,9 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
                 )
               else if (_catalog == null)
                 const Expanded(
-                  child: Center(child: Text('Nao foi possivel carregar os presets.')),
+                  child: Center(
+                    child: Text('Não foi possivel carregar os presets.'),
+                  ),
                 )
               else
                 Expanded(
@@ -170,27 +165,9 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _SectionTitle(
-                          title: 'Prontos para usar',
-                          subtitle: 'Comece rapido com layouts pensados para onboarding.',
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: _catalog!.builtInPresets
-                              .map(
-                                (preset) => _PresetCard(
-                                  preset: preset,
-                                  activePresetId: _catalog!.activePresetId,
-                                  onSelect: _saving ? null : () => _selectPreset(preset),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                        const SizedBox(height: 28),
-                        _SectionTitle(
                           title: 'Presets de jogos',
-                          subtitle: 'Sugestoes leves e faceis de expandir depois.',
+                          subtitle:
+                              'Sugestoes leves e faceis de expandir depois.',
                         ),
                         const SizedBox(height: 12),
                         Wrap(
@@ -201,15 +178,21 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
                                 (preset) => _PresetCard(
                                   preset: preset,
                                   activePresetId: _catalog!.activePresetId,
-                                  onSelect: _saving ? null : () => _selectPreset(preset),
+                                  onSelect: _saving
+                                      ? null
+                                      : () => _selectPreset(preset),
                                 ),
                               )
                               .toList(),
                         ),
                         const SizedBox(height: 28),
-                        _SectionTitle(
-                          title: 'Seus presets',
-                          subtitle: 'Layouts personalizados salvos para o seu setup.',
+                        Text(
+                          "Seus presets personalizados",
+                          style: const TextStyle(
+                            fontFamily: 'pico',
+                            fontSize: 22,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         if (_catalog!.customPresets.isEmpty)
@@ -232,13 +215,16 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
                                   (preset) => _PresetCard(
                                     preset: preset,
                                     activePresetId: _catalog!.activePresetId,
-                                    onSelect: _saving ? null : () => _selectPreset(preset),
+                                    onSelect: _saving
+                                        ? null
+                                        : () => _selectPreset(preset),
                                     footer: Row(
                                       children: [
                                         TextButton.icon(
                                           onPressed: _saving
                                               ? null
-                                              : () => _openEditor(preset: preset),
+                                              : () =>
+                                                    _openEditor(preset: preset),
                                           icon: const Icon(Icons.edit_rounded),
                                           label: const Text('Renomear/editar'),
                                         ),
@@ -246,7 +232,9 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
                                           onPressed: _saving
                                               ? null
                                               : () => _deletePreset(preset),
-                                          icon: const Icon(Icons.delete_outline_rounded),
+                                          icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                          ),
                                           label: const Text('Excluir'),
                                         ),
                                       ],
@@ -287,15 +275,11 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
     'btnRT',
     'btnLB',
     'btnLT',
-    'btnRS',
-    'btnLS',
+    'btnRSB',
+    'btnLSB',
   ];
 
   late final TextEditingController _nameController;
-  late final TextEditingController _descriptionController;
-  late final TextEditingController _bestForController;
-  late final TextEditingController _prosController;
-  late final TextEditingController _consController;
   late String _movementMode;
   late Map<String, bool> _visibleButtons;
   late List<String> _buttonOrder;
@@ -306,22 +290,12 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
     super.initState();
     final preset = widget.preset;
     _nameController = TextEditingController(text: preset?.name ?? 'Meu preset');
-    _descriptionController = TextEditingController(
-      text: preset?.description ?? 'Preset personalizado para o seu estilo de jogo.',
-    );
-    _bestForController = TextEditingController(
-      text: preset?.bestFor ?? 'Feito para o seu jeito de jogar',
-    );
-    _prosController = TextEditingController(
-      text: preset?.pros ?? 'Pode ser ajustado para qualquer jogo.',
-    );
-    _consController = TextEditingController(
-      text: preset?.cons ?? 'Depende da sua configuracao manual.',
-    );
     _movementMode = preset?.layout.movementMode ?? 'floatingJoystick';
     _visibleButtons = {
       for (final buttonId in _allButtons)
-        buttonId: preset?.layout.visibleButtons[buttonId] ?? _defaultVisible(buttonId),
+        buttonId:
+            preset?.layout.visibleButtons[buttonId] ??
+            _defaultVisible(buttonId),
     };
     _buttonOrder = List<String>.from(
       preset?.layout.buttonOrder.where(_allButtons.contains) ?? _allButtons,
@@ -334,7 +308,14 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
   }
 
   static bool _defaultVisible(String buttonId) {
-    return const {'btnA', 'btnB', 'btnX', 'btnY', 'btnLB', 'btnRB'}.contains(buttonId);
+    return const {
+      'btnA',
+      'btnB',
+      'btnX',
+      'btnY',
+      'btnLB',
+      'btnRB',
+    }.contains(buttonId);
   }
 
   String _labelForButton(String buttonId) {
@@ -354,20 +335,12 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
       if (widget.preset == null) {
         await widget.api.createCustomPreset(
           name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          bestFor: _bestForController.text.trim(),
-          pros: _prosController.text.trim(),
-          cons: _consController.text.trim(),
           layout: layout,
         );
       } else {
         await widget.api.updateCustomPreset(
           presetId: widget.preset!.id,
           name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          bestFor: _bestForController.text.trim(),
-          pros: _prosController.text.trim(),
-          cons: _consController.text.trim(),
           layout: layout,
         );
       }
@@ -385,10 +358,6 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
   @override
   void dispose() {
     _nameController.dispose();
-    _descriptionController.dispose();
-    _bestForController.dispose();
-    _prosController.dispose();
-    _consController.dispose();
     super.dispose();
   }
 
@@ -422,114 +391,165 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
                   runSpacing: 16,
                   children: [
                     _EditorField(controller: _nameController, label: 'Nome'),
-                    _EditorField(
-                      controller: _descriptionController,
-                      label: 'Descricao curta',
-                    ),
-                    _EditorField(
-                      controller: _bestForController,
-                      label: 'Melhor para',
-                    ),
-                    _EditorField(controller: _prosController, label: 'Ponto forte'),
-                    _EditorField(controller: _consController, label: 'Observacao'),
                   ],
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Movimento',
-                  style: TextStyle(
-                    fontFamily: 'pico',
-                    fontSize: 18,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _MovementChoiceChip(
-                      label: 'D-Pad',
-                      description: 'Melhor para precisao e plataforma',
-                      selected: _movementMode == 'dpad',
-                      onTap: () => setState(() => _movementMode = 'dpad'),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Movimento',
+                            style: TextStyle(
+                              fontFamily: 'pico',
+                              fontSize: 18,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            direction: Axis.vertical,
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _MovementChoiceChip(
+                                label: 'D-Pad',
+                                description:
+                                    'Melhor para precisao e plataforma',
+                                selected: _movementMode == 'dpad',
+                                onTap: () =>
+                                    setState(() => _movementMode = 'dpad'),
+                              ),
+                              _MovementChoiceChip(
+                                label: 'Joystick Fixo',
+                                description: 'Sempre visivel e previsivel',
+                                selected: _movementMode == 'fixedJoystick',
+                                onTap: () => setState(
+                                  () => _movementMode = 'fixedJoystick',
+                                ),
+                              ),
+                              _MovementChoiceChip(
+                                label: 'Joystick Flutuante',
+                                description: 'Recomendado na maioria dos casos',
+                                selected: _movementMode == 'floatingJoystick',
+                                onTap: () => setState(
+                                  () => _movementMode = 'floatingJoystick',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    _MovementChoiceChip(
-                      label: 'Joystick Fixo',
-                      description: 'Sempre visivel e previsivel',
-                      selected: _movementMode == 'fixedJoystick',
-                      onTap: () => setState(() => _movementMode = 'fixedJoystick'),
-                    ),
-                    _MovementChoiceChip(
-                      label: 'Joystick Flutuante',
-                      description: 'Recomendado na maioria dos casos',
-                      selected: _movementMode == 'floatingJoystick',
-                      onTap: () => setState(() => _movementMode = 'floatingJoystick'),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Botoes visiveis',
+                            style: TextStyle(
+                              fontFamily: 'pico',
+                              fontSize: 18,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _allButtons.map((buttonId) {
+                              final isVisible =
+                                  _visibleButtons[buttonId] == true;
+                              return FilterChip(
+                                label: Text(
+                                  _labelForButton(buttonId),
+                                  style: const TextStyle(
+                                    fontFamily: 'pico',
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                selected: isVisible,
+                                onSelected: (selected) {
+                                  setState(
+                                    () => _visibleButtons[buttonId] = selected,
+                                  );
+                                },
+                                backgroundColor: AppColors.backgroundColor
+                                    .withValues(alpha: 0.12),
+                                selectedColor: AppColors.highlightColor
+                                    .withValues(alpha: 0.18),
+                                checkmarkColor: AppColors.highlightColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: isVisible
+                                        ? AppColors.highlightColor
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Ordem (Arraste os botoes no preview)',
+                            style: TextStyle(
+                              fontFamily: 'pico',
+                              fontSize: 18,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color: AppColors.backgroundColor.withValues(
+                                alpha: 0.18,
+                              ),
+                              border: Border.all(color: AppColors.textPrimary),
+                            ),
+                            child: _PresetPreview(
+                              layout: ControllerPresetLayout(
+                                movementMode: _movementMode,
+                                visibleButtons: _visibleButtons,
+                                buttonOrder: _buttonOrder,
+                              ),
+                              onReorder: (draggedId, targetId) {
+                                setState(() {
+                                  final draggedIndex = _buttonOrder.indexOf(
+                                    draggedId,
+                                  );
+                                  final targetIndex = _buttonOrder.indexOf(
+                                    targetId,
+                                  );
+                                  if (draggedIndex != -1 && targetIndex != -1) {
+                                    final temp = _buttonOrder[draggedIndex];
+                                    _buttonOrder[draggedIndex] =
+                                        _buttonOrder[targetIndex];
+                                    _buttonOrder[targetIndex] = temp;
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  'Botoes visiveis e ordem',
-                  style: TextStyle(
-                    fontFamily: 'pico',
-                    fontSize: 18,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  height: 280,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.textPrimary),
-                  ),
-                  child: ReorderableListView.builder(
-                    itemCount: _buttonOrder.length,
-                    onReorder: (oldIndex, newIndex) {
-                      setState(() {
-                        if (newIndex > oldIndex) {
-                          newIndex -= 1;
-                        }
-                        final item = _buttonOrder.removeAt(oldIndex);
-                        _buttonOrder.insert(newIndex, item);
-                      });
-                    },
-                    itemBuilder: (context, index) {
-                      final buttonId = _buttonOrder[index];
-                      return SwitchListTile(
-                        key: ValueKey(buttonId),
-                        title: Text(_labelForButton(buttonId)),
-                        subtitle: Text('Posicao ${index + 1} na coluna de acoes'),
-                        value: _visibleButtons[buttonId] == true,
-                        onChanged: (value) {
-                          setState(() => _visibleButtons[buttonId] = value);
-                        },
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: AppColors.backgroundColor.withValues(alpha: 0.18),
-                    border: Border.all(color: AppColors.textPrimary),
-                  ),
-                  child: _PresetPreview(layout: ControllerPresetLayout(
-                    movementMode: _movementMode,
-                    visibleButtons: _visibleButtons,
-                    buttonOrder: _buttonOrder,
-                  )),
-                ),
-                const SizedBox(height: 18),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
-                      onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+                      onPressed: _saving
+                          ? null
+                          : () => Navigator.of(context).pop(false),
                       child: const Text('Cancelar'),
                     ),
                     const SizedBox(width: 12),
@@ -595,7 +615,10 @@ class _PresetCard extends StatelessWidget {
               ),
               if (isActive)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.highlightColor,
                     borderRadius: BorderRadius.circular(999),
@@ -607,29 +630,20 @@ class _PresetCard extends StatelessWidget {
           const SizedBox(height: 12),
           _PresetPreview(layout: preset.layout),
           const SizedBox(height: 12),
-          Text(preset.description),
-          const SizedBox(height: 8),
-          Text(
-            preset.bestFor,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text('Pro: ${preset.pros}'),
-          const SizedBox(height: 4),
-          Text('Obs: ${preset.cons}'),
-          const SizedBox(height: 12),
           Row(
             children: [
               FilledButton(
                 onPressed: onSelect,
+                style: FilledButton.styleFrom(
+                  backgroundColor: isActive
+                      ? AppColors.highlightColor
+                      : AppColors.textPrimary,
+                ),
                 child: Text(isActive ? 'Selecionado' : 'Usar preset'),
               ),
             ],
           ),
-          if (footer != null) ...[
-            const SizedBox(height: 8),
-            footer!,
-          ],
+          if (footer != null) ...[const SizedBox(height: 8), footer!],
         ],
       ),
     );
@@ -637,9 +651,29 @@ class _PresetCard extends StatelessWidget {
 }
 
 class _PresetPreview extends StatelessWidget {
-  const _PresetPreview({required this.layout});
+  const _PresetPreview({required this.layout, this.onReorder});
 
   final ControllerPresetLayout layout;
+  final void Function(String, String)? onReorder;
+
+  List<List<String>> _splitIntoColumns(List<String> buttons) {
+    final left = <String>[];
+    final right = <String>[];
+
+    for (final button in buttons) {
+      if (left.length <= right.length) {
+        left.add(button);
+      } else {
+        right.add(button);
+      }
+    }
+
+    if (left.length > right.length) {
+      return [right, left];
+    }
+
+    return [left, right];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -647,54 +681,158 @@ class _PresetPreview extends StatelessWidget {
         .where((buttonId) => layout.visibleButtons[buttonId] == true)
         .toList();
 
+    final columns = _splitIntoColumns(visible);
+
     return Container(
       height: 140,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         color: AppColors.screenBackground.withValues(alpha: 0.9),
-        border: Border.all(color: AppColors.textPrimary.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: AppColors.textPrimary.withValues(alpha: 0.25),
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: layout.movementMode == 'dpad'
-                  ? _PreviewDpad()
-                  : _PreviewStick(floating: layout.movementMode == 'floatingJoystick'),
+            flex: 3,
+            child: layout.movementMode == 'dpad'
+                ? _PreviewDpad()
+                : _PreviewStick(
+                    floating: layout.movementMode == 'floatingJoystick',
+                  ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'ma•net',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontFamily: 'pico',
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _PreviewCenterButton(label: '⧉'),
+                    const SizedBox(width: 4),
+                    _PreviewCenterButton(label: '≡'),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: visible
-                  .map(
-                    (buttonId) => Container(
-                      width: 42,
-                      height: 42,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.backgroundColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.textPrimary),
-                      ),
-                      child: Text(
-                        buttonId.replaceFirst('btn', ''),
-                        style: const TextStyle(
-                          fontFamily: 'pico',
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
+            flex: 3,
+            child: Row(
+              children: [
+                _PreviewColumn(buttons: columns[0], onReorder: onReorder),
+                const SizedBox(width: 4),
+                _PreviewColumn(buttons: columns[1], onReorder: onReorder),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PreviewCenterButton extends StatelessWidget {
+  const _PreviewCenterButton({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 16,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.textPrimary, width: 1),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 8, color: AppColors.textPrimary),
+      ),
+    );
+  }
+}
+
+class _PreviewColumn extends StatelessWidget {
+  const _PreviewColumn({required this.buttons, this.onReorder});
+
+  final List<String> buttons;
+  final void Function(String, String)? onReorder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: buttons.map((btnId) {
+          final box = Container(
+            width: double.infinity,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.backgroundColor,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.textPrimary, width: 1),
+            ),
+            child: Text(
+              btnId.replaceFirst('btn', ''),
+              style: const TextStyle(
+                fontSize: 10,
+                fontFamily: 'pico',
+                color: AppColors.textPrimary,
+              ),
+            ),
+          );
+
+          final content = Padding(padding: const EdgeInsets.all(2), child: box);
+
+          if (onReorder == null) {
+            return Expanded(child: content);
+          }
+
+          return Expanded(
+            child: DragTarget<String>(
+              onWillAcceptWithDetails: (details) => details.data != btnId,
+              onAcceptWithDetails: (details) => onReorder!(details.data, btnId),
+              builder: (context, candidateData, rejectedData) {
+                final isTarget = candidateData.isNotEmpty;
+                return Draggable<String>(
+                  data: btnId,
+                  feedback: Material(
+                    color: Colors.transparent,
+                    child: SizedBox(width: 60, height: 30, child: box),
+                  ),
+                  childWhenDragging: Opacity(opacity: 0.3, child: content),
+                  child: Container(
+                    foregroundDecoration: isTarget
+                        ? BoxDecoration(
+                            border: Border.all(color: Colors.green, width: 2),
+                            borderRadius: BorderRadius.circular(8),
+                          )
+                        : null,
+                    child: content,
+                  ),
+                );
+              },
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -704,27 +842,33 @@ class _PreviewDpad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget box() => Container(
-      width: 24,
-      height: 24,
+      width: 26,
+      height: 26,
       decoration: BoxDecoration(
         color: AppColors.backgroundColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.textPrimary),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.textPrimary, width: 1),
       ),
     );
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        box(),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [box(), const SizedBox(width: 4), box()],
+    return Container(
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: 82,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            box(),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [box(), box()],
+            ),
+            const SizedBox(height: 2),
+            box(),
+          ],
         ),
-        const SizedBox(height: 4),
-        box(),
-      ],
+      ),
     );
   }
 }
@@ -740,19 +884,26 @@ class _PreviewStick extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         Container(
-          width: 74,
-          height: 74,
+          width: floating ? 70 : 82,
+          height: floating ? 70 : 82,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.textPrimary),
-            color: floating
-                ? AppColors.highlightColor.withValues(alpha: 0.18)
-                : AppColors.backgroundColor,
+            borderRadius: BorderRadius.circular(floating ? 15 : 18),
+            border: Border.all(color: AppColors.textPrimary, width: 1),
+            color: floating ? AppColors.screenBackground : Colors.transparent,
+            boxShadow: floating
+                ? [
+                    BoxShadow(
+                      color: AppColors.textPrimary.withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
         ),
         Container(
-          width: 28,
-          height: 28,
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppColors.textPrimary,

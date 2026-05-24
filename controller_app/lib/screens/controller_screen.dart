@@ -45,8 +45,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     'btnRB',
     'btnLT',
     'btnRT',
-    'btnLS',
-    'btnRS',
+    'btnLSB',
+    'btnRSB',
   ];
 
   static const List<String> _defaultButtonOrder = [
@@ -58,8 +58,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     'btnRT',
     'btnLB',
     'btnLT',
-    'btnRS',
-    'btnLS',
+    'btnRSB',
+    'btnLSB',
   ];
 
   final Map<String, bool> visibleButtons = {
@@ -69,10 +69,10 @@ class _ControllerScreenState extends State<ControllerScreen>
     'btnY': true,
     'btnRB': false,
     'btnRT': false,
-    'btnRS': false,
+    'btnRSB': false,
     'btnLB': false,
     'btnLT': false,
-    'btnLS': false,
+    'btnLSB': false,
   };
   List<String> _buttonOrder = List<String>.from(_defaultButtonOrder);
 
@@ -626,16 +626,9 @@ class _ControllerScreenState extends State<ControllerScreen>
       builder: (context) {
         return OptionsPopup(
           playerFace: _playerFace,
-          movementMode: _movementMode,
-          onMovementModeChanged: (value) {
-            setState(() => _movementMode = value);
-            PreferencesService.instance.setMovementMode(value.index);
-          },
           onEnterMouseMode: () {
             unawaited(_enterMouseMode());
           },
-          onEnterEditMode: _enterEditMode,
-          onEnterFaceMode: _enterFaceMode,
           currentTheme: _currentTheme,
           onThemeChanged: _onThemeChanged,
           onDisconnectRequested: _resetConnection,
@@ -791,8 +784,14 @@ class _ControllerScreenState extends State<ControllerScreen>
           onStickRelease: _onStickRelease,
           onButtonStateChanged: _sendButton,
           onOpenOptions: _showOptionsDialog,
+          onOpenFaceEditor: _enterFaceMode,
+          onOpenEditControls: _enterEditMode,
           onRetryConnection: _retryConnection,
           onOpenQrScanner: kIsWeb ? null : _openQRScanner,
+          onMovementModeChanged: (value) {
+            setState(() => _movementMode = value);
+            PreferencesService.instance.setMovementMode(value.index);
+          },
           connectionState: _connectionState,
           status: status,
           playerFace: _playerFace,
@@ -901,9 +900,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                 )
               : null,
         ),
-        child: Stack(
-          children: [_buildResponsiveControllerFrame()],
-        ),
+        child: Stack(children: [_buildResponsiveControllerFrame()]),
       ),
     );
   }

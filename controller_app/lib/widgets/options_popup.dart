@@ -12,11 +12,7 @@ import 'player_face_indicator.dart';
 
 class OptionsPopup extends StatefulWidget {
   final PlayerFaceData playerFace;
-  final MovementMode movementMode;
-  final ValueChanged<MovementMode> onMovementModeChanged;
   final VoidCallback onEnterMouseMode;
-  final VoidCallback onEnterEditMode;
-  final VoidCallback onEnterFaceMode;
   final ColorTheme currentTheme;
   final ValueChanged<ColorTheme> onThemeChanged;
   final VoidCallback? onDisconnectRequested;
@@ -25,11 +21,7 @@ class OptionsPopup extends StatefulWidget {
   const OptionsPopup({
     super.key,
     required this.playerFace,
-    required this.movementMode,
-    required this.onMovementModeChanged,
     required this.onEnterMouseMode,
-    required this.onEnterEditMode,
-    required this.onEnterFaceMode,
     required this.currentTheme,
     required this.onThemeChanged,
     this.onDisconnectRequested,
@@ -120,25 +112,6 @@ class _OptionsPopupState extends State<OptionsPopup>
     HapticsManager.instance.setEnabled(newValue);
     if (newValue) {
       widget.onRumbleTest?.call();
-    }
-  }
-
-  void _toggleMovementMode() {
-    final nextIndex =
-        (widget.movementMode.index + 1) % MovementMode.values.length;
-    final nextMode = MovementMode.values[nextIndex];
-    widget.onMovementModeChanged(nextMode);
-    Navigator.of(context).pop();
-  }
-
-  String _getNextModeLabel(MovementMode mode) {
-    switch (mode) {
-      case MovementMode.dpad:
-        return 'Joystick Fixo';
-      case MovementMode.fixedJoystick:
-        return 'Joystick Flutuante';
-      case MovementMode.floatingJoystick:
-        return 'D-Pad';
     }
   }
 
@@ -263,43 +236,12 @@ class _OptionsPopupState extends State<OptionsPopup>
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   _OptionButton(
-                                    icon: _getNextModeIcon(widget.movementMode),
-                                    label: _getNextModeLabel(
-                                      widget.movementMode,
-                                    ),
-                                    onTap: _toggleMovementMode,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  _OptionButton(
                                     icon: _rumbleEnabled
                                         ? Icons.vibration_rounded
                                         : Icons.mobile_off_rounded,
                                     label: 'Vibracao',
                                     isActive: _rumbleEnabled,
                                     onTap: _toggleRumble,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  _OptionButton(
-                                    customIcon: PlayerFaceIndicator(
-                                      face: widget.playerFace,
-                                      size: 38,
-                                      roundedSquare: true,
-                                      borderColor: Colors.transparent,
-                                    ),
-                                    label: 'Rostinho',
-                                    onTap: () {
-                                      Navigator.of(context).pop();
-                                      widget.onEnterFaceMode();
-                                    },
-                                  ),
-                                  const SizedBox(width: 12),
-                                  _OptionButton(
-                                    icon: Icons.tune_rounded,
-                                    label: 'Botoes',
-                                    onTap: () {
-                                      Navigator.of(context).pop();
-                                      widget.onEnterEditMode();
-                                    },
                                   ),
                                   const SizedBox(width: 12),
                                   _OptionButton(

@@ -557,10 +557,6 @@ class HostApiService {
 
   Future<ControllerPreset> createCustomPreset({
     required String name,
-    required String description,
-    required String bestFor,
-    required String pros,
-    required String cons,
     required ControllerPresetLayout layout,
   }) async {
     final response = await http.post(
@@ -568,10 +564,6 @@ class HostApiService {
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
         'name': name,
-        'description': description,
-        'bestFor': bestFor,
-        'pros': pros,
-        'cons': cons,
         'layout': layout.toJson(),
       }),
     );
@@ -588,10 +580,6 @@ class HostApiService {
   Future<ControllerPreset> updateCustomPreset({
     required String presetId,
     required String name,
-    required String description,
-    required String bestFor,
-    required String pros,
-    required String cons,
     required ControllerPresetLayout layout,
   }) async {
     final response = await http.put(
@@ -599,10 +587,6 @@ class HostApiService {
       headers: {'Content-Type': 'application/json'},
       body: json.encode({
         'name': name,
-        'description': description,
-        'bestFor': bestFor,
-        'pros': pros,
-        'cons': cons,
         'layout': layout.toJson(),
       }),
     );

@@ -116,8 +116,8 @@ class _ControllerEditViewState extends State<ControllerEditView>
                 Expanded(
                   flex: 2,
                   child: ControllerModeHub(
-                    icon: Icons.tune_rounded,
-                    title: 'edit mode',
+                    icon: Icons.close_rounded,
+                    title: 'editar controles',
                     onTap: widget.onExit,
                     totalSlots: widget.totalSlots,
                     selectedPlayerIndex: widget.playerIndex,

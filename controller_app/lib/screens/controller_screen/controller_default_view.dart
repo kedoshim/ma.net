@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/player_face.dart';
+import '../../widgets/player_face_indicator.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/action_buttons.dart';
 import '../../widgets/control_button.dart' hide ButtonStateCallback;
@@ -12,14 +13,17 @@ import 'controller_screen_widgets.dart';
 
 typedef ControllerButtonStateCallback = void Function(String id, String state);
 
-class ControllerDefaultView extends StatelessWidget {
+class ControllerDefaultView extends StatefulWidget {
   const ControllerDefaultView({
     super.key,
     required this.movementMode,
+    required this.onMovementModeChanged,
     required this.onStickChanged,
     required this.onStickRelease,
     required this.onButtonStateChanged,
     required this.onOpenOptions,
+    required this.onOpenFaceEditor,
+    required this.onOpenEditControls,
     required this.onRetryConnection,
     required this.onOpenQrScanner,
     required this.connectionState,
@@ -33,10 +37,13 @@ class ControllerDefaultView extends StatelessWidget {
   });
 
   final MovementMode movementMode;
+  final ValueChanged<MovementMode> onMovementModeChanged;
   final ValueChanged<Offset> onStickChanged;
   final VoidCallback onStickRelease;
   final ControllerButtonStateCallback onButtonStateChanged;
   final VoidCallback onOpenOptions;
+  final VoidCallback onOpenFaceEditor;
+  final VoidCallback onOpenEditControls;
   final VoidCallback onRetryConnection;
   final VoidCallback? onOpenQrScanner;
   final ControllerConnectionState connectionState;
@@ -49,91 +56,215 @@ class ControllerDefaultView extends StatelessWidget {
   final List<String> buttonOrder;
 
   @override
+  State<ControllerDefaultView> createState() => _ControllerDefaultViewState();
+}
+
+class _ControllerDefaultViewState extends State<ControllerDefaultView> {
+  void _toggleMovementMode() {
+    final nextIndex =
+        (widget.movementMode.index + 1) % MovementMode.values.length;
+    final nextMode = MovementMode.values[nextIndex];
+    widget.onMovementModeChanged(nextMode);
+  }
+
+  IconData _getNextModeIcon(MovementMode mode) {
+    switch (mode) {
+      case MovementMode.dpad:
+        return Icons.control_camera_rounded;
+      case MovementMode.fixedJoystick:
+        return Icons.touch_app_rounded;
+      case MovementMode.floatingJoystick:
+        return Icons.gamepad_outlined;
+    }
+  }
+
+  String _getNextModeLabel(MovementMode mode) {
+    switch (mode) {
+      case MovementMode.dpad:
+        return 'Mudar para Joystick Fixo';
+      case MovementMode.fixedJoystick:
+        return 'Mudar para Joystick Flutuante';
+      case MovementMode.floatingJoystick:
+        return 'Mudar para D-Pad';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          flex: 3,
-          child: movementMode == MovementMode.dpad
-              ? _ControllerDpad(onButtonStateChanged: onButtonStateChanged)
-              : movementMode == MovementMode.floatingJoystick
-              ? AdaptiveJoystick(
-                  onChanged: (x, y) => onStickChanged(Offset(x, y)),
-                  onReleased: onStickRelease,
-                )
-              : Joystick(
-                  size: 220,
-                  onChanged: (x, y) => onStickChanged(Offset(x, y)),
-                  onReleased: onStickRelease,
-                ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              const Text(
-                'ma•net',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.normal,
-                  fontFamily: 'pico',
-                ),
-              ),
-              const SizedBox(height: 10),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ControllerCenterStatus(
-                          connectionState: connectionState,
-                          status: status,
-                          playerFace: playerFace,
-                          playerColor: playerColor,
-                          onRetry: onRetryConnection,
-                          onOpenQrScanner: onOpenQrScanner,
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          //Left side (movement controls)
+          Expanded(
+            flex: 12,
+            child: widget.movementMode == MovementMode.dpad
+                ? _ControllerDpad(
+                    onButtonStateChanged: widget.onButtonStateChanged,
+                  )
+                : widget.movementMode == MovementMode.floatingJoystick
+                ? AdaptiveJoystick(
+                    onChanged: (x, y) => widget.onStickChanged(Offset(x, y)),
+                    onReleased: widget.onStickRelease,
+                  )
+                : Joystick(
+                    size: 220,
+                    onChanged: (x, y) => widget.onStickChanged(Offset(x, y)),
+                    onReleased: widget.onStickRelease,
+                  ),
+          ),
+          //Center (player info, status, and central buttons)
+          Expanded(
+            flex: 7,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child:
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20),
+                        child: Container(
+                          alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: 32,
+                          height: 48,
+                          child: Material(
+                            color: AppColors.backgroundColor.withValues(
+                              alpha: 0.05,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(
+                                color: Colors.transparent,
+                                width: AppColors.borderThickness,
+                              ),
+                            ),
+                            child: IconButton(
+                              icon: Icon(
+                                _getNextModeIcon(widget.movementMode),
+                                size: 18,
+                                ),
+                              splashRadius: 10,
+                              onPressed: _toggleMovementMode,
+                              tooltip: _getNextModeLabel(widget.movementMode),
+                              ),
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ControllerPlayerIndicator(
-                      totalSlots: totalSlots,
-                      selectedPlayerIndex: playerIndex,
-                      status: status,
-                      playerFace: playerFace,
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: 14),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'ma•net',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.normal,
+                              fontFamily: 'pico',
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          InkWell(
+                            onTap: widget.onOpenFaceEditor,
+                            borderRadius: BorderRadius.circular(24),
+                            child: PlayerFaceIndicator(
+                              face: widget.playerFace,
+                              size: 64,
+                              roundedSquare: true,
+                              borderColor: AppColors.textPrimary,
+                            ),
+                          ),
+                        ]
+                      ),
+                      const SizedBox(width: 14),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20, right: 4),
+                        child: Container(
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            width: 32,
+                            height: 48,
+                            child: Material(
+                              color: AppColors.backgroundColor.withValues(
+                                alpha: 0.05,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(
+                                  color: Colors.transparent,
+                                  width: AppColors.borderThickness,
+                                ),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.edit, size: 15),
+                                splashRadius: 10,
+                                onPressed: widget.onOpenEditControls,
+                                tooltip: 'Editar controles',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ]
+                  )
                 ),
-              ),
-              const SizedBox(height: 10),
-              IconButton(
-                icon: const Icon(Icons.settings, size: 32),
-                onPressed: onOpenOptions,
-                tooltip: 'Options',
-              ),
-              const SizedBox(height: 18),
-              _CenterAction(onButtonStateChanged: onButtonStateChanged),
-            ],
+                const SizedBox(height: 14),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ControllerCenterStatus(
+                        connectionState: widget.connectionState,
+                        status: widget.status,
+                        playerFace: widget.playerFace,
+                        playerColor: null,
+                        onRetry: widget.onRetryConnection,
+                        onOpenQrScanner: widget.onOpenQrScanner,
+                      ),
+                      const SizedBox(height: 8),
+                      ControllerPlayerIndicator(
+                        totalSlots: widget.totalSlots,
+                        selectedPlayerIndex: widget.playerIndex,
+                        status: widget.status,
+                        playerFace: widget.playerFace,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                IconButton(
+                  icon: const Icon(Icons.more_horiz, size: 32),
+                  onPressed: widget.onOpenOptions,
+                  tooltip: 'Opções',
+                ),
+                _CenterAction(
+                  onButtonStateChanged: widget.onButtonStateChanged,
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 3,
-          child: ActionButtons(
-            visibleButtons: visibleButtons,
-            buttonOrder: buttonOrder,
-            onButtonStateChanged: onButtonStateChanged,
-            editMode: false,
+          //Edit button
+          //Right side (movement controls)
+          Expanded(
+            flex: 12,
+            child: ActionButtons(
+              visibleButtons: widget.visibleButtons,
+              buttonOrder: widget.buttonOrder,
+              onButtonStateChanged: widget.onButtonStateChanged,
+              editMode: false,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

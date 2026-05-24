@@ -17,6 +17,7 @@ class ActionButtons extends StatefulWidget {
   final VoidCallback? onDragEnded;
   final bool tapHapticsEnabled;
   final void Function(List<String> order)? onButtonOrderChanged;
+  final ValueChanged<bool>? onAnyButtonPressed;
 
   const ActionButtons({
     super.key,
@@ -28,6 +29,7 @@ class ActionButtons extends StatefulWidget {
     this.onDragEnded,
     this.tapHapticsEnabled = false,
     this.onButtonOrderChanged,
+    this.onAnyButtonPressed,
   });
 
   @override
@@ -47,8 +49,8 @@ class _ActionButtonsState extends State<ActionButtons> {
     'btnRT',
     'btnLB',
     'btnLT',
-    'btnRS',
-    'btnLS',
+    'btnRSB',
+    'btnLSB',
   ];
 
   @override
@@ -150,6 +152,7 @@ class _ActionButtonsState extends State<ActionButtons> {
       label: btnConfig.label,
       onStateChange: (state) =>
           widget.onButtonStateChanged(btnConfig.xinput, state),
+      onPressedChanged: widget.onAnyButtonPressed,
     );
   }
 
@@ -191,8 +194,8 @@ class _ActionButtonsState extends State<ActionButtons> {
       _ButtonConfig('btnRT', 'RT', 'RT'),
       _ButtonConfig('btnLB', 'LB', 'LB'),
       _ButtonConfig('btnLT', 'LT', 'LT'),
-      _ButtonConfig('btnRS', 'RSB', 'RSB'),
-      _ButtonConfig('btnLS', 'LSB', 'LSB'),
+      _ButtonConfig('btnRSB', 'RSB', 'RSB'),
+      _ButtonConfig('btnLSB', 'LSB', 'LSB'),
     ];
 
     try {
@@ -243,8 +246,13 @@ class _ButtonConfig {
 class _GameButton extends StatefulWidget {
   final String label;
   final void Function(String state) onStateChange;
+  final ValueChanged<bool>? onPressedChanged;
 
-  const _GameButton({required this.label, required this.onStateChange});
+  const _GameButton({
+    required this.label,
+    required this.onStateChange,
+    this.onPressedChanged,
+  });
 
   @override
   State<_GameButton> createState() => _GameButtonState();
@@ -261,6 +269,7 @@ class _GameButtonState extends State<_GameButton> {
     if (_pressed == value) return;
     setState(() => _pressed = value);
     widget.onStateChange(value ? 'down' : 'up');
+    widget.onPressedChanged?.call(value);
   }
 
   void _setHovered(bool value) {
