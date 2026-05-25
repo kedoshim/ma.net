@@ -3,154 +3,99 @@ import 'package:path/path.dart' as p;
 import 'package:server_app/screens/home_page/home_page_widget.dart';
 import 'package:server_app/services/server_process_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_colors.dart';
 import '../../services/sound_effect_service.dart';
 import 'start_page_model.dart';
-export 'start_page_model.dart';
-
-Future<bool> waitUntilServerReady(int port) async {
-  final client = HttpClient();
-
-  for (int i = 0; i < 20; i++) {
-    try {
-      final request = await client.getUrl(
-        Uri.parse('http://127.0.0.1:$port/api/server/connections'),
-      );
-
-      final response = await request.close();
-
-      if (response.statusCode == 200) return true;
-    } catch (_) {}
-
-    await Future.delayed(const Duration(milliseconds: 500));
-  }
-  return false;
-}
-
-Future<bool> isServerRunning(int port) async {
-  final client = HttpClient();
-  client.connectionTimeout = const Duration(seconds: 2);
-  try {
-    final request = await client.getUrl(
-      Uri.parse('http://127.0.0.1:$port/api/server/status'),
-    );
-    final response = await request.close().timeout(const Duration(seconds: 2));
-    return response.statusCode == 200;
-  } catch (_) {
-    return false;
-  } finally {
-    client.close();
-  }
-}
-
-Future<void> killExistingServer(int port) async {
-  try {
-    if (Platform.isWindows) {
-      final result = await Process.run('cmd', [
-        '/c',
-        'netstat -ano | findstr :$port',
-      ]);
-      final lines = result.stdout.toString().split('\n');
-      for (var line in lines) {
-        if (line.contains('LISTENING')) {
-          final parts = line.trim().split(RegExp(r'\s+'));
-          if (parts.length >= 5 && parts[1].endsWith(':$port')) {
-            final pid = parts.last;
-            await Process.run('taskkill', ['/F', '/T', '/PID', pid]);
-          }
-        }
-      }
-    } else {
-      await Process.run('sh', [
-        '-c',
-        'fuser -k $port/tcp || lsof -t -i:$port | xargs kill -9',
-      ]);
-    }
-    await Future.delayed(const Duration(seconds: 1));
-  } catch (_) {}
-}
 
 class StartPageWidget extends StatefulWidget {
   const StartPageWidget({super.key});
-
-  static String routeName = 'StartPage';
-  static String routePath = '/startPage';
 
   @override
   State<StartPageWidget> createState() => _StartPageWidgetState();
 }
 
 class _StartPageWidgetState extends State<StartPageWidget> {
-  late StartPageModel _model;
-
-  final TextEditingController _portController = TextEditingController(
-    text: '8765',
-  );
-
   final scaffoldKey = GlobalKey<ScaffoldState>();
-
-  final _serverService = ServerProcessService.instance;
-
+  late StartPageModel _model;
+  final TextEditingController _portController = TextEditingController(text: '8765');
   bool _isLoading = false;
+  final ServerProcessService _serverService = ServerProcessService.instance;
 
   @override
   void initState() {
     super.initState();
     _model = StartPageModel();
-    SoundEffectService.instance.init();
-    _loadTheme();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkDriverAndShowDialog();
-    });
   }
 
-  Future<void> _loadTheme() async {
+  Future<bool> isServerRunning(int port) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final themeName = prefs.getString('selected_theme');
-      if (themeName != null) {
-        final theme = ColorTheme.values.firstWhere(
-          (e) => e.name == themeName,
-          orElse: () => ColorTheme.blue,
+      final socket = await Socket.connect('127.0.0.1', port, timeout: const Duration(milliseconds: 500));
+      socket.destroy();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> killExistingServer(int port) async {
+    await _serverService.stopServer();
+  }
+
+  Future<bool> waitUntilServerReady(int port) async {
+    for (int i = 0; i < 20; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (await isServerRunning(port)) return true;
+    }
+    return false;
+  }
+
+  Future<String?> _showModeSelectionDialog() async {
+    return await showGeneralDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Selecao de modo',
+      transitionDuration: const Duration(milliseconds: 450),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Material(
+                  color: AppColors.screenBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    height: MediaQuery.sizeOf(context).height * 0.7,
+                    padding: const EdgeInsets.all(20),
+                    child: ModeSelectionContent(),
+                  ),
+                ),
+              ),
+            ),
+          ),
         );
-        AppColors.setTheme(theme);
-        if (mounted) {
-          setState(() {});
-        }
-      }
-    } catch (_) {}
+      },
+    );
   }
 
   Future<void> _checkDriverAndShowDialog() async {
-    if (Platform.isWindows) {
-      final isInstalled = await _isDriverInstalled();
-      if (!isInstalled && mounted) {
-        _showDriverInstallDialog();
-      }
+    final installed = await _isDriverInstalled();
+    if (!installed && mounted) {
+      _showDriverInstallDialog();
     }
   }
 
   Future<bool> _isDriverInstalled() async {
     try {
-      print('[DRIVER CHECK] Executing: sc query ViGEmBus');
-      final result = await Process.run('cmd', ['/c', 'sc query ViGEmBus']);
-      final output = result.stdout.toString() + result.stderr.toString();
-      print('[DRIVER CHECK] Exit code: ${result.exitCode}');
-      print('[DRIVER CHECK] Output:\n$output');
-
-      final lowerOutput = output.toLowerCase();
-      if (result.exitCode != 0 ||
-          output.contains('1060') ||
-          lowerOutput.contains('does not exist') ||
-          lowerOutput.contains('falha') ||
-          lowerOutput.contains('não existe') ||
-          lowerOutput.contains('stopped')) {
-        print('[DRIVER CHECK] Driver not found (service query failed).');
+      final result = await Process.run('sc', ['query', 'ViGEmBus']);
+      if (result.stdout.toString().contains('1060')) {
         return false;
       }
-      print('[DRIVER CHECK] Driver is installed.');
       return true;
     } catch (e) {
       print('[DRIVER CHECK] sc query threw an exception: $e');
@@ -313,20 +258,16 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                         try {
                           SoundEffectService.instance.playStartButton();
 
-                          final slots = int.parse(_model.dropDownValue1 ?? '4');
-                          final fixed = _model.checkboxValue ?? false;
-
-                          final modeMap = {
-                            'modo padrao': 'mixed',
-                            'd•input': 'ds4',
-                            'only x•input': 'x360',
-                          };
-
-                          final mode =
-                              modeMap[_model.dropDownValue2 ?? 'modo padrao']!;
+                          // Default start values: 4 players, unlocked (auto expand)
+                          final slots = 4;
+                          final fixed = true;
 
                           final port =
                               int.tryParse(_portController.text) ?? 8765;
+
+                          // Let user pick XInput / DInput in a friendly modal
+                          final chosen = await _showModeSelectionDialog();
+                          final mode = (chosen == 'ds4') ? 'ds4' : 'x360';
 
                           if (port < 1024 || port > 65535) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -343,14 +284,12 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                 content: Text(
                                   'Servidor anterior encontrado. Encerrando para reiniciar...',
                                 ),
-                                duration: const Duration(seconds: 2),
+                                duration: Duration(seconds: 2),
                               ),
                             );
                             await killExistingServer(port);
                           }
 
-                          // Always check if the port is bound on ANY interface (0.0.0.0),
-                          // since the Python server binds to all interfaces for LAN access.
                           try {
                             final socket = await ServerSocket.bind(
                               InternetAddress.anyIPv4,
@@ -358,8 +297,6 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                             );
                             await socket.close();
                           } catch (e) {
-                            // If it's still in use (e.g., a frozen python process that didn't respond to HTTP),
-                            // we try killing it forcefully.
                             await killExistingServer(port);
 
                             try {
@@ -387,6 +324,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                             fixed: fixed,
                             controllerMode: mode,
                           );
+
                           final isReady = await waitUntilServerReady(port);
 
                           if (!mounted) return;
@@ -399,7 +337,6 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                                 ),
                               ),
                             );
-                            // Re-trigger the driver check to immediately pop up the dialog if missing
                             await _checkDriverAndShowDialog();
                             return; // DO NOT PROGRESS TO THE HOME PAGE
                           }
@@ -412,9 +349,10 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                               ),
                               pageBuilder:
                                   (context, animation, secondaryAnimation) =>
-                                      const HomePageScreen(
+                                      HomePageScreen(
                                         host: '127.0.0.1',
-                                        port: 8765,
+                                        port: port,
+                                        initialControllerMode: mode,
                                       ),
                               transitionsBuilder:
                                   (
@@ -476,216 +414,87 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                               ),
                             ),
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.max,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Container(
-                            decoration: BoxDecoration(),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.max,
-                              children: [
-                                Container(
-                                  width: 140,
-                                  height: 50.0,
-                                  decoration: BoxDecoration(),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: [
-                                      Flexible(
-                                        flex: 2,
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.max,
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Flexible(
-                                              child: Container(
-                                                width: 40,
-                                                decoration: BoxDecoration(),
-                                                child:
-                                                    DropdownButtonFormField<
-                                                      String
-                                                    >(
-                                                      dropdownColor: AppColors
-                                                          .screenBackground,
-                                                      initialValue:
-                                                          _model
-                                                              .dropDownValue1 ??
-                                                          '4',
-                                                      items:
-                                                          [
-                                                                '1',
-                                                                '2',
-                                                                '3',
-                                                                '4',
-                                                                '5',
-                                                                '6',
-                                                                '7',
-                                                                '8',
-                                                              ]
-                                                              .map(
-                                                                (e) =>
-                                                                    DropdownMenuItem(
-                                                                      value: e,
-                                                                      child:
-                                                                          Text(
-                                                                            e,
-                                                                          ),
-                                                                    ),
-                                                              )
-                                                              .toList(),
-                                                      onChanged: (val) {
-                                                        setState(() {
-                                                          _model.dropDownValue1 =
-                                                              val;
-                                                        });
-                                                      },
-                                                      decoration:
-                                                          const InputDecoration(
-                                                            border: InputBorder
-                                                                .none,
-                                                          ),
-                                                      style: AppTheme.bodyMedium
-                                                          .copyWith(
-                                                            fontFamily: 'pico',
-                                                            letterSpacing: 0.0,
-                                                            color: AppColors
-                                                                .textPrimary,
-                                                          ),
-                                                    ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Expanded(
-                                        flex: 3,
-                                        child: Text(
-                                          'jogadores',
-                                          style: AppTheme.bodyMedium.copyWith(
-                                            fontFamily: 'pico',
-                                            letterSpacing: 0.0,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (_isLoading) return;
+                          setState(() {
+                            _isLoading = true;
+                          });
+                          try {
+                            final chosen = await _showModeSelectionDialog();
+                            final mode = (chosen == 'ds4') ? 'ds4' : 'x360';
+                            final port = int.tryParse(_portController.text) ?? 8765;
+                            if (port < 1024 || port > 65535) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Porta inválida')),
+                              );
+                              return;
+                            }
+                            final isReady = await waitUntilServerReady(port);
+                            if (!mounted) return;
+                            if (!isReady) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Não foi possível conectar ao servidor em execução.'),
                                 ),
-                                Container(
-                                  width: 100.0,
-                                  height: 50.0,
-                                  decoration: BoxDecoration(),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.max,
-                                    children: [
-                                      Theme(
-                                        data: ThemeData(
-                                          checkboxTheme: CheckboxThemeData(
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            materialTapTargetSize:
-                                                MaterialTapTargetSize
-                                                    .shrinkWrap,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(4.0),
-                                            ),
-                                          ),
-                                          unselectedWidgetColor:
-                                              AppColors.textPrimary,
-                                        ),
-                                        child: Checkbox(
-                                          value: _model.checkboxValue ??= false,
-                                          onChanged: (newValue) {
-                                            setState(() {
-                                              _model.checkboxValue = newValue;
-                                            });
-                                          },
-                                          side: BorderSide(
-                                            width: 2,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                          activeColor: AppColors.textPrimary,
-                                          checkColor:
-                                              AppColors.screenBackground,
-                                        ),
-                                      ),
-                                      Text(
-                                        'fixo',
-                                        style: AppTheme.bodyMedium.copyWith(
-                                          fontFamily: 'pico',
-                                          letterSpacing: 0.0,
-                                          color: AppColors.textPrimary,
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: 0,
-                                        child: TextFormField(
-                                          controller: _portController,
-                                          keyboardType: TextInputType.number,
-                                          style: AppTheme.bodyMedium.copyWith(
-                                            fontFamily: 'pico',
-                                            letterSpacing: 0.0,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: 130,
-                          height: 50.0,
-                          decoration: BoxDecoration(),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Container(
-                                width: 230,
-                                decoration: BoxDecoration(),
-                                child: DropdownButtonFormField<String>(
-                                  dropdownColor: AppColors.screenBackground,
-                                  initialValue:
-                                      _model.dropDownValue2 ?? 'modo padrao',
-                                  items:
-                                      ['modo padrao', 'd•input', 'only x•input']
-                                          .map(
-                                            (e) => DropdownMenuItem(
-                                              value: e,
-                                              child: Text(e),
-                                            ),
-                                          )
-                                          .toList(),
-                                  onChanged: (val) {
-                                    setState(() {
-                                      _model.dropDownValue2 = val;
-                                    });
-                                  },
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                  ),
-                                  style: AppTheme.bodyMedium.copyWith(
-                                    fontFamily: 'pico',
-                                    letterSpacing: 0.0,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
+                              );
+                              return;
+                            }
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                transitionDuration: const Duration(milliseconds: 500),
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    HomePageScreen(
+                                      host: '127.0.0.1',
+                                      port: port,
+                                      initialControllerMode: mode,
+                                    ),
+                                transitionsBuilder: (
+                                  context,
+                                  animation,
+                                  secondaryAnimation,
+                                  child,
+                                ) {
+                                  const begin = Offset(1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.easeInOut;
+                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  return SlideTransition(
+                                    position: animation.drive(tween),
+                                    child: child,
+                                  );
+                                },
                               ),
-                            ],
+                            );
+                          } finally {
+                            if (mounted) {
+                              setState(() {
+                                _isLoading = false;
+                              });
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.screenBackground,
+                          foregroundColor: AppColors.textPrimary,
+                          side: BorderSide(color: AppColors.textPrimary, width: 2.0),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+                          minimumSize: const Size(double.infinity, 48.0),
+                          elevation: 0.0,
+                        ),
+                        child: Text(
+                          'iniciar debug',
+                          style: AppTheme.titleSmall.copyWith(
+                            fontFamily: 'pico',
+                            letterSpacing: 0.0,
+                            color: AppColors.textPrimary,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -693,6 +502,175 @@ class _StartPageWidgetState extends State<StartPageWidget> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class ModeSelectionContent extends StatefulWidget {
+  @override
+  State<ModeSelectionContent> createState() => _ModeSelectionContentState();
+}
+
+class _ModeSelectionContentState extends State<ModeSelectionContent> {
+  String? _chosen;
+
+  void _select(String v) async {
+    setState(() => _chosen = v);
+    await Future.delayed(const Duration(milliseconds: 450));
+    Navigator.of(context).pop(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          'Escolha o modo de controle',
+          style: AppTheme.titleSmall.copyWith(
+            fontFamily: 'pico',
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _select('x360'),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: EdgeInsets.all(_chosen == 'x360' ? 6 : 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundColor.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _chosen == 'x360'
+                            ? AppColors.highlightColor
+                            : AppColors.textPrimary.withOpacity(0.12),
+                        width: _chosen == 'x360' ? 3 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.gamepad,
+                              size: 36,
+                              color: AppColors.textPrimary,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'x•input',
+                              style: AppTheme.titleSmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Melhor compatibilidade com jogos modernos',
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Vibração funciona • Ideal para até 4 jogadores',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppColors.textPrimary.withOpacity(0.85),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Alguns jogos podem limitar players extras',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppColors.textPrimary.withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _select('ds4'),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: EdgeInsets.all(_chosen == 'ds4' ? 6 : 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundColor.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _chosen == 'ds4'
+                            ? AppColors.highlightColor
+                            : AppColors.textPrimary.withOpacity(0.12),
+                        width: _chosen == 'ds4' ? 3 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.group,
+                              size: 36,
+                              color: AppColors.textPrimary,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'd•input',
+                              style: AppTheme.titleSmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Melhor para muitas pessoas',
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Funciona em vários jogos party/local',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppColors.textPrimary.withOpacity(0.85),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Sem vibração em alguns jogos • Compatibilidade varia',
+                          style: AppTheme.bodySmall.copyWith(
+                            color: AppColors.textPrimary.withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Toque em uma opção para continuar',
+          style: AppTheme.bodySmall.copyWith(
+            color: AppColors.textPrimary.withOpacity(0.7),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -355,7 +355,9 @@ class PresetCatalog {
   factory PresetCatalog.fromJson(Map<String, dynamic> json) {
     List<ControllerPreset> parseList(String key) {
       return (json[key] as List<dynamic>? ?? const [])
-          .map((item) => ControllerPreset.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => ControllerPreset.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
     }
 
@@ -428,6 +430,25 @@ class HostApiService {
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to unassign device');
+    }
+  }
+
+  /// Reset controllers mode without restarting the server.
+  /// Server should implement `/api/server/reset-controllers` to recreate controllers
+  /// and reassign existing players to the same slot indices.
+  Future<void> resetControllers({String? mode, int? slots, bool? fixed}) async {
+    final body = <String, dynamic>{};
+    if (mode != null) body['mode'] = mode;
+    if (slots != null) body['slots'] = slots;
+    if (fixed != null) body['fixed'] = fixed;
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/server/reset-controllers'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(body),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to reset controllers');
     }
   }
 
@@ -562,10 +583,7 @@ class HostApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/api/presets/custom'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'name': name,
-        'layout': layout.toJson(),
-      }),
+      body: json.encode({'name': name, 'layout': layout.toJson()}),
     );
 
     if (response.statusCode == 200) {
@@ -585,10 +603,7 @@ class HostApiService {
     final response = await http.put(
       Uri.parse('$baseUrl/api/presets/custom/$presetId'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'name': name,
-        'layout': layout.toJson(),
-      }),
+      body: json.encode({'name': name, 'layout': layout.toJson()}),
     );
 
     if (response.statusCode == 200) {

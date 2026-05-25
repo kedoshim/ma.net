@@ -51,3 +51,4 @@ def register_http_routes(app, services):
     app.router.add_post('/api/slots/move', services.move_handler)
     app.router.add_post('/api/slots/swap', services.swap_handler)
     app.router.add_post('/api/slots/unassign', services.unassign_handler)
+    app.router.add_post('/api/server/reset-controllers', services.reset_controllers_handler)

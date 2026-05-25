@@ -4,6 +4,10 @@ from src.core.gamepad_factory import create_gamepad
 from src.core.player_identity import normalize_identity
 from src.core.controller_presets import ControllerPresetStore
 
+import logging
+
+LOGGER = logging.getLogger(__name__)
+
 
 class ControllerManager:
     def __init__(self, config):
@@ -44,7 +48,7 @@ class ControllerManager:
                 loop = asyncio.get_running_loop()
                 loop.create_task(ws.send_json(payload))
             except Exception:
-                pass
+                LOGGER.exception("Failed to notify device %s", device_id)
 
     def broadcast_to_devices(self, payload):
         for device_id in list(self.device_ws_map.keys()):
@@ -66,12 +70,12 @@ class ControllerManager:
                 slot.gamepad.reset()
                 slot.gamepad.update()
             except Exception:
-                pass
+                LOGGER.exception("Error resetting/updating gamepad for slot %s", getattr(slot, 'slot_id', None))
 
             try:
                 del slot.gamepad
             except Exception:
-                pass
+                LOGGER.exception("Error deleting gamepad attribute for slot %s", getattr(slot, 'slot_id', None))
 
         self.slots.clear()
 
@@ -92,10 +96,12 @@ class ControllerManager:
             "presetId": identity.get("presetId"),
             "connected": True,
         }
+        LOGGER.info("Registered device %s name=%s", device_id, player_name)
 
     def unregister_device(self, device_id):
         self.connected_devices.pop(device_id, None)
         self.release_mouse_mode(device_id)
+        LOGGER.info("Unregistered device %s", device_id)
 
     def _create_empty_slot(self, index):
         gamepad, gp_type = create_gamepad(
@@ -453,3 +459,112 @@ class ControllerManager:
         slot.face_text = identity["faceText"]
         slot.face_rotation = identity["faceRotation"]
         slot.preset_id = identity.get("presetId")
+
+    def update_server_settings(self, mode: str | None = None, slots: int | None = None, fixed: bool | None = None):
+        mode_changed = mode is not None and getattr(self.config, 'controller_type', None) != mode
+
+        if fixed is not None:
+            self.config.auto_expand_slots = not fixed
+
+        if slots is not None:
+            self.config.initial_slots = slots
+            self.config.max_slots = slots
+
+        if mode_changed:
+            if mode is not None:
+                self.config.controller_type = mode
+            LOGGER.info("Controller mode changed to %s, recreating gamepads", mode)
+            self._recreate_all_gamepads(slots if slots is not None else len(self.slots))
+        elif slots is not None:
+            LOGGER.info("Resizing slots to %s", slots)
+            self._resize_slots(slots)
+
+    def _recreate_all_gamepads(self, new_slot_count: int):
+
+        LOGGER.info(f"Recreating gamepads to {new_slot_count} slots")
+
+        # Save current assignments up to new bounds
+        assignments = []
+        for i, slot in enumerate(self.slots):
+            if i < new_slot_count:
+                assignments.append((i, slot.assigned_device_id, slot.player_name))
+            else:
+                if slot.assigned_device_id:
+                    self.unassign_slot(i)
+
+        # Cleanup existing gamepads and slots
+        try:
+            self.cleanup_gamepads()
+        except Exception:
+            LOGGER.exception("Error during cleanup_gamepads")
+
+        # Recreate slots in two phases when converting to modes that may be unstable
+        # if many devices are created at once (e.g., DS4). Create first up to 4
+        # immediately, then create remaining slots sequentially with a short delay.
+        first_phase = min(new_slot_count, 4)
+        LOGGER.info(f"Creating first phase of gamepads: 0 to {first_phase - 1}")
+        for i in range(first_phase):
+            self._create_empty_slot(i)
+
+        # Create remaining slots one-by-one with a short pause to avoid driver stress
+        LOGGER.info(f"Creating second phase of gamepads: {first_phase} to {new_slot_count - 1}")
+        for i in range(first_phase, new_slot_count):
+            try:
+                time.sleep(0.35)
+            except Exception:
+                LOGGER.exception("Sleep interrupted while creating gamepads")
+            self._create_empty_slot(i)
+
+        # Reassign devices to previous slot indices
+        LOGGER.info(f"Reassigning {len(assignments)} devices to new slots")
+        for index, device_id, player_name in assignments:
+            if device_id:
+                try:
+                    self.assign_to_slot(device_id, index, player_name)
+                except Exception:
+                    LOGGER.exception("Failed to reassign device %s to slot %s", device_id, index)
+
+        # Broadcast updates to admin and devices
+        try:
+            self.broadcast_active_layout()
+        except Exception:
+            LOGGER.exception("Failed to broadcast active layout")
+
+    def _resize_slots(self, new_size: int):
+        current_size = len(self.slots)
+        if new_size == current_size:
+            return
+
+        if new_size > current_size:
+            # Add new slots dynamically
+            for i in range(current_size, new_size):
+                self._create_empty_slot(i)
+            
+            # Broadcast the new limit to connected clients incrementally 
+            # to avoid disruptive 'assigned' haptics/reconnections.
+            for slot in self.slots:
+                if slot.assigned_device_id and slot.connected:
+                    self.notify_device(slot.assigned_device_id, {
+                        "type": "slots_updated",
+                        "total_slots": new_size
+                    })
+        else:
+            # Remove excess slots cleanly and return players to pool
+            for i in range(new_size, current_size):
+                slot = self.slots[i]
+                if slot.assigned_device_id:
+                    self.unassign_slot(i)
+                try:
+                    slot.gamepad.reset()
+                    slot.gamepad.update()
+                    del slot.gamepad
+                except Exception:
+                    LOGGER.exception("Failed to reset/delete gamepad for slot %s", getattr(slot, 'slot_id', None))
+            self.slots = self.slots[:new_size]
+
+            for slot in self.slots:
+                if slot.assigned_device_id and slot.connected:
+                    self.notify_device(slot.assigned_device_id, {
+                        "type": "slots_updated",
+                        "total_slots": new_size
+                    })

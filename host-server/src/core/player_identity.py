@@ -1,4 +1,7 @@
 import random
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_FACE_TEXT = ":)"
 DEFAULT_ROTATION = "normal"
@@ -108,6 +111,8 @@ def random_identity():
 def normalize_identity(customization=None, fallback=None):
     fallback = fallback or random_identity()
     customization = customization or {}
+    if customization:
+        LOGGER.debug("Normalizing identity with customization: %s", customization)
     preset_id = customization.get("presetId") if "presetId" in customization else fallback.get("presetId")
     preset = get_preset_by_id(preset_id)
     color = customization.get("color")

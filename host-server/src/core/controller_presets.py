@@ -1,6 +1,9 @@
 import json
+import logging
 from copy import deepcopy
 from pathlib import Path
+
+LOGGER = logging.getLogger(__name__)
 
 
 BUTTON_ORDER = [
@@ -135,6 +138,7 @@ class ControllerPresetStore:
         try:
             payload = json.loads(self.storage_path.read_text(encoding="utf-8"))
         except Exception:
+            LOGGER.exception("Failed to load controller presets from %s", self.storage_path)
             return
 
         custom_items = payload.get("customPresets", [])
@@ -153,10 +157,13 @@ class ControllerPresetStore:
             "activePresetId": self._active_preset_id,
             "customPresets": list(self._custom.values()),
         }
-        self.storage_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        try:
+            self.storage_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            LOGGER.exception("Failed to save controller presets to %s", self.storage_path)
 
     @property
     def all_presets_by_id(self):
@@ -221,6 +228,7 @@ class ControllerPresetStore:
             raise KeyError(preset_id)
         self._active_preset_id = preset_id
         self._save()
+        LOGGER.info("Active controller preset set: %s", preset_id)
         return self.get_active_preset()
 
     def create_custom_preset(self, payload):
@@ -230,6 +238,7 @@ class ControllerPresetStore:
         normalized = self._normalize_custom_preset(payload)
         self._custom[preset_id] = normalized
         self._save()
+        LOGGER.info("Created custom controller preset: %s", preset_id)
         return deepcopy(normalized)
 
     def update_custom_preset(self, preset_id, payload):
@@ -242,6 +251,7 @@ class ControllerPresetStore:
         normalized = self._normalize_custom_preset(merged)
         self._custom[preset_id] = normalized
         self._save()
+        LOGGER.info("Updated custom controller preset: %s", preset_id)
         return deepcopy(normalized)
 
     def delete_custom_preset(self, preset_id):
@@ -251,4 +261,5 @@ class ControllerPresetStore:
         if self._active_preset_id == preset_id:
             self._active_preset_id = "builtin-simple-shoulder"
         self._save()
+        LOGGER.info("Deleted custom controller preset: %s", preset_id)
         return self.get_active_preset()

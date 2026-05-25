@@ -3,9 +3,11 @@ import sys
 import ctypes
 from ctypes import wintypes
 import logging
+import subprocess
+import time
 import vgamepad as vg
 
-LOG = logging.getLogger("piko-proto")
+LOG = logging.getLogger(__name__)
 
 
 def count_xinput_connected():
@@ -25,7 +27,7 @@ def count_xinput_connected():
             xinput = ctypes.WinDLL(name)
             break
         except Exception:
-            pass
+            LOG.debug("XInput DLL not found: %s", name)
 
     if xinput is None:
         return 0
@@ -35,6 +37,7 @@ def count_xinput_connected():
         XInputGetState.argtypes = [wintypes.DWORD, ctypes.c_void_p]
         XInputGetState.restype = wintypes.DWORD
     except Exception:
+        LOG.exception("Failed to bind XInputGetState")
         return 0
 
     connected = 0
@@ -46,9 +49,48 @@ def count_xinput_connected():
             if res == 0:
                 connected += 1
         except Exception:
-            pass
+            LOG.debug("XInputGetState call failed for index %d", i)
 
     return connected
+
+
+def probe_gamepad_type(gamepad_type: str, timeout: float = 5.0) -> bool:
+    """
+    Probe in a subprocess whether creating a gamepad of `gamepad_type` succeeds.
+    This isolates native crashes to the child process and prevents the main
+    server from dying when a gamepad creation would trigger a native fault.
+    """
+    cmd = [sys.executable, "-c"]
+    if gamepad_type == "ds4":
+        code = "import vgamepad as vg; g=vg.VDS4Gamepad(); print('ok')"
+    else:
+        code = "import vgamepad as vg; g=vg.VX360Gamepad(); print('ok')"
+
+    try:
+        proc = subprocess.run(cmd + [code], capture_output=True, timeout=timeout)
+        return proc.returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
+    except Exception:
+        LOG.exception("Probe subprocess failed for gamepad_type=%s", gamepad_type)
+        return False
+
+
+class NullGamepad:
+    """Fallback no-op gamepad used when real gamepad creation is unsafe.
+
+    Methods match those used by the codebase (`reset`, `update`,
+    `register_notification`) so the rest of the system can continue
+    functioning without native handles.
+    """
+    def reset(self):
+        return
+
+    def update(self):
+        return
+
+    def register_notification(self, callback_function=None):
+        return
 
 async def notify_rumble(manager, slot, large, small):
     """
@@ -77,7 +119,7 @@ async def notify_rumble(manager, slot, large, small):
     strong = _norm(large)
     weak = _norm(small)
 
-    LOG.info("notify_rumble: device=%s large=%s small=%s", device_id, large, small)
+    LOG.debug("notify_rumble: device=%s large=%s small=%s", device_id, large, small)
 
     # Throttle: minimum interval between sends per-slot (seconds)
     min_interval = 0.15  # Approx 6-7 Hz to avoid network flooding while maintaining state
@@ -124,7 +166,7 @@ async def notify_rumble(manager, slot, large, small):
         slot.last_rumble_strong = strong
         slot.last_rumble_weak = weak
     except Exception as e:
-        LOG.error("Failed rumble notify: %s", e)
+        LOG.exception("Failed rumble notify for device=%s", device_id)
 
 
 def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loop, slot_index: int):
@@ -140,13 +182,13 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
             return
 
         try:
-            LOG.info('rumble_callback: slot=%s large_motor=%s small_motor=%s', slot.slot_id, large_motor, small_motor)
+            # LOG.info('rumble_callback: slot=%s large_motor=%s small_motor=%s', slot.slot_id, large_motor, small_motor)
             asyncio.run_coroutine_threadsafe(
                 notify_rumble(manager, slot, large_motor, small_motor),
                 main_loop
             )
         except Exception as e:
-            LOG.error("Rumble callback failed: %s", e)
+            LOG.exception("Rumble callback failed for slot=%s", getattr(slot, 'slot_id', None))
 
     gamepad_type = config_type
 
@@ -160,17 +202,27 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
             gamepad_type = "x360"
 
     if gamepad_type == "ds4":
+        # Probe creation in a child process first to avoid native crashes
+        ok = probe_gamepad_type("ds4")
+        if not ok:
+            LOG.error("Probe failed: DS4 gamepad creation is unsafe on this system")
+            # Return a NullGamepad to keep the server alive; callers should
+            # handle the fact that rumble/notifications won't work for this slot.
+            return NullGamepad(), "ds4"
+
         try:
             gamepad = vg.VDS4Gamepad()
-        except Exception as e:
-            LOG.error("Failed to create DS4 gamepad: %s", e)
-            raise
+        except Exception:
+            LOG.exception("Failed to create DS4 gamepad after probe")
+            # Fallback to NullGamepad on unexpected exception
+            return NullGamepad(), "ds4"
     else:
         try:
             gamepad = vg.VX360Gamepad()
-        except Exception as e:
-            LOG.error("Failed to create X360 gamepad: %s", e)
-            raise
+        except Exception:
+            LOG.exception("Failed to create X360 gamepad")
+            # X360 creation is generally safer; if it fails, return NullGamepad
+            return NullGamepad(), "x360"
 
     gamepad.register_notification(
         callback_function=rumble_callback

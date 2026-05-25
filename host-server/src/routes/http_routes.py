@@ -265,3 +265,25 @@ class HTTPRoutes:
         await notify_device_unassigned(self.manager, device_id)
         self.admin_panel.broadcast_update()
         return web.json_response({'success': True})
+
+    async def reset_controllers_handler(self, request):
+        data = await request.json()
+        mode = data.get('mode')
+        slots = data.get('slots')
+        fixed = data.get('fixed')
+
+        if mode is not None and mode not in ('x360', 'ds4', 'mixed'):
+            return web.json_response({'success': False, 'code': 'invalid_mode'}, status=400)
+
+        # When switching modes, the system will enforce a uniform controller
+        # scheme (no mixed types). The manager will recreate gamepads and
+        # perform staged creation to reduce driver stress.
+
+        try:
+            self.manager.update_server_settings(mode=mode, slots=slots, fixed=fixed)
+            # Notify admin UI about changes
+            self.admin_panel.broadcast_update()
+            return web.json_response({'success': True})
+        except Exception as e:
+            LOG.error('Failed to update server settings: %s', e)
+            return web.json_response({'success': False, 'code': 'update_failed'}, status=500)

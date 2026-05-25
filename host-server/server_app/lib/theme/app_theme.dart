@@ -23,6 +23,11 @@ class AppTheme {
     color: primaryText,
   );
 
+  static TextStyle bodySmall = const TextStyle(
+    fontSize: 14,
+    color: primaryText,
+  );
+
   static ThemeData get theme => ThemeData(
     primaryColor: primaryText,
     scaffoldBackgroundColor: primaryBackground,

@@ -1,38 +1,4 @@
 {
-  "activePresetId": "builtin-simple-shoulder",
-  "customPresets": [
-    {
-      "id": "user-bc019975ab594da2a65751d6e7fe372e",
-      "name": "Meu preset 1",
-      "category": "user",
-      "isBuiltIn": false,
-      "layout": {
-        "movementMode": "dpad",
-        "visibleButtons": {
-          "btnY": true,
-          "btnB": true,
-          "btnX": true,
-          "btnA": true,
-          "btnRB": true,
-          "btnRT": false,
-          "btnLB": false,
-          "btnLT": false,
-          "btnRSB": false,
-          "btnLSB": false
-        },
-        "buttonOrder": [
-          "btnY",
-          "btnB",
-          "btnX",
-          "btnRB",
-          "btnA",
-          "btnRT",
-          "btnLB",
-          "btnLT",
-          "btnRSB",
-          "btnLSB"
-        ]
-      }
-    }
-  ]
+  "activePresetId": "builtin-full",
+  "customPresets": []
 }

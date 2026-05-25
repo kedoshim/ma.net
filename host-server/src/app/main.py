@@ -3,6 +3,8 @@ from pathlib import Path
 
 from src.app.config import ServerConfig
 from src.app.server import run_server
+from src.core.logging_config import setup_logging
+import logging
 
 
 def parse_args():
@@ -58,6 +60,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # Initialize logging early so core modules emit structured logs
+    setup_logging(logging.DEBUG if args.debug else logging.INFO)
 
     config = ServerConfig(
         web_page_static_path=args.static_path,

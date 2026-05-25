@@ -1,7 +1,6 @@
 import logging
 
-logging.basicConfig(level=logging.INFO)
-LOG = logging.getLogger("slot_manager")
+LOG = logging.getLogger(__name__)
 
 async def notify_device_slot(manager, device_id):
     slot = manager.get_slot_by_device(device_id)

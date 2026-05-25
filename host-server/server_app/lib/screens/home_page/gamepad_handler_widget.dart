@@ -41,6 +41,7 @@ class AdaptiveStageLayout extends StatelessWidget {
   final bool isLoadingDiagnostics;
   final Future<void> Function(String connectionId) onSelectConnection;
   final Future<void> Function() onRefreshDiagnostics;
+  final Widget? lobbyToolbar;
 
   const AdaptiveStageLayout({
     super.key,
@@ -54,6 +55,7 @@ class AdaptiveStageLayout extends StatelessWidget {
     required this.isLoadingDiagnostics,
     required this.onSelectConnection,
     required this.onRefreshDiagnostics,
+    this.lobbyToolbar,
   });
 
   @override
@@ -73,6 +75,7 @@ class AdaptiveStageLayout extends StatelessWidget {
             isLoadingDiagnostics: isLoadingDiagnostics,
             onSelectConnection: onSelectConnection,
             onRefreshDiagnostics: onRefreshDiagnostics,
+            lobbyToolbar: lobbyToolbar,
           );
         } else {
           return CompactStageLayout(
@@ -86,6 +89,7 @@ class AdaptiveStageLayout extends StatelessWidget {
             isLoadingDiagnostics: isLoadingDiagnostics,
             onSelectConnection: onSelectConnection,
             onRefreshDiagnostics: onRefreshDiagnostics,
+            lobbyToolbar: lobbyToolbar,
           );
         }
       },
@@ -104,6 +108,7 @@ class WideStageLayout extends StatelessWidget {
   final bool isLoadingDiagnostics;
   final Future<void> Function(String connectionId) onSelectConnection;
   final Future<void> Function() onRefreshDiagnostics;
+  final Widget? lobbyToolbar;
 
   const WideStageLayout({
     super.key,
@@ -117,6 +122,7 @@ class WideStageLayout extends StatelessWidget {
     required this.isLoadingDiagnostics,
     required this.onSelectConnection,
     required this.onRefreshDiagnostics,
+    this.lobbyToolbar,
   });
 
   @override
@@ -130,17 +136,32 @@ class WideStageLayout extends StatelessWidget {
         final leftWidth = totalWidth * 0.75;
         final rightWidth = totalWidth * 0.25;
 
-        const columns = 4;
-        final rows = (math.max(4, state.slots.length) / columns).ceil();
+        final columns = state.slots.length > 12
+            ? 8
+            : (state.slots.length > 8 ? 6 : 6);
+        final rows = (math.max(columns, state.slots.length) / columns).ceil();
 
         final widthFactor = columns + (columns - 1) / 8.0;
-        // +1.5 logic reserves ample room vertically for the DevicePoolArea
-        final heightFactor = rows + (rows - 1) / 8.0 + 0.95;
+        // +1.35 logic reserves ample room vertically for the DevicePoolArea and toolbar
+        // and prevents small vertical overflows at the bottom.
+        final heightFactor = rows + (rows - 1) / 8.0 + 1.35;
 
         final slotSize = math
             .min(leftWidth / widthFactor, totalHeight / heightFactor)
             .clamp(40.0, 400.0);
         final scale = UIScale(slotSize);
+
+        // Stable, independent scale for the QR panel, decoupled from slot counts
+        final qrScaleSize = math
+            .min(rightWidth, totalHeight * 0.4)
+            .clamp(180.0, 260.0);
+        final qrScale = UIScale(qrScaleSize);
+
+        // Add a 2.0px epsilon to prevent premature wrapping due to float rounding
+        final contentWidth =
+            scale.slot * columns + scale.eighth / 2 * (columns - 1) + 2.0;
+        final gridHeight =
+            scale.slot * rows + scale.eighth / 2 * (rows - 1) + 2.0;
 
         return Row(
           children: [
@@ -151,15 +172,24 @@ class WideStageLayout extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    width:
-                        scale.slot * columns + scale.eighth / 2 * (columns - 1),
+                    width: contentWidth,
                     child: DevicePoolArea(scale: scale),
                   ),
-                  SizedBox(height: scale.eighth),
+                  if (lobbyToolbar != null) ...[
+                    SizedBox(height: scale.eighth / 3),
+                    SizedBox(
+                      width: contentWidth,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: lobbyToolbar!,
+                      ),
+                    ),
+                    SizedBox(height: scale.eighth / 3),
+                  ] else
+                    SizedBox(height: scale.eighth),
                   SizedBox(
-                    height: scale.slot * rows + scale.eighth / 2 * (rows - 1),
-                    width:
-                        scale.slot * columns + scale.eighth / 2 * (columns - 1),
+                    height: gridHeight,
+                    width: contentWidth,
                     child: ControllerSlotsGrid(scale: scale),
                   ),
                 ],
@@ -168,7 +198,7 @@ class WideStageLayout extends StatelessWidget {
             SizedBox(
               width: rightWidth,
               child: Padding(
-                padding: EdgeInsets.only(left: scale.eighth),
+                padding: const EdgeInsets.only(left: 24.0),
                 child: QRCodePanel(
                   connectionSnapshot: connectionSnapshot,
                   diagnosticsSnapshot: diagnosticsSnapshot,
@@ -178,7 +208,7 @@ class WideStageLayout extends StatelessWidget {
                   api: api,
                   isLoadingConnection: isLoadingConnections,
                   isLoadingDiagnostics: isLoadingDiagnostics,
-                  scale: scale,
+                  scale: qrScale,
                   onSelectConnection: onSelectConnection,
                   onRefreshDiagnostics: onRefreshDiagnostics,
                 ),
@@ -202,6 +232,7 @@ class CompactStageLayout extends StatelessWidget {
   final bool isLoadingDiagnostics;
   final Future<void> Function(String connectionId) onSelectConnection;
   final Future<void> Function() onRefreshDiagnostics;
+  final Widget? lobbyToolbar;
 
   const CompactStageLayout({
     super.key,
@@ -215,6 +246,7 @@ class CompactStageLayout extends StatelessWidget {
     required this.isLoadingDiagnostics,
     required this.onSelectConnection,
     required this.onRefreshDiagnostics,
+    this.lobbyToolbar,
   });
 
   @override
@@ -225,11 +257,15 @@ class CompactStageLayout extends StatelessWidget {
         final totalWidth = constraints.maxWidth;
         final totalHeight = constraints.maxHeight;
 
-        const columns = 4;
-        final rows = (math.max(4, state.slots.length) / columns).ceil();
+        final columns = state.slots.length > 16
+            ? 8
+            : (state.slots.length > 8 ? 6 : 4);
+        final rows = (math.max(columns, state.slots.length) / columns).ceil();
 
         final widthFactor = columns + (columns - 1) / 8.0;
-        final heightFactor = rows + (rows - 1) / 8.0 + 1.5;
+        // +1.75 logic reserves ample room vertically for the DevicePoolArea and toolbar
+        // and prevents small vertical overflows at the bottom.
+        final heightFactor = rows + (rows - 1) / 8.0 + 1.75;
 
         final availableHeight =
             totalHeight * 0.7; // Lower 70% available for interactive slots/pool
@@ -238,13 +274,25 @@ class CompactStageLayout extends StatelessWidget {
             .clamp(40.0, 400.0);
         final scale = UIScale(slotSize);
 
+        // Stable, independent scale for the QR panel, decoupled from slot counts
+        final qrScaleSize = math
+            .min(totalWidth, totalHeight * 0.3)
+            .clamp(160.0, 240.0);
+        final qrScale = UIScale(qrScaleSize);
+
+        // Add a 2.0px epsilon to prevent premature wrapping due to float rounding
+        final contentWidth =
+            scale.slot * columns + scale.eighth / 2 * (columns - 1) + 2.0;
+        final gridHeight =
+            scale.slot * rows + scale.eighth / 2 * (rows - 1) + 2.0;
+
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SizedBox(
               height: totalHeight * 0.3,
               child: Padding(
-                padding: EdgeInsets.only(bottom: scale.quarter),
+                padding: const EdgeInsets.only(bottom: 24.0),
                 child: QRCodePanel(
                   connectionSnapshot: connectionSnapshot,
                   diagnosticsSnapshot: diagnosticsSnapshot,
@@ -254,20 +302,31 @@ class CompactStageLayout extends StatelessWidget {
                   api: api,
                   isLoadingConnection: isLoadingConnections,
                   isLoadingDiagnostics: isLoadingDiagnostics,
-                  scale: scale,
+                  scale: qrScale,
                   onSelectConnection: onSelectConnection,
                   onRefreshDiagnostics: onRefreshDiagnostics,
                 ),
               ),
             ),
             SizedBox(
-              width: scale.slot * columns + scale.eighth / 2 * (columns - 1),
+              width: contentWidth,
               child: DevicePoolArea(scale: scale),
             ),
-            SizedBox(height: scale.quarter),
+            if (lobbyToolbar != null) ...[
+              SizedBox(height: scale.eighth / 2),
+              SizedBox(
+                width: contentWidth,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: lobbyToolbar!,
+                ),
+              ),
+              SizedBox(height: scale.eighth / 2),
+            ] else
+              SizedBox(height: scale.quarter),
             SizedBox(
-              height: scale.slot * rows + scale.eighth / 2 * (rows - 1),
-              width: scale.slot * columns + scale.eighth / 2 * (columns - 1),
+              height: gridHeight,
+              width: contentWidth,
               child: ControllerSlotsGrid(scale: scale),
             ),
           ],
@@ -415,17 +474,6 @@ class ControllerSlotWidget extends StatelessWidget {
                           ),
                         ),
                 ),
-              Positioned(
-                top: scale.eighth / 2,
-                right: scale.eighth / 2,
-                child: Text(
-                  slotModel.type ?? 'x360',
-                  style: AppTheme.bodyMedium.copyWith(
-                    fontFamily: 'pico',
-                    fontSize: scale.eighth,
-                  ),
-                ),
-              ),
               Positioned(
                 top: scale.eighth / 2,
                 left: scale.eighth / 2,
