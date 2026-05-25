@@ -66,16 +66,12 @@ class ControllerCenterStatus extends StatelessWidget {
     required this.status,
     required this.playerFace,
     required this.playerColor,
-    required this.onRetry,
-    this.onOpenQrScanner,
   });
 
   final ControllerConnectionState connectionState;
   final String status;
   final PlayerFaceData playerFace;
   final Color? playerColor;
-  final VoidCallback onRetry;
-  final VoidCallback? onOpenQrScanner;
 
   @override
   Widget build(BuildContext context) {
@@ -91,38 +87,13 @@ class ControllerCenterStatus extends StatelessWidget {
     }
 
     if (connectionState == ControllerConnectionState.disconnected) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'desconectado',
-            style: TextStyle(
-              fontSize: 18,
-              color: AppColors.textPrimary,
-              fontFamily: 'pico',
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: onRetry,
-            child: const Icon(
-              Icons.refresh,
-              color: AppColors.textPrimary,
-              size: 24,
-            ),
-          ),
-          if (!kIsWeb && onOpenQrScanner != null) ...[
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: onOpenQrScanner,
-              child: const Icon(
-                Icons.qr_code_scanner,
-                color: AppColors.textPrimary,
-                size: 24,
-              ),
-            ),
-          ],
-        ],
+      return const Text(
+        'desconectado',
+        style: TextStyle(
+          fontSize: 18,
+          color: AppColors.textPrimary,
+          fontFamily: 'pico',
+        ),
       );
     }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../models/player_face.dart';
@@ -124,11 +125,11 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                   fit: BoxFit.scaleDown,
                   child:
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(top: 20),
+                        padding: const EdgeInsets.only(top: 0),
                         child: Container(
                           alignment: Alignment.topCenter,
                         child: SizedBox(
@@ -186,7 +187,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                       ),
                       const SizedBox(width: 14),
                       Padding(
-                        padding: const EdgeInsets.only(top: 20, right: 4),
+                        padding: const EdgeInsets.only(top: 0, right: 4),
                         child: Container(
                           alignment: Alignment.topCenter,
                           child: SizedBox(
@@ -227,16 +228,40 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                         status: widget.status,
                         playerFace: widget.playerFace,
                         playerColor: null,
-                        onRetry: widget.onRetryConnection,
-                        onOpenQrScanner: widget.onOpenQrScanner,
                       ),
                       const SizedBox(height: 8),
-                      ControllerPlayerIndicator(
-                        totalSlots: widget.totalSlots,
-                        selectedPlayerIndex: widget.playerIndex,
-                        status: widget.status,
-                        playerFace: widget.playerFace,
-                      ),
+                      if (widget.connectionState == ControllerConnectionState.disconnected)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              onTap: widget.onRetryConnection,
+                              child: const Icon(
+                                Icons.refresh,
+                                color: AppColors.textPrimary,
+                                size: 24,
+                              ),
+                            ),
+                            if (!kIsWeb && widget.onOpenQrScanner != null) ...[
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: widget.onOpenQrScanner,
+                                child: const Icon(
+                                  Icons.qr_code_scanner,
+                                  color: AppColors.textPrimary,
+                                  size: 24,
+                                ),
+                              ),
+                            ],
+                          ],
+                        )
+                      else
+                        ControllerPlayerIndicator(
+                          totalSlots: widget.totalSlots,
+                          selectedPlayerIndex: widget.playerIndex,
+                          status: widget.status,
+                          playerFace: widget.playerFace,
+                        ),
                     ],
                   ),
                 ),
