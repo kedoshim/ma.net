@@ -12,6 +12,12 @@ class AppTheme {
     color: primaryText,
   );
 
+  static TextStyle titleMedium = const TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w500,
+    color: primaryText,
+  );
+
   static TextStyle titleSmall = const TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w500,
@@ -33,8 +39,9 @@ class AppTheme {
     scaffoldBackgroundColor: primaryBackground,
     textTheme: TextTheme(
       titleLarge: titleLarge,
-      titleSmall: titleSmall,
+      titleMedium: titleMedium,
       bodyMedium: bodyMedium,
+      bodySmall: bodySmall,
     ),
   );
 }

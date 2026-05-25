@@ -138,7 +138,7 @@ class WideStageLayout extends StatelessWidget {
 
         final columns = state.slots.length > 12
             ? 8
-            : (state.slots.length > 8 ? 6 : 6);
+            : (state.slots.length > 8 ? 6 : (state.slots.length > 4 ? 6 : 4));
         final rows = (math.max(columns, state.slots.length) / columns).ceil();
 
         final widthFactor = columns + (columns - 1) / 8.0;

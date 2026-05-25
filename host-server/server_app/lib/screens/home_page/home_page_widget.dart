@@ -170,12 +170,20 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                 padding: const EdgeInsets.all(24.0),
                 child: Material(
                   color: AppColors.screenBackground,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
+                  clipBehavior: Clip.antiAlias,
                   child: Container(
-                    width: double.infinity,
-                    height: MediaQuery.sizeOf(context).height * 0.7,
-                    padding: const EdgeInsets.all(20),
-                    child: ModeSelectionContent(),
+                    width: MediaQuery.sizeOf(context).width * 0.85,
+                    height: MediaQuery.sizeOf(context).height * 0.85,
+                    constraints: const BoxConstraints(
+                      maxWidth: 1000,
+                      maxHeight: 750,
+                    ),
+                    padding: const EdgeInsets.all(32),
+                    child: ModeSelectionContent(
+                      isMandatory: false,
+                      initialMode: _controllerMode,
+                    ),
                   ),
                 ),
               ),
@@ -255,7 +263,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
     // Base layout pressure on actual row count, not raw player count,
     // so horizontal clustering only updates when a new row is formed.
-    int columns = _slots > 12 ? 8 : (_slots > 8 ? 6 : 6);
+    int columns = _slots > 12 ? 8 : (_slots > 8 ? 6 : (_slots > 4 ? 6 : 4));
     int rows = (_slots > 0 ? (_slots / columns).ceil() : 1);
 
     double dynamicHorizontalPadding = 50.0;
@@ -543,7 +551,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         if (_controllerMode == 'x360' &&
                                             newSlots > 4) {
                                           _addAlert(
-                                            'Alguns jogos podem não suportar mais de 4 controles XInput. Se tiver problemas, tente DInput.',
+                                            'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
                                             isError: false,
                                           );
                                         }
