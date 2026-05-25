@@ -27,32 +27,99 @@ class ControllerPlayerIndicator extends StatelessWidget {
         ? selectedPlayerIndex! - 1
         : null;
 
+    if (totalSlots > 12) {
+      final pLabel = selectedPlayerIndex != null
+          ? 'p$selectedPlayerIndex'
+          : 'p?';
+      return AnimatedOpacity(
+        opacity: status == 'Conectado' ? 1.0 : 0.4,
+        duration: const Duration(milliseconds: 180),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            border: Border.all(
+              color: AppColors.textPrimary,
+              width: AppColors.borderThickness,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (status == 'Conectado') ...[
+                PlayerFaceIndicator(
+                  face: playerFace,
+                  size: 16,
+                  roundedSquare: true,
+                  borderColor: AppColors.textPrimary,
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                pLabel,
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 18,
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = totalSlots <= 4 ? (totalSlots > 0 ? totalSlots : 1) : 4;
-        final rows = (totalSlots / columns).ceil();
-        final squareSize = ((constraints.maxWidth - (columns * 8)) / columns)
-            .clamp(12.0, 22.0);
+        final int safeTotal = totalSlots > 0 ? totalSlots : 1;
+        final int columns = safeTotal > 6 ? 6 : safeTotal;
+        const double spacing = 6.0;
+        const double runSpacing = 6.0;
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(rows, (rowIndex) {
-            final rowItemCount = (rowIndex == rows - 1)
-                ? totalSlots - (rowIndex * columns)
-                : columns;
+        final double maxSquareSize = constraints.maxWidth.isFinite
+            ? ((constraints.maxWidth - ((columns - 1) * spacing)) / columns)
+            : 22.0;
 
-            return Padding(
-              padding: EdgeInsets.only(bottom: rowIndex < rows - 1 ? 6.0 : 0),
-              child: _IndicatorRow(
-                selectedIndex: selectedIndex,
-                offset: rowIndex * columns,
-                count: rowItemCount,
-                squareSize: squareSize,
-                status: status,
-                playerFace: playerFace,
-              ),
-            );
-          }),
+        final double squareSize = maxSquareSize.clamp(12.0, 22.0);
+        final double expectedWidth =
+            columns * squareSize + (columns - 1) * spacing;
+
+        return SizedBox(
+          width: expectedWidth,
+          child: Wrap(
+            alignment: WrapAlignment.start,
+            spacing: spacing,
+            runSpacing: runSpacing,
+            children: List.generate(safeTotal, (index) {
+              final isActive = selectedIndex == index;
+
+              return AnimatedOpacity(
+                opacity: isActive && status == 'Conectado' ? 1 : 0.4,
+                duration: const Duration(milliseconds: 180),
+                child: isActive && status == 'Conectado'
+                    ? PlayerFaceIndicator(
+                        face: playerFace,
+                        size: squareSize,
+                        roundedSquare: true,
+                        borderColor: AppColors.textPrimary,
+                      )
+                    : Container(
+                        width: squareSize,
+                        height: squareSize,
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          border: Border.all(
+                            color: AppColors.textPrimary,
+                            width: AppColors.borderThickness,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+              );
+            }),
+          ),
         );
       },
     );
@@ -212,8 +279,8 @@ class ControllerModeHub extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          width: 96,
+        Container(
+          constraints: const BoxConstraints(maxWidth: 180),
           child: ControllerPlayerIndicator(
             totalSlots: totalSlots,
             selectedPlayerIndex: selectedPlayerIndex,
@@ -333,62 +400,6 @@ class MultipleHostsOverlay extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _IndicatorRow extends StatelessWidget {
-  const _IndicatorRow({
-    required this.selectedIndex,
-    required this.offset,
-    required this.count,
-    required this.squareSize,
-    required this.status,
-    required this.playerFace,
-  });
-
-  final int? selectedIndex;
-  final int offset;
-  final int count;
-  final double squareSize;
-  final String status;
-  final PlayerFaceData playerFace;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(count, (index) {
-        final position = offset + index;
-        final isActive = selectedIndex == position;
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: AnimatedOpacity(
-            opacity: isActive && status == 'Conectado' ? 1 : 0.4,
-            duration: const Duration(milliseconds: 180),
-            child: isActive && status == 'Conectado'
-                ? PlayerFaceIndicator(
-                    face: playerFace,
-                    size: squareSize,
-                    roundedSquare: true,
-                    borderColor: AppColors.textPrimary,
-                  )
-                : Container(
-                    width: squareSize,
-                    height: squareSize,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      border: Border.all(
-                        color: AppColors.textPrimary,
-                        width: AppColors.borderThickness,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-          ),
-        );
-      }),
     );
   }
 }
