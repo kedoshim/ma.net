@@ -7,16 +7,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 BUTTON_ORDER = [
+    "RSB",
+    "LSB",
+    "LT",
+    "RT",
+    "LB",
+    "RB",
     "Y",
     "B",
     "X",
     "A",
-    "RB",
-    "RT",
-    "LB",
-    "LT",
-    "RSB",
-    "LSB",
 ]
 
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +15,7 @@ import '../../services/sound_effect_service.dart';
 import '../../services/startup_connection_pipeline.dart';
 import '../start_page/start_page_widget.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/preset_selector_dialog.dart';
+import '../../widgets/layout_selector_widget.dart';
 import '../../widgets/server_options_popup.dart';
 
 class HomePageScreen extends StatelessWidget {
@@ -217,6 +218,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     }
   }
 
+  // ignore: unused_element
   Widget _buildPresetTooltip(
     String presetId,
     String label,
@@ -329,74 +331,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 24),
-                        if (_presetCatalog != null)
-                          Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.backgroundColor.withValues(
-                                alpha: 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: AppColors.textPrimary.withValues(
-                                  alpha: 0.2,
-                                ),
-                              ),
-                            ),
-                            padding: const EdgeInsets.all(4),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildPresetTooltip(
-                                  'builtin-simple-shoulder',
-                                  'Simple + Shoulder',
-                                  _presetCatalog!,
-                                ),
-                                _buildPresetTooltip(
-                                  'builtin-simple-trigger',
-                                  'Simple + Trigger',
-                                  _presetCatalog!,
-                                ),
-                                _buildPresetTooltip(
-                                  'builtin-full',
-                                  'Complete',
-                                  _presetCatalog!,
-                                ),
-                                const SizedBox(width: 4),
-                                InkWell(
-                                  onTap: () async {
-                                    await showDialog(
-                                      context: context,
-                                      builder: (context) =>
-                                          PresetSelectorDialog(
-                                            api: _api,
-                                            brandingModeListenable:
-                                                _brandingModeNotifier,
-                                          ),
-                                    );
-                                    _loadPresets();
-                                  },
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(16),
-                                      color: AppColors.backgroundColor
-                                          .withValues(alpha: 0.2),
-                                    ),
-                                    child: const Icon(
-                                      Icons.add_rounded,
-                                      size: 20,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         const Spacer(),
                         IconButton(
                           iconSize: 30.0,
@@ -499,6 +433,10 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                       serverSlots: _slots,
                                       serverLocked: _locked,
                                       controllerMode: _controllerMode,
+                                      layoutCatalog: _presetCatalog,
+                                      layoutApi: _api,
+                                      brandingModeListenable:
+                                          _brandingModeNotifier,
                                       alerts: _alerts,
                                       onOpenAlerts: () {
                                         _markAlertsSeen();
@@ -509,6 +447,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                             onDismiss: _dismissAlert,
                                           ),
                                         );
+                                      },
+                                      onLayoutCatalogChanged: (catalog) {
+                                        setState(() {
+                                          _presetCatalog = catalog;
+                                        });
                                       },
                                       onApply: (newSlots, newLocked) async {
                                         final assigned = await _api
@@ -682,8 +625,12 @@ class _LobbyToolbar extends StatefulWidget {
   final int serverSlots;
   final bool serverLocked;
   final String controllerMode;
+  final PresetCatalog? layoutCatalog;
+  final HostApiService layoutApi;
+  final ValueListenable<ControllerBrandingMode> brandingModeListenable;
   final List<ServerAlert> alerts;
   final VoidCallback onOpenAlerts;
+  final ValueChanged<PresetCatalog> onLayoutCatalogChanged;
   final Future<void> Function(int slots, bool locked) onApply;
   final VoidCallback onOpenSettings;
 
@@ -691,8 +638,12 @@ class _LobbyToolbar extends StatefulWidget {
     required this.serverSlots,
     required this.serverLocked,
     required this.controllerMode,
+    required this.layoutCatalog,
+    required this.layoutApi,
+    required this.brandingModeListenable,
     required this.alerts,
     required this.onOpenAlerts,
+    required this.onLayoutCatalogChanged,
     required this.onApply,
     required this.onOpenSettings,
   });
@@ -831,6 +782,15 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
               ],
             ],
           ),
+          if (widget.layoutCatalog != null) ...[
+            const SizedBox(width: 18),
+            LayoutSelectorWidget(
+              api: widget.layoutApi,
+              catalog: widget.layoutCatalog!,
+              brandingModeListenable: widget.brandingModeListenable,
+              onCatalogChanged: widget.onLayoutCatalogChanged,
+            ),
+          ],
 
           // RIGHT SIDE: Input mode controls
           Row(

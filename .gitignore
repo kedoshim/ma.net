@@ -4,3 +4,4 @@
 *.h
 *.cc
 *.swift
+host-server/data/controller_presets.json
