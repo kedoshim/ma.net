@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:server_app/screens/home_page/gamepad_state.dart';
 import 'package:server_app/screens/home_page/gamepad_handler_widget.dart';
 
+import '../../models/controller_branding.dart';
 import '../../theme/app_theme.dart';
 import '../../services/host_api_service.dart';
 import '../../services/host_window_service.dart';
@@ -67,6 +68,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   int _slots = 4;
   bool _locked = true;
   String _controllerMode = 'x360';
+  late final ValueNotifier<ControllerBrandingMode> _brandingModeNotifier;
 
   List<ServerAlert> _alerts = [];
 
@@ -104,6 +106,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _loadTheme();
     _loadPresets();
     _controllerMode = widget.initialControllerMode ?? _controllerMode;
+    _brandingModeNotifier = ValueNotifier(
+      ControllerBranding.modeFromWire(_controllerMode),
+    );
   }
 
   Future<void> _loadPresets() async {
@@ -202,6 +207,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
         setState(() {
           _controllerMode = chosen;
         });
+        _brandingModeNotifier.value = ControllerBranding.modeFromWire(chosen);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Modo aplicado com sucesso')),
         );
@@ -252,6 +258,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   @override
   void dispose() {
     _startupPipeline.state.removeListener(_handlePipelineUpdate);
+    _brandingModeNotifier.dispose();
     _hostWindowService.dispose();
     _startupPipeline.dispose();
     super.dispose();
@@ -316,7 +323,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                           child: Text(
                             'ma•net',
                             style: AppTheme.bodyMedium.copyWith(
-                              fontFamily: 'pico',
+                              fontFamily: 'momo',
                               fontSize: 40.0,
                               letterSpacing: 0.0,
                             ),
@@ -361,7 +368,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                     await showDialog(
                                       context: context,
                                       builder: (context) =>
-                                          PresetSelectorDialog(api: _api),
+                                          PresetSelectorDialog(
+                                            api: _api,
+                                            brandingModeListenable:
+                                                _brandingModeNotifier,
+                                          ),
                                     );
                                     _loadPresets();
                                   },
@@ -659,7 +670,7 @@ class _PresetChip extends StatelessWidget {
           ),
           child: Text(
             label,
-            style: TextStyle(fontFamily: 'pico', color: AppColors.textPrimary),
+            style: TextStyle(fontFamily: 'momo', color: AppColors.textPrimary),
           ),
         ),
       ),

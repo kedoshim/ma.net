@@ -483,7 +483,7 @@ class ControllerSlotWidget extends StatelessWidget {
                     Text(
                       'p${index + 1}',
                       style: AppTheme.bodyMedium.copyWith(
-                        fontFamily: 'pico',
+                        fontFamily: 'momo',
                         fontSize: scale.eighth,
                       ),
                     ),
@@ -494,7 +494,7 @@ class ControllerSlotWidget extends StatelessWidget {
                         child: Text(
                           'offline',
                           style: AppTheme.bodyMedium.copyWith(
-                            fontFamily: 'pico',
+                            fontFamily: 'momo',
                             fontSize: scale.eighth * 0.7,
                             color: AppTheme.primaryText.withValues(alpha: 0.5),
                           ),
@@ -559,7 +559,7 @@ class DevicePoolArea extends StatelessWidget {
                         child: Text(
                           'banco de reservas',
                           style: TextStyle(
-                            fontFamily: 'pico',
+                            fontFamily: 'momo',
                             fontSize: scale.eighth,
                             color: AppTheme.primaryText.withValues(alpha: 0.3),
                           ),

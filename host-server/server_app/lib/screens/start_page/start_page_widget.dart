@@ -130,14 +130,14 @@ class _StartPageWidgetState extends State<StartPageWidget> {
           title: Text(
             'Sem Driver',
             style: AppTheme.titleSmall.copyWith(
-              fontFamily: 'pico',
+              fontFamily: 'momo',
               color: AppColors.textPrimary,
             ),
           ),
           content: Text(
             'Esse app precisa do driver ViGEmBus para funcionar :P',
             style: AppTheme.bodyMedium.copyWith(
-              fontFamily: 'pico',
+              fontFamily: 'momo',
               color: AppColors.textPrimary,
             ),
           ),
@@ -147,7 +147,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
               child: Text(
                 'Cancelar',
                 style: AppTheme.bodyMedium.copyWith(
-                  fontFamily: 'pico',
+                  fontFamily: 'momo',
                   color: AppColors.textPrimary,
                 ),
               ),
@@ -164,7 +164,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
               child: Text(
                 'Instalar Driver',
                 style: AppTheme.titleSmall.copyWith(
-                  fontFamily: 'pico',
+                  fontFamily: 'momo',
                   color: AppColors.screenBackground,
                 ),
               ),
@@ -422,7 +422,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                           : Text(
                               'iniciar',
                               style: AppTheme.titleSmall.copyWith(
-                                fontFamily: 'pico',
+                                fontFamily: 'momo',
                                 letterSpacing: 0.0,
                                 color: AppColors.textPrimary,
                               ),
@@ -517,7 +517,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                         child: Text(
                           'iniciar debug',
                           style: AppTheme.titleSmall.copyWith(
-                            fontFamily: 'pico',
+                            fontFamily: 'momo',
                             letterSpacing: 0.0,
                             color: AppColors.textPrimary,
                           ),
@@ -571,7 +571,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
         Text(
           'Escolha o modo de controle',
           style: AppTheme.titleMedium.copyWith(
-            fontFamily: 'pico',
+            fontFamily: 'momo',
             color: AppColors.textPrimary,
           ),
         ),
@@ -642,7 +642,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                 child: Text(
                   'Cancelar',
                   style: AppTheme.bodyMedium.copyWith(
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     color: AppColors.textPrimary.withValues(alpha: 0.7),
                   ),
                 ),
@@ -672,7 +672,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
               child: Text(
                 'Confirmar Seleção',
                 style: AppTheme.titleSmall.copyWith(
-                  fontFamily: 'pico',
+                  fontFamily: 'momo',
                   fontSize: 16,
                 ),
               ),
@@ -793,7 +793,7 @@ class _ModeCardState extends State<_ModeCard>
                       Text(
                         widget.title,
                         style: AppTheme.titleMedium.copyWith(
-                          fontFamily: 'pico',
+                          fontFamily: 'momo',
                           color: isSelected ? glowColor : AppColors.textPrimary,
                           letterSpacing: 2,
                         ),

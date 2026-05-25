@@ -68,7 +68,7 @@ class QuickActionsMenu extends StatelessWidget {
                 color: enabled
                     ? AppColors.textPrimary
                     : AppColors.textPrimary.withValues(alpha: 0.45),
-                fontFamily: 'pico',
+                fontFamily: 'momo',
               ),
             ),
           ],
@@ -131,7 +131,7 @@ class _QuickActionsDialogState extends State<_QuickActionsDialog> {
                     const Text(
                       'Quick Actions',
                       style: TextStyle(
-                        fontFamily: 'pico',
+                        fontFamily: 'momo',
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
@@ -193,7 +193,7 @@ class _QuickActionsDialogState extends State<_QuickActionsDialog> {
               Text(
                 quickActionGroupLabel(group),
                 style: const TextStyle(
-                  fontFamily: 'pico',
+                  fontFamily: 'momo',
                   fontSize: 14,
                   color: AppColors.textPrimary,
                 ),
@@ -273,7 +273,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     fontSize: 9,
                     color: fgColor,
                     height: 1.1,

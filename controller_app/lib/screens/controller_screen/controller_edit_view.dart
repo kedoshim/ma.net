@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/controller_branding.dart';
 import '../../models/player_face.dart';
 import '../../services/preferences_service.dart';
 import '../../theme/app_colors.dart';
@@ -12,6 +13,7 @@ import 'controller_screen_widgets.dart';
 class ControllerEditView extends StatefulWidget {
   const ControllerEditView({
     super.key,
+    required this.brandingMode,
     required this.tapHapticsEnabled,
     required this.onTapHapticsToggled,
     required this.editableButtons,
@@ -29,6 +31,7 @@ class ControllerEditView extends StatefulWidget {
     required this.onPulseCycleEnd,
   });
 
+  final ControllerBrandingMode brandingMode;
   final bool tapHapticsEnabled;
   final VoidCallback onTapHapticsToggled;
   final List<String> editableButtons;
@@ -101,6 +104,7 @@ class _ControllerEditViewState extends State<ControllerEditView>
             Expanded(
               flex: 3,
               child: _AvailableButtonsPanel(
+                brandingMode: widget.brandingMode,
                 isDragging: _isDragging,
                 buttons: availableButtons,
                 tapHapticsEnabled: widget.tapHapticsEnabled,
@@ -171,6 +175,7 @@ class _ControllerEditViewState extends State<ControllerEditView>
                       borderRadius: BorderRadius.circular(28),
                     ),
                     child: ActionButtons(
+                      brandingMode: widget.brandingMode,
                       visibleButtons: widget.visibleButtons,
                       buttonOrder: widget.buttonOrder,
                       onButtonStateChanged: widget.onGameButtonStateChanged,
@@ -256,6 +261,7 @@ class _ControllerEditViewState extends State<ControllerEditView>
 
 class _AvailableButtonsPanel extends StatelessWidget {
   const _AvailableButtonsPanel({
+    required this.brandingMode,
     required this.isDragging,
     required this.buttons,
     required this.onButtonDropped,
@@ -264,6 +270,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
     required this.tapHapticsEnabled,
   });
 
+  final ControllerBrandingMode brandingMode;
   final bool isDragging;
   final List<String> buttons;
   final ValueChanged<String> onButtonDropped;
@@ -302,7 +309,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
               Text(
                 'unused buttons',
                 style: TextStyle(
-                  fontFamily: 'pico',
+                  fontFamily: 'momo',
                   fontSize: 22,
                   color: AppColors.textPrimary.withValues(
                     alpha: isTarget ? 1.0 : 0.8,
@@ -316,9 +323,17 @@ class _AvailableButtonsPanel extends StatelessWidget {
                     spacing: 12,
                     runSpacing: 12,
                     children: buttons.map((buttonKey) {
+                      final presentation = ControllerBranding.presentationFor(
+                        buttonKey,
+                        brandingMode,
+                      );
                       return DraggableEditButton(
                         btnId: buttonKey,
-                        label: buttonKey.replaceFirst('btn', ''),
+                        label: presentation.shortLabel,
+                        labelWidget: ControllerButtonBrand(
+                          presentation: presentation,
+                          size: 24,
+                        ),
                         onDragStarted: onDragStarted,
                         onDragEnded: onDragEnded,
                         tapHapticsEnabled: tapHapticsEnabled,

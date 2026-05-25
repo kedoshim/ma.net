@@ -118,7 +118,7 @@ flutter:
         - asset: assets/fonts/picobl.ttf
           style: normal
 
-    - family: pico
+    - family: momo
       fonts:
         - asset: assets/fonts/Momo_Trust_Display/MomoTrustDisplay-Regular.ttf
           style: normal

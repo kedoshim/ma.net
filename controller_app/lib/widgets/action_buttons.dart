@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../models/controller_branding.dart';
 import '../services/haptics_manager.dart';
 import '../theme/app_colors.dart';
 
@@ -9,6 +10,7 @@ int _failedDragTaps = 0;
 typedef ButtonStateCallback = void Function(String xinputId, String state);
 
 class ActionButtons extends StatefulWidget {
+  final ControllerBrandingMode brandingMode;
   final Map<String, bool> visibleButtons;
   final List<String> buttonOrder;
   final ButtonStateCallback onButtonStateChanged;
@@ -21,6 +23,7 @@ class ActionButtons extends StatefulWidget {
 
   const ActionButtons({
     super.key,
+    required this.brandingMode,
     required this.visibleButtons,
     required this.buttonOrder,
     required this.onButtonStateChanged,
@@ -41,16 +44,16 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   // Default button order
   static const List<String> _defaultButtonOrder = [
-    'btnY',
-    'btnB',
-    'btnX',
-    'btnA',
-    'btnRB',
-    'btnRT',
-    'btnLB',
-    'btnLT',
-    'btnRSB',
-    'btnLSB',
+    'Y',
+    'B',
+    'X',
+    'A',
+    'RB',
+    'RT',
+    'LB',
+    'LT',
+    'RSB',
+    'LSB',
   ];
 
   @override
@@ -147,9 +150,14 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   Widget _buildGameButton(String btnId) {
     final btnConfig = _getButtonConfig(btnId);
+    final presentation = ControllerBranding.presentationFor(
+      btnConfig.xinput,
+      widget.brandingMode,
+    );
 
     return _GameButton(
-      label: btnConfig.label,
+      label: presentation.shortLabel,
+      labelWidget: ControllerButtonBrand(presentation: presentation, size: 28),
       onStateChange: (state) =>
           widget.onButtonStateChanged(btnConfig.xinput, state),
       onPressedChanged: widget.onAnyButtonPressed,
@@ -158,6 +166,10 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   Widget _buildEditModeButton(String btnId) {
     final btnConfig = _getButtonConfig(btnId);
+    final presentation = ControllerBranding.presentationFor(
+      btnConfig.xinput,
+      widget.brandingMode,
+    );
 
     return DragTarget<String>(
       onWillAcceptWithDetails: (details) {
@@ -172,7 +184,11 @@ class _ActionButtonsState extends State<ActionButtons> {
 
         return DraggableEditButton(
           btnId: btnId,
-          label: btnConfig.label,
+          label: presentation.shortLabel,
+          labelWidget: ControllerButtonBrand(
+            presentation: presentation,
+            size: 24,
+          ),
           isDragTarget: isDragTarget,
           onDragStarted: widget.onDragStarted,
           onDragEnded: widget.onDragEnded,
@@ -186,16 +202,16 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   _ButtonConfig _getButtonConfig(String btnId) {
     const allButtons = [
-      _ButtonConfig('btnY', 'Y', 'Y'),
-      _ButtonConfig('btnB', 'B', 'B'),
-      _ButtonConfig('btnX', 'X', 'X'),
-      _ButtonConfig('btnA', 'A', 'A'),
-      _ButtonConfig('btnRB', 'RB', 'RB'),
-      _ButtonConfig('btnRT', 'RT', 'RT'),
-      _ButtonConfig('btnLB', 'LB', 'LB'),
-      _ButtonConfig('btnLT', 'LT', 'LT'),
-      _ButtonConfig('btnRSB', 'RSB', 'RSB'),
-      _ButtonConfig('btnLSB', 'LSB', 'LSB'),
+      _ButtonConfig('Y', 'Y', 'Y'),
+      _ButtonConfig('B', 'B', 'B'),
+      _ButtonConfig('X', 'X', 'X'),
+      _ButtonConfig('A', 'A', 'A'),
+      _ButtonConfig('RB', 'RB', 'RB'),
+      _ButtonConfig('RT', 'RT', 'RT'),
+      _ButtonConfig('LB', 'LB', 'LB'),
+      _ButtonConfig('LT', 'LT', 'LT'),
+      _ButtonConfig('RSB', 'RSB', 'RSB'),
+      _ButtonConfig('LSB', 'LSB', 'LSB'),
     ];
 
     try {
@@ -215,9 +231,9 @@ class _ActionButtonsState extends State<ActionButtons> {
               ? 'Sem botões visiveis'
               : 'Habilite botões nas configurações',
           style: TextStyle(
-            fontFamily: 'pico',
+            fontFamily: 'momo',
             fontSize: 14,
-            color: AppColors.textPrimary.withOpacity(0.54),
+            color: AppColors.textPrimary.withValues(alpha: 0.54),
           ),
         ),
       );
@@ -245,11 +261,13 @@ class _ButtonConfig {
 
 class _GameButton extends StatefulWidget {
   final String label;
+  final Widget? labelWidget;
   final void Function(String state) onStateChange;
   final ValueChanged<bool>? onPressedChanged;
 
   const _GameButton({
     required this.label,
+    this.labelWidget,
     required this.onStateChange,
     this.onPressedChanged,
   });
@@ -335,15 +353,17 @@ class _GameButtonState extends State<_GameButton> {
               width: AppColors.borderThickness,
             ),
           ),
-          child: Text(
-            widget.label,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-              fontFamily: 'pico',
-            ),
-          ),
+          child:
+              widget.labelWidget ??
+              Text(
+                widget.label,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  fontFamily: 'momo',
+                ),
+              ),
         ),
       ),
     );
@@ -353,6 +373,7 @@ class _GameButtonState extends State<_GameButton> {
 class DraggableEditButton extends StatefulWidget {
   final String btnId;
   final String label;
+  final Widget? labelWidget;
   final bool isDragTarget;
   final VoidCallback? onDragStarted;
   final VoidCallback? onDragEnded;
@@ -364,6 +385,7 @@ class DraggableEditButton extends StatefulWidget {
     super.key,
     required this.btnId,
     required this.label,
+    this.labelWidget,
     this.isDragTarget = false,
     this.onDragStarted,
     this.onDragEnded,
@@ -418,7 +440,7 @@ class _DraggableEditButtonState extends State<DraggableEditButton>
               const SizedBox(width: 12),
               const Text(
                 'Arraste para mover',
-                style: TextStyle(fontFamily: 'pico', fontSize: 16),
+                style: TextStyle(fontFamily: 'momo', fontSize: 16),
               ),
             ],
           ),
@@ -483,15 +505,23 @@ class _DraggableEditButtonState extends State<DraggableEditButton>
                   color: AppColors.textPrimary.withValues(alpha: 0.4),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary.withValues(alpha: opacity),
-                    fontFamily: 'pico',
+                if (widget.labelWidget != null)
+                  DefaultTextStyle.merge(
+                    style: TextStyle(
+                      color: AppColors.textPrimary.withValues(alpha: opacity),
+                    ),
+                    child: widget.labelWidget!,
+                  )
+                else
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary.withValues(alpha: opacity),
+                      fontFamily: 'momo',
+                    ),
                   ),
-                ),
               ],
             ),
             AnimatedBuilder(
@@ -563,8 +593,8 @@ class _DraggableEditButtonState extends State<DraggableEditButton>
 
             return Transform(
               transform: Matrix4.identity()
-                ..translate(0.0, wobbleY + idleY)
-                ..scale(scale)
+                ..translateByDouble(0.0, wobbleY + idleY, 0.0, 1.0)
+                ..scaleByDouble(scale, scale, 1.0, 1.0)
                 ..rotateZ(wobbleRot),
               alignment: Alignment.center,
               child: child,

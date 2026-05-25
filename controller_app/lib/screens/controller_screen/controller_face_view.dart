@@ -99,7 +99,7 @@ class ControllerFaceView extends StatelessWidget {
                   if (!isTyping) ...[
                     const Text(
                       'cores',
-                      style: TextStyle(fontFamily: 'pico', fontSize: 16),
+                      style: TextStyle(fontFamily: 'momo', fontSize: 16),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -130,7 +130,7 @@ class ControllerFaceView extends StatelessWidget {
                             const Text(
                               'rosto',
                               style: TextStyle(
-                                fontFamily: 'pico',
+                                fontFamily: 'momo',
                                 fontSize: 16,
                               ),
                             ),
@@ -195,7 +195,7 @@ class ControllerFaceView extends StatelessWidget {
                             const Text(
                               'rotacao',
                               style: TextStyle(
-                                fontFamily: 'pico',
+                                fontFamily: 'momo',
                                 fontSize: 16,
                               ),
                             ),
@@ -223,7 +223,7 @@ class ControllerFaceView extends StatelessWidget {
                     const SizedBox(height: 16),
                     const Text(
                       'presets',
-                      style: TextStyle(fontFamily: 'pico', fontSize: 16),
+                      style: TextStyle(fontFamily: 'momo', fontSize: 16),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -377,7 +377,7 @@ class _PresetChip extends StatelessWidget {
             Text(
               preset.label,
               style: const TextStyle(
-                fontFamily: 'pico',
+                fontFamily: 'momo',
                 fontSize: 12,
                 color: AppColors.textPrimary,
               ),

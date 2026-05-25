@@ -154,7 +154,7 @@ class _OptionsPopupState extends State<OptionsPopup>
                   const Text(
                     'Opcoes',
                     style: TextStyle(
-                      fontFamily: 'pico',
+                      fontFamily: 'momo',
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
@@ -188,7 +188,7 @@ class _OptionsPopupState extends State<OptionsPopup>
                         label: const Text(
                           'Baixar App',
                           style: TextStyle(
-                            fontFamily: 'pico',
+                            fontFamily: 'momo',
                             fontSize: 12,
                             color: AppColors.textPrimary,
                           ),
@@ -288,7 +288,7 @@ class _OptionsPopupState extends State<OptionsPopup>
                                     Text(
                                       'Vibracao apenas no app Android!',
                                       style: TextStyle(
-                                        fontFamily: 'pico',
+                                        fontFamily: 'momo',
                                         fontSize: 12,
                                         color: AppColors.textPrimary.withValues(
                                           alpha: 0.7,
@@ -304,7 +304,7 @@ class _OptionsPopupState extends State<OptionsPopup>
                       const Text(
                         'Cores do ma.net',
                         style: TextStyle(
-                          fontFamily: 'pico',
+                          fontFamily: 'momo',
                           fontSize: 14,
                           color: AppColors.textPrimary,
                         ),
@@ -424,7 +424,7 @@ class _OptionButtonState extends State<_OptionButton> {
                 widget.label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontFamily: 'pico',
+                  fontFamily: 'momo',
                   fontSize: 12,
                   color: fgColor,
                 ),

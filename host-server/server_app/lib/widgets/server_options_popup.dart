@@ -41,7 +41,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
           const Text(
             'Opcoes',
             style: TextStyle(
-              fontFamily: 'pico',
+              fontFamily: 'momo',
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
             ),
@@ -59,7 +59,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
             child: const Text(
               'X',
               style: TextStyle(
-                fontFamily: 'pico',
+                fontFamily: 'momo',
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
@@ -75,7 +75,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
           const Text(
             'Cores do ma.net',
             style: TextStyle(
-              fontFamily: 'pico',
+              fontFamily: 'momo',
               fontWeight: FontWeight.bold,
               fontSize: 16,
               color: AppColors.textPrimary,

@@ -91,7 +91,7 @@ class _ControlButtonState extends State<ControlButton> {
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
-                        fontFamily: 'pico',
+                        fontFamily: 'momo',
                       ),
                     )
                   : null),

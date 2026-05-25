@@ -1,12 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../models/controller_branding.dart';
 import '../services/host_api_service.dart';
 import '../theme/app_colors.dart';
 
 class PresetSelectorDialog extends StatefulWidget {
-  const PresetSelectorDialog({super.key, required this.api});
+  const PresetSelectorDialog({
+    super.key,
+    required this.api,
+    required this.brandingModeListenable,
+  });
 
   final HostApiService api;
+  final ValueListenable<ControllerBrandingMode> brandingModeListenable;
 
   @override
   State<PresetSelectorDialog> createState() => _PresetSelectorDialogState();
@@ -55,8 +62,11 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
   Future<void> _openEditor({ControllerPreset? preset}) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) =>
-          _PresetEditorDialog(api: widget.api, preset: preset),
+      builder: (context) => _PresetEditorDialog(
+        api: widget.api,
+        preset: preset,
+        brandingModeListenable: widget.brandingModeListenable,
+      ),
     );
 
     if (result == true) {
@@ -101,164 +111,179 @@ class _PresetSelectorDialogState extends State<PresetSelectorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppColors.screenBackground,
-      insetPadding: const EdgeInsets.all(32),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-        side: const BorderSide(
-          color: AppColors.textPrimary,
-          width: AppColors.borderThickness,
-        ),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1120, maxHeight: 760),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return ValueListenableBuilder<ControllerBrandingMode>(
+      valueListenable: widget.brandingModeListenable,
+      builder: (context, brandingMode, _) {
+        return Dialog(
+          backgroundColor: AppColors.screenBackground,
+          insetPadding: const EdgeInsets.all(32),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+            side: const BorderSide(
+              color: AppColors.textPrimary,
+              width: AppColors.borderThickness,
+            ),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120, maxHeight: 760),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
                           'Presets',
                           style: TextStyle(
-                            fontFamily: 'pico',
+                            fontFamily: 'momo',
                             fontSize: 28,
                             color: AppColors.textPrimary,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _saving ? null : () => _openEditor(),
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Criar preset'),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _saving ? null : () => _openEditor(),
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Criar preset'),
-                  ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              if (_loading)
-                const Expanded(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_catalog == null)
-                const Expanded(
-                  child: Center(
-                    child: Text('Não foi possivel carregar os presets.'),
-                  ),
-                )
-              else
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _SectionTitle(
-                          title: 'Presets de jogos',
-                          subtitle:
-                              'Sugestoes leves e faceis de expandir depois.',
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: _catalog!.gamePresets
-                              .map(
-                                (preset) => _PresetCard(
-                                  preset: preset,
-                                  activePresetId: _catalog!.activePresetId,
-                                  onSelect: _saving
-                                      ? null
-                                      : () => _selectPreset(preset),
+                  const SizedBox(height: 20),
+                  if (_loading)
+                    const Expanded(
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_catalog == null)
+                    const Expanded(
+                      child: Center(
+                        child: Text('NÃ£o foi possivel carregar os presets.'),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionTitle(
+                              title: 'Presets de jogos',
+                              subtitle:
+                                  'Sugestoes leves e faceis de expandir depois.',
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 16,
+                              children: _catalog!.gamePresets
+                                  .map(
+                                    (preset) => _PresetCard(
+                                      brandingMode: brandingMode,
+                                      preset: preset,
+                                      activePresetId: _catalog!.activePresetId,
+                                      onSelect: _saving
+                                          ? null
+                                          : () => _selectPreset(preset),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            const SizedBox(height: 28),
+                            const Text(
+                              'Seus presets personalizados',
+                              style: TextStyle(
+                                fontFamily: 'momo',
+                                fontSize: 22,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (_catalog!.customPresets.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(18),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Ainda nao ha presets personalizados. Crie um e monte o controle do seu jeito.',
                                 ),
                               )
-                              .toList(),
-                        ),
-                        const SizedBox(height: 28),
-                        Text(
-                          "Seus presets personalizados",
-                          style: const TextStyle(
-                            fontFamily: 'pico',
-                            fontSize: 22,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (_catalog!.customPresets.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: AppColors.textPrimary),
-                            ),
-                            child: const Text(
-                              'Ainda nao ha presets personalizados. Crie um e monte o controle do seu jeito.',
-                            ),
-                          )
-                        else
-                          Wrap(
-                            spacing: 16,
-                            runSpacing: 16,
-                            children: _catalog!.customPresets
-                                .map(
-                                  (preset) => _PresetCard(
-                                    preset: preset,
-                                    activePresetId: _catalog!.activePresetId,
-                                    onSelect: _saving
-                                        ? null
-                                        : () => _selectPreset(preset),
-                                    footer: Row(
-                                      children: [
-                                        TextButton.icon(
-                                          onPressed: _saving
-                                              ? null
-                                              : () =>
-                                                    _openEditor(preset: preset),
-                                          icon: const Icon(Icons.edit_rounded),
-                                          label: const Text('Renomear/editar'),
+                            else
+                              Wrap(
+                                spacing: 16,
+                                runSpacing: 16,
+                                children: _catalog!.customPresets
+                                    .map(
+                                      (preset) => _PresetCard(
+                                        brandingMode: brandingMode,
+                                        preset: preset,
+                                        activePresetId:
+                                            _catalog!.activePresetId,
+                                        onSelect: _saving
+                                            ? null
+                                            : () => _selectPreset(preset),
+                                        footer: Row(
+                                          children: [
+                                            TextButton.icon(
+                                              onPressed: _saving
+                                                  ? null
+                                                  : () => _openEditor(
+                                                      preset: preset,
+                                                    ),
+                                              icon: const Icon(
+                                                Icons.edit_rounded,
+                                              ),
+                                              label: const Text(
+                                                'Renomear/editar',
+                                              ),
+                                            ),
+                                            TextButton.icon(
+                                              onPressed: _saving
+                                                  ? null
+                                                  : () => _deletePreset(preset),
+                                              icon: const Icon(
+                                                Icons.delete_outline_rounded,
+                                              ),
+                                              label: const Text('Excluir'),
+                                            ),
+                                          ],
                                         ),
-                                        TextButton.icon(
-                                          onPressed: _saving
-                                              ? null
-                                              : () => _deletePreset(preset),
-                                          icon: const Icon(
-                                            Icons.delete_outline_rounded,
-                                          ),
-                                          label: const Text('Excluir'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                      ],
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 class _PresetEditorDialog extends StatefulWidget {
-  const _PresetEditorDialog({required this.api, this.preset});
+  const _PresetEditorDialog({
+    required this.api,
+    required this.brandingModeListenable,
+    this.preset,
+  });
 
   final HostApiService api;
+  final ValueListenable<ControllerBrandingMode> brandingModeListenable;
   final ControllerPreset? preset;
 
   @override
@@ -266,17 +291,17 @@ class _PresetEditorDialog extends StatefulWidget {
 }
 
 class _PresetEditorDialogState extends State<_PresetEditorDialog> {
-  static const List<String> _allButtons = [
-    'btnY',
-    'btnB',
-    'btnX',
-    'btnA',
-    'btnRB',
-    'btnRT',
-    'btnLB',
-    'btnLT',
-    'btnRSB',
-    'btnLSB',
+  static const List<String> _allButtons = <String>[
+    'Y',
+    'B',
+    'X',
+    'A',
+    'RB',
+    'RT',
+    'LB',
+    'LT',
+    'RSB',
+    'LSB',
   ];
 
   late final TextEditingController _nameController;
@@ -291,7 +316,7 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
     final preset = widget.preset;
     _nameController = TextEditingController(text: preset?.name ?? 'Meu preset');
     _movementMode = preset?.layout.movementMode ?? 'floatingJoystick';
-    _visibleButtons = {
+    _visibleButtons = <String, bool>{
       for (final buttonId in _allButtons)
         buttonId:
             preset?.layout.visibleButtons[buttonId] ??
@@ -308,18 +333,7 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
   }
 
   static bool _defaultVisible(String buttonId) {
-    return const {
-      'btnA',
-      'btnB',
-      'btnX',
-      'btnY',
-      'btnLB',
-      'btnRB',
-    }.contains(buttonId);
-  }
-
-  String _labelForButton(String buttonId) {
-    return buttonId.replaceFirst('btn', '');
+    return const <String>{'A', 'B', 'X', 'Y', 'LB', 'RB'}.contains(buttonId);
   }
 
   Future<void> _save() async {
@@ -363,219 +377,242 @@ class _PresetEditorDialogState extends State<_PresetEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppColors.screenBackground,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: const BorderSide(color: AppColors.textPrimary, width: 2),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 760),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.preset == null ? 'Criar preset' : 'Editar preset',
-                  style: const TextStyle(
-                    fontFamily: 'pico',
-                    fontSize: 24,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: [
-                    _EditorField(controller: _nameController, label: 'Nome'),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
+    return ValueListenableBuilder<ControllerBrandingMode>(
+      valueListenable: widget.brandingModeListenable,
+      builder: (context, brandingMode, _) {
+        return Dialog(
+          backgroundColor: AppColors.screenBackground,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: const BorderSide(color: AppColors.textPrimary, width: 2),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900, maxHeight: 760),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Movimento',
-                            style: TextStyle(
-                              fontFamily: 'pico',
-                              fontSize: 18,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            direction: Axis.vertical,
-                            spacing: 12,
-                            runSpacing: 12,
+                    Text(
+                      widget.preset == null ? 'Criar preset' : 'Editar preset',
+                      style: const TextStyle(
+                        fontFamily: 'momo',
+                        fontSize: 24,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        _EditorField(
+                          controller: _nameController,
+                          label: 'Nome',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _MovementChoiceChip(
-                                label: 'D-Pad',
-                                description:
-                                    'Melhor para precisao e plataforma',
-                                selected: _movementMode == 'dpad',
-                                onTap: () =>
-                                    setState(() => _movementMode = 'dpad'),
-                              ),
-                              _MovementChoiceChip(
-                                label: 'Joystick Fixo',
-                                description: 'Sempre visivel e previsivel',
-                                selected: _movementMode == 'fixedJoystick',
-                                onTap: () => setState(
-                                  () => _movementMode = 'fixedJoystick',
+                              const Text(
+                                'Movimento',
+                                style: TextStyle(
+                                  fontFamily: 'momo',
+                                  fontSize: 18,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
-                              _MovementChoiceChip(
-                                label: 'Joystick Flutuante',
-                                description: 'Recomendado na maioria dos casos',
-                                selected: _movementMode == 'floatingJoystick',
-                                onTap: () => setState(
-                                  () => _movementMode = 'floatingJoystick',
+                              const SizedBox(height: 10),
+                              Wrap(
+                                direction: Axis.vertical,
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  _MovementChoiceChip(
+                                    label: 'D-Pad',
+                                    description:
+                                        'Melhor para precisao e plataforma',
+                                    selected: _movementMode == 'dpad',
+                                    onTap: () =>
+                                        setState(() => _movementMode = 'dpad'),
+                                  ),
+                                  _MovementChoiceChip(
+                                    label: 'Joystick Fixo',
+                                    description: 'Sempre visivel e previsivel',
+                                    selected: _movementMode == 'fixedJoystick',
+                                    onTap: () => setState(
+                                      () => _movementMode = 'fixedJoystick',
+                                    ),
+                                  ),
+                                  _MovementChoiceChip(
+                                    label: 'Joystick Flutuante',
+                                    description:
+                                        'Recomendado na maioria dos casos',
+                                    selected:
+                                        _movementMode == 'floatingJoystick',
+                                    onTap: () => setState(
+                                      () => _movementMode = 'floatingJoystick',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Botoes visiveis',
+                                style: TextStyle(
+                                  fontFamily: 'momo',
+                                  fontSize: 18,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _allButtons.map((buttonId) {
+                                  final isVisible =
+                                      _visibleButtons[buttonId] == true;
+                                  final presentation =
+                                      ControllerBranding.presentationFor(
+                                        buttonId,
+                                        brandingMode,
+                                      );
+                                  return FilterChip(
+                                    tooltip: presentation.semanticLabel,
+                                    label: ControllerButtonBrand(
+                                      presentation: presentation,
+                                      size: 18,
+                                      textColor: AppColors.textPrimary,
+                                    ),
+                                    selected: isVisible,
+                                    onSelected: (selected) {
+                                      setState(
+                                        () => _visibleButtons[buttonId] =
+                                            selected,
+                                      );
+                                    },
+                                    backgroundColor: AppColors.backgroundColor
+                                        .withValues(alpha: 0.12),
+                                    selectedColor: AppColors.highlightColor
+                                        .withValues(alpha: 0.18),
+                                    checkmarkColor: presentation.accentColor,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(
+                                        color: isVisible
+                                            ? presentation.accentColor
+                                            : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 24),
+                              const Text(
+                                'Ordem (Arraste os botoes no preview)',
+                                style: TextStyle(
+                                  fontFamily: 'momo',
+                                  fontSize: 18,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  color: AppColors.backgroundColor.withValues(
+                                    alpha: 0.18,
+                                  ),
+                                  border: Border.all(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                child: _PresetPreview(
+                                  brandingMode: brandingMode,
+                                  layout: ControllerPresetLayout(
+                                    movementMode: _movementMode,
+                                    visibleButtons: _visibleButtons,
+                                    buttonOrder: _buttonOrder,
+                                  ),
+                                  onReorder: (draggedId, targetId) {
+                                    setState(() {
+                                      final draggedIndex = _buttonOrder.indexOf(
+                                        draggedId,
+                                      );
+                                      final targetIndex = _buttonOrder.indexOf(
+                                        targetId,
+                                      );
+                                      if (draggedIndex != -1 &&
+                                          targetIndex != -1) {
+                                        final temp = _buttonOrder[draggedIndex];
+                                        _buttonOrder[draggedIndex] =
+                                            _buttonOrder[targetIndex];
+                                        _buttonOrder[targetIndex] = temp;
+                                      }
+                                    });
+                                  },
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Botoes visiveis',
-                            style: TextStyle(
-                              fontFamily: 'pico',
-                              fontSize: 18,
-                              color: AppColors.textPrimary,
-                            ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: _saving
+                              ? null
+                              : () => Navigator.of(context).pop(false),
+                          child: const Text('Cancelar'),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton(
+                          onPressed: _saving ? null : _save,
+                          child: Text(
+                            widget.preset == null ? 'Criar' : 'Salvar',
                           ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _allButtons.map((buttonId) {
-                              final isVisible =
-                                  _visibleButtons[buttonId] == true;
-                              return FilterChip(
-                                label: Text(
-                                  _labelForButton(buttonId),
-                                  style: const TextStyle(
-                                    fontFamily: 'pico',
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                selected: isVisible,
-                                onSelected: (selected) {
-                                  setState(
-                                    () => _visibleButtons[buttonId] = selected,
-                                  );
-                                },
-                                backgroundColor: AppColors.backgroundColor
-                                    .withValues(alpha: 0.12),
-                                selectedColor: AppColors.highlightColor
-                                    .withValues(alpha: 0.18),
-                                checkmarkColor: AppColors.highlightColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(
-                                    color: isVisible
-                                        ? AppColors.highlightColor
-                                        : AppColors.textPrimary,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 24),
-                          const Text(
-                            'Ordem (Arraste os botoes no preview)',
-                            style: TextStyle(
-                              fontFamily: 'pico',
-                              fontSize: 18,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              color: AppColors.backgroundColor.withValues(
-                                alpha: 0.18,
-                              ),
-                              border: Border.all(color: AppColors.textPrimary),
-                            ),
-                            child: _PresetPreview(
-                              layout: ControllerPresetLayout(
-                                movementMode: _movementMode,
-                                visibleButtons: _visibleButtons,
-                                buttonOrder: _buttonOrder,
-                              ),
-                              onReorder: (draggedId, targetId) {
-                                setState(() {
-                                  final draggedIndex = _buttonOrder.indexOf(
-                                    draggedId,
-                                  );
-                                  final targetIndex = _buttonOrder.indexOf(
-                                    targetId,
-                                  );
-                                  if (draggedIndex != -1 && targetIndex != -1) {
-                                    final temp = _buttonOrder[draggedIndex];
-                                    _buttonOrder[draggedIndex] =
-                                        _buttonOrder[targetIndex];
-                                    _buttonOrder[targetIndex] = temp;
-                                  }
-                                });
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _saving
-                          ? null
-                          : () => Navigator.of(context).pop(false),
-                      child: const Text('Cancelar'),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton(
-                      onPressed: _saving ? null : _save,
-                      child: Text(widget.preset == null ? 'Criar' : 'Salvar'),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 class _PresetCard extends StatelessWidget {
   const _PresetCard({
+    required this.brandingMode,
     required this.preset,
     required this.activePresetId,
     required this.onSelect,
     this.footer,
   });
 
+  final ControllerBrandingMode brandingMode;
   final ControllerPreset preset;
   final String activePresetId;
   final VoidCallback? onSelect;
@@ -607,7 +644,7 @@ class _PresetCard extends StatelessWidget {
                 child: Text(
                   preset.name,
                   style: const TextStyle(
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     fontSize: 22,
                     color: AppColors.textPrimary,
                   ),
@@ -628,7 +665,7 @@ class _PresetCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _PresetPreview(layout: preset.layout),
+          _PresetPreview(brandingMode: brandingMode, layout: preset.layout),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -651,8 +688,13 @@ class _PresetCard extends StatelessWidget {
 }
 
 class _PresetPreview extends StatelessWidget {
-  const _PresetPreview({required this.layout, this.onReorder});
+  const _PresetPreview({
+    required this.brandingMode,
+    required this.layout,
+    this.onReorder,
+  });
 
+  final ControllerBrandingMode brandingMode;
   final ControllerPresetLayout layout;
   final void Function(String, String)? onReorder;
 
@@ -711,10 +753,10 @@ class _PresetPreview extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Text(
-                  'ma•net',
+                  'maâ€¢net',
                   style: TextStyle(
                     fontSize: 10,
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     color: AppColors.textPrimary,
                   ),
                 ),
@@ -722,9 +764,9 @@ class _PresetPreview extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _PreviewCenterButton(label: '⧉'),
+                    _PreviewCenterButton(label: 'â§‰'),
                     const SizedBox(width: 4),
-                    _PreviewCenterButton(label: '≡'),
+                    _PreviewCenterButton(label: 'â‰¡'),
                   ],
                 ),
               ],
@@ -735,9 +777,17 @@ class _PresetPreview extends StatelessWidget {
             flex: 3,
             child: Row(
               children: [
-                _PreviewColumn(buttons: columns[0], onReorder: onReorder),
+                _PreviewColumn(
+                  brandingMode: brandingMode,
+                  buttons: columns[0],
+                  onReorder: onReorder,
+                ),
                 const SizedBox(width: 4),
-                _PreviewColumn(buttons: columns[1], onReorder: onReorder),
+                _PreviewColumn(
+                  brandingMode: brandingMode,
+                  buttons: columns[1],
+                  onReorder: onReorder,
+                ),
               ],
             ),
           ),
@@ -772,8 +822,13 @@ class _PreviewCenterButton extends StatelessWidget {
 }
 
 class _PreviewColumn extends StatelessWidget {
-  const _PreviewColumn({required this.buttons, this.onReorder});
+  const _PreviewColumn({
+    required this.brandingMode,
+    required this.buttons,
+    this.onReorder,
+  });
 
+  final ControllerBrandingMode brandingMode;
   final List<String> buttons;
   final void Function(String, String)? onReorder;
 
@@ -781,7 +836,11 @@ class _PreviewColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Column(
-        children: buttons.map((btnId) {
+        children: buttons.map((buttonId) {
+          final presentation = ControllerBranding.presentationFor(
+            buttonId,
+            brandingMode,
+          );
           final box = Container(
             width: double.infinity,
             alignment: Alignment.center,
@@ -790,13 +849,10 @@ class _PreviewColumn extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               border: Border.all(color: AppColors.textPrimary, width: 1),
             ),
-            child: Text(
-              btnId.replaceFirst('btn', ''),
-              style: const TextStyle(
-                fontSize: 10,
-                fontFamily: 'pico',
-                color: AppColors.textPrimary,
-              ),
+            child: ControllerButtonBrand(
+              presentation: presentation,
+              size: 14,
+              textColor: AppColors.textPrimary,
             ),
           );
 
@@ -808,12 +864,13 @@ class _PreviewColumn extends StatelessWidget {
 
           return Expanded(
             child: DragTarget<String>(
-              onWillAcceptWithDetails: (details) => details.data != btnId,
-              onAcceptWithDetails: (details) => onReorder!(details.data, btnId),
+              onWillAcceptWithDetails: (details) => details.data != buttonId,
+              onAcceptWithDetails: (details) =>
+                  onReorder!(details.data, buttonId),
               builder: (context, candidateData, rejectedData) {
                 final isTarget = candidateData.isNotEmpty;
                 return Draggable<String>(
-                  data: btnId,
+                  data: buttonId,
                   feedback: Material(
                     color: Colors.transparent,
                     child: SizedBox(width: 60, height: 30, child: box),
@@ -904,7 +961,7 @@ class _PreviewStick extends StatelessWidget {
         Container(
           width: 32,
           height: 32,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
             color: AppColors.textPrimary,
           ),
@@ -971,7 +1028,7 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: const TextStyle(
-            fontFamily: 'pico',
+            fontFamily: 'momo',
             fontSize: 22,
             color: AppColors.textPrimary,
           ),

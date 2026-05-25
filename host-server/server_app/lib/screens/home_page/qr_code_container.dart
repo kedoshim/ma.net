@@ -291,7 +291,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                                             : 'No QR yet',
                                         textAlign: TextAlign.center,
                                         style: AppTheme.bodyMedium.copyWith(
-                                          fontFamily: 'pico',
+                                          fontFamily: 'momo',
                                           fontSize: widget.scale.eighth * 0.9,
                                           color: AppTheme.primaryText
                                               .withOpacity(0.44),
@@ -332,7 +332,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                                   : QRCodePanel.t('ui_connection_fallback'),
                               overflow: TextOverflow.ellipsis,
                               style: AppTheme.bodyMedium.copyWith(
-                                fontFamily: 'pico',
+                                fontFamily: 'momo',
                                 fontSize: widget.scale.eighth * 0.9,
                               ),
                             ),
@@ -364,7 +364,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                             label: Text(
                               QRCodePanel.t('ui_more'),
                               style: AppTheme.bodyMedium.copyWith(
-                                fontFamily: 'pico',
+                                fontFamily: 'momo',
                                 fontSize: widget.scale.eighth * 0.78,
                               ),
                             ),
@@ -573,7 +573,7 @@ class _OnboardingTip extends StatelessWidget {
                 child: Text(
                   QRCodePanel.t('diag_tip_title'),
                   style: AppTheme.bodyMedium.copyWith(
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     fontSize: scale.eighth * 0.78,
                   ),
                 ),
@@ -612,7 +612,7 @@ class _OnboardingTip extends StatelessWidget {
               child: Text(
                 QRCodePanel.t('diag_tip_got_it'),
                 style: AppTheme.bodyMedium.copyWith(
-                  fontFamily: 'pico',
+                  fontFamily: 'momo',
                   fontSize: scale.eighth * 0.72,
                 ),
               ),
@@ -779,7 +779,7 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
                     child: Text(
                       QRCodePanel.t('diag_sheet_title'),
                       style: AppTheme.bodyMedium.copyWith(
-                        fontFamily: 'pico',
+                        fontFamily: 'momo',
                         fontSize: widget.scale.eighth * 1.05,
                       ),
                     ),
@@ -824,7 +824,7 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
                             ? QRCodePanel.t('diag_sheet_attention')
                             : QRCodePanel.t('diag_sheet_healthy'),
                         style: AppTheme.bodyMedium.copyWith(
-                          fontFamily: 'pico',
+                          fontFamily: 'momo',
                           fontSize: widget.scale.eighth * 0.72,
                         ),
                       ),
@@ -934,7 +934,7 @@ class _DiagnosticCard extends StatelessWidget {
                     Text(
                       QRCodePanel.t(check.titleKey),
                       style: AppTheme.bodyMedium.copyWith(
-                        fontFamily: 'pico',
+                        fontFamily: 'momo',
                         fontSize: scale.eighth * 0.78,
                       ),
                     ),
@@ -1008,7 +1008,7 @@ class _ActionChip extends StatelessWidget {
             Text(
               label,
               style: AppTheme.bodyMedium.copyWith(
-                fontFamily: 'pico',
+                fontFamily: 'momo',
                 fontSize: scale.eighth * 0.6,
               ),
             ),
@@ -1099,7 +1099,7 @@ class _ConnectionsSheetState extends State<_ConnectionsSheet> {
                     child: Text(
                       QRCodePanel.t('ui_more_connections'),
                       style: AppTheme.bodyMedium.copyWith(
-                        fontFamily: 'pico',
+                        fontFamily: 'momo',
                         fontSize: widget.scale.eighth * 1.05,
                       ),
                     ),
@@ -1136,7 +1136,7 @@ class _ConnectionsSheetState extends State<_ConnectionsSheet> {
                         child: Text(
                           'No extra connection found.',
                           style: AppTheme.bodyMedium.copyWith(
-                            fontFamily: 'pico',
+                            fontFamily: 'momo',
                           ),
                         ),
                       ),
@@ -1241,7 +1241,7 @@ class _ConnectionCard extends StatelessWidget {
                 Text(
                   QRCodePanel.displayName(connection),
                   style: AppTheme.bodyMedium.copyWith(
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     fontSize: scale.eighth,
                   ),
                 ),
@@ -1312,7 +1312,7 @@ class _ConnectionCard extends StatelessWidget {
                             ? QRCodePanel.t('ui_showing')
                             : QRCodePanel.t('ui_use_this'),
                         style: AppTheme.bodyMedium.copyWith(
-                          fontFamily: 'pico',
+                          fontFamily: 'momo',
                           fontSize: scale.eighth * 0.72,
                         ),
                       ),
@@ -1356,7 +1356,7 @@ class _StatusChip extends StatelessWidget {
       child: Text(
         label,
         style: AppTheme.bodyMedium.copyWith(
-          fontFamily: 'pico',
+          fontFamily: 'momo',
           fontSize: scale.eighth * 0.58,
         ),
       ),

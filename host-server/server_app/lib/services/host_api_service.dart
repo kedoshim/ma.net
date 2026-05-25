@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:server_app/models/controller_branding.dart';
 import 'package:server_app/models/player_face.dart';
 import 'package:server_app/theme/app_theme.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -265,12 +266,10 @@ class ControllerPresetLayout {
 
     return ControllerPresetLayout(
       movementMode: json['movementMode'] as String? ?? 'floatingJoystick',
-      visibleButtons: rawVisibility.map(
-        (key, value) => MapEntry(key, value == true),
+      visibleButtons: ControllerBranding.normalizeVisibility(rawVisibility),
+      buttonOrder: ControllerBranding.normalizeCanonicalOrder(
+        json['buttonOrder'] as List<dynamic>? ?? const [],
       ),
-      buttonOrder: (json['buttonOrder'] as List<dynamic>? ?? const [])
-          .map((item) => '$item')
-          .toList(),
     );
   }
 

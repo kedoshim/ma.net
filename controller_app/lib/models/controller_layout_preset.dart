@@ -1,3 +1,4 @@
+import '../models/controller_branding.dart';
 import '../services/preferences_service.dart';
 
 class ControllerLayoutPreset {
@@ -28,10 +29,8 @@ class ControllerLayoutPreset {
       movementMode: movementModeFromWire(
         layout['movementMode'] as String?,
       ),
-      visibleButtons: rawVisibility.map(
-        (key, value) => MapEntry(key, value == true),
-      ),
-      buttonOrder: rawOrder.map((item) => '$item').toList(),
+      visibleButtons: ControllerBranding.normalizeVisibility(rawVisibility),
+      buttonOrder: ControllerBranding.normalizeCanonicalOrder(rawOrder),
     );
   }
 }

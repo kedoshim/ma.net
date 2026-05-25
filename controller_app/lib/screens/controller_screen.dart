@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/controller_layout_preset.dart';
+import '../models/controller_branding.dart';
 import '../models/player_face.dart';
 import '../services/controller_connection_manager.dart';
 import '../services/haptics_manager.dart';
@@ -37,42 +38,42 @@ class _ControllerScreenState extends State<ControllerScreen>
   };
 
   static const List<String> _editableButtons = [
-    'btnA',
-    'btnB',
-    'btnX',
-    'btnY',
-    'btnLB',
-    'btnRB',
-    'btnLT',
-    'btnRT',
-    'btnLSB',
-    'btnRSB',
+    'A',
+    'B',
+    'X',
+    'Y',
+    'LB',
+    'RB',
+    'LT',
+    'RT',
+    'LSB',
+    'RSB',
   ];
 
   static const List<String> _defaultButtonOrder = [
-    'btnY',
-    'btnB',
-    'btnX',
-    'btnA',
-    'btnRB',
-    'btnRT',
-    'btnLB',
-    'btnLT',
-    'btnRSB',
-    'btnLSB',
+    'Y',
+    'B',
+    'X',
+    'A',
+    'RB',
+    'RT',
+    'LB',
+    'LT',
+    'RSB',
+    'LSB',
   ];
 
   final Map<String, bool> visibleButtons = {
-    'btnA': true,
-    'btnB': true,
-    'btnX': true,
-    'btnY': true,
-    'btnRB': false,
-    'btnRT': false,
-    'btnRSB': false,
-    'btnLB': false,
-    'btnLT': false,
-    'btnLSB': false,
+    'A': true,
+    'B': true,
+    'X': true,
+    'Y': true,
+    'RB': false,
+    'RT': false,
+    'RSB': false,
+    'LB': false,
+    'LT': false,
+    'LSB': false,
   };
   List<String> _buttonOrder = List<String>.from(_defaultButtonOrder);
 
@@ -104,6 +105,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   Color? playerColor;
   ColorTheme _currentTheme = ColorTheme.blue;
   PlayerFaceData _playerFace = PlayerFaceData.random();
+  ControllerBrandingMode _brandingMode = ControllerBrandingMode.xinput;
 
   bool get _isTemporaryModeActive =>
       _activeMode != ControllerScreenMode.gameplay;
@@ -404,7 +406,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       return;
     }
 
-    final id = 'btn${(data['btn'] as String).toUpperCase()}';
+    final id = ControllerBranding.normalizeCanonicalId('${data['btn']}');
     final visible = data['visible'] != false;
     setState(() {
       visibleButtons[id] = visible;
@@ -418,16 +420,21 @@ class _ControllerScreenState extends State<ControllerScreen>
     }
 
     final preset = ControllerLayoutPreset.fromJson(presetData);
-    final nextVisibility = Map<String, bool>.from(visibleButtons);
-    nextVisibility.addAll(preset.visibleButtons);
+    final nextVisibility = Map<String, bool>.from(visibleButtons)
+      ..addAll(preset.visibleButtons);
 
     setState(() {
       _movementMode = preset.movementMode;
+      _brandingMode = ControllerBranding.modeFromWire(
+        data['controllerMode'] as String?,
+      );
       visibleButtons
         ..clear()
         ..addAll(nextVisibility);
       if (preset.buttonOrder.isNotEmpty) {
-        _buttonOrder = List<String>.from(preset.buttonOrder);
+        _buttonOrder = ControllerBranding.normalizeCanonicalOrder(
+          preset.buttonOrder,
+        );
       }
     });
 
@@ -688,11 +695,13 @@ class _ControllerScreenState extends State<ControllerScreen>
 
       final savedVisibility = await prefs.getButtonVisibility();
       if (savedVisibility != null) {
-        visibleButtons.addAll(savedVisibility);
+        visibleButtons.addAll(
+          ControllerBranding.normalizeVisibility(savedVisibility),
+        );
       }
       final savedOrder = await prefs.getButtonOrder();
       if (savedOrder != null && savedOrder.isNotEmpty) {
-        _buttonOrder = List<String>.from(savedOrder);
+        _buttonOrder = ControllerBranding.normalizeCanonicalOrder(savedOrder);
       }
     } catch (_) {
       AppColors.setTheme(ColorTheme.blue);
@@ -737,6 +746,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         );
       case ControllerScreenMode.edit:
         return ControllerEditView(
+          brandingMode: _brandingMode,
           tapHapticsEnabled: tapHapticsEnabled,
           onTapHapticsToggled: _toggleTapHaptics,
           editableButtons: _editableButtons,
@@ -779,6 +789,7 @@ class _ControllerScreenState extends State<ControllerScreen>
         );
       case ControllerScreenMode.gameplay:
         return ControllerDefaultView(
+          brandingMode: _brandingMode,
           movementMode: _movementMode,
           onStickChanged: _onStickChanged,
           onStickRelease: _onStickRelease,

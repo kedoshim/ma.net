@@ -55,7 +55,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
       appBar: AppBar(
         title: const Text(
           'Escanear Host',
-          style: TextStyle(fontFamily: 'pico'),
+          style: TextStyle(fontFamily: 'momo'),
         ),
         backgroundColor: Colors.black,
         foregroundColor: AppColors.textPrimary,

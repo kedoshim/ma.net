@@ -7,17 +7,38 @@ LOGGER = logging.getLogger(__name__)
 
 
 BUTTON_ORDER = [
-    "btnY",
-    "btnB",
-    "btnX",
-    "btnA",
-    "btnRB",
-    "btnRT",
-    "btnLB",
-    "btnLT",
-    "btnRSB",
-    "btnLSB",
+    "Y",
+    "B",
+    "X",
+    "A",
+    "RB",
+    "RT",
+    "LB",
+    "LT",
+    "RSB",
+    "LSB",
 ]
+
+
+LEGACY_BUTTON_IDS = {
+    "BTNY": "Y",
+    "BTNB": "B",
+    "BTNX": "X",
+    "BTNA": "A",
+    "BTNRB": "RB",
+    "BTNRT": "RT",
+    "BTNLB": "LB",
+    "BTNLT": "LT",
+    "BTNRSB": "RSB",
+    "BTNLSB": "LSB",
+}
+
+
+def _canonical_button_id(value):
+    if value is None:
+        return None
+    upper = str(value).upper()
+    return LEGACY_BUTTON_IDS.get(upper, upper)
 
 
 def _build_visibility(visible_ids):
@@ -52,14 +73,14 @@ BUILT_IN_PRESETS = [
         name="Simple + Shoulder",
         category="builtin",
         movement_mode="floatingJoystick",
-        visible_ids=["btnA", "btnB", "btnX", "btnY", "btnLB", "btnRB"],
+        visible_ids=["A", "B", "X", "Y", "LB", "RB"],
     ),
     _preset(
         "builtin-simple-trigger",
         name="Simple + Trigger",
         category="builtin",
         movement_mode="floatingJoystick",
-        visible_ids=["btnA", "btnB", "btnX", "btnY", "btnLT", "btnRT"],
+        visible_ids=["A", "B", "X", "Y", "LT", "RT"],
     ),
     _preset(
         "builtin-full",
@@ -67,14 +88,14 @@ BUILT_IN_PRESETS = [
         category="builtin",
         movement_mode="floatingJoystick",
         visible_ids=[
-            "btnA",
-            "btnB",
-            "btnX",
-            "btnY",
-            "btnLB",
-            "btnRB",
-            "btnLT",
-            "btnRT",
+            "A",
+            "B",
+            "X",
+            "Y",
+            "LB",
+            "RB",
+            "LT",
+            "RT",
         ],
     ),
 ]
@@ -86,35 +107,35 @@ GAME_PRESETS = [
         name="Overcooked",
         category="game",
         movement_mode="floatingJoystick",
-        visible_ids=["btnA", "btnB", "btnX", "btnY", "btnLB", "btnRB"],
+        visible_ids=["A", "B", "X", "Y", "LB", "RB"],
     ),
     _preset(
         "game-speedrunners",
         name="SpeedRunners",
         category="game",
         movement_mode="dpad",
-        visible_ids=["btnA", "btnB", "btnX", "btnY", "btnLB", "btnRB"],
+        visible_ids=["A", "B", "X", "Y", "LB", "RB"],
     ),
     _preset(
         "game-pico-park",
         name="Pico Park",
         category="game",
         movement_mode="floatingJoystick",
-        visible_ids=["btnA", "btnB", "btnX", "btnY"],
+        visible_ids=["A", "B", "X", "Y"],
     ),
     _preset(
         "game-party-animals",
         name="Party Animals",
         category="game",
         movement_mode="floatingJoystick",
-        visible_ids=["btnA", "btnB", "btnX", "btnY", "btnLB", "btnRB", "btnLT", "btnRT"],
+        visible_ids=["A", "B", "X", "Y", "LB", "RB", "LT", "RT"],
     ),
     _preset(
         "game-boomerang-fu",
         name="Boomerang Fu",
         category="game",
         movement_mode="floatingJoystick",
-        visible_ids=["btnA", "btnB", "btnX", "btnY"],
+        visible_ids=["A", "B", "X", "Y"],
     ),
 ]
 
@@ -173,12 +194,16 @@ class ControllerPresetStore:
         base_visibility = _build_visibility([])
         raw_visibility = layout.get("visibleButtons") or {}
         base_visibility.update({
-            key: value == True
+            _canonical_button_id(key): value == True
             for key, value in raw_visibility.items()
-            if key in base_visibility
+            if _canonical_button_id(key) in base_visibility
         })
 
-        raw_order = [item for item in (layout.get("buttonOrder") or []) if item in BUTTON_ORDER]
+        raw_order = []
+        for item in layout.get("buttonOrder") or []:
+            canonical = _canonical_button_id(item)
+            if canonical in BUTTON_ORDER and canonical not in raw_order:
+                raw_order.append(canonical)
         remaining = [item for item in BUTTON_ORDER if item not in raw_order]
 
         movement_mode = layout.get("movementMode")

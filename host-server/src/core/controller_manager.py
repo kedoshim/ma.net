@@ -58,6 +58,7 @@ class ControllerManager:
         preset = self.preset_store.get_active_preset()
         return {
             "type": "layout_preset",
+            "controllerMode": getattr(self.config, "controller_type", "x360"),
             "preset": preset,
         }
 

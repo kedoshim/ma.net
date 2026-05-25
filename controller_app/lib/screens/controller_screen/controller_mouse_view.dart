@@ -291,7 +291,7 @@ class _TouchpadSurfaceState extends State<_TouchpadSurface> {
                         Text(
                           'touchpad',
                           style: TextStyle(
-                            fontFamily: 'pico',
+                            fontFamily: 'momo',
                             fontSize: 18,
                             color: AppColors.textPrimary,
                           ),
@@ -406,7 +406,7 @@ class _MouseScrollStripState extends State<_MouseScrollStrip> {
                 Text(
                   'scroll',
                   style: TextStyle(
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     fontSize: 16,
                     color: AppColors.textPrimary.withValues(alpha: 0.85),
                   ),

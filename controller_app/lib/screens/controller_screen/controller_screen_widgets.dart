@@ -81,7 +81,7 @@ class ControllerCenterStatus extends StatelessWidget {
         style: TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
-          fontFamily: 'pico',
+          fontFamily: 'momo',
         ),
       );
     }
@@ -92,7 +92,7 @@ class ControllerCenterStatus extends StatelessWidget {
         style: TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
-          fontFamily: 'pico',
+          fontFamily: 'momo',
         ),
       );
     }
@@ -103,7 +103,7 @@ class ControllerCenterStatus extends StatelessWidget {
         style: TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
-          fontFamily: 'pico',
+          fontFamily: 'momo',
         ),
       );
     }
@@ -129,7 +129,7 @@ class ControllerCenterStatus extends StatelessWidget {
           style: const TextStyle(
             fontSize: 18,
             color: AppColors.textPrimary,
-            fontFamily: 'pico',
+            fontFamily: 'momo',
           ),
         ),
       ],
@@ -174,7 +174,7 @@ class ControllerModeHub extends StatelessWidget {
           style: const TextStyle(
             fontSize: 22,
             color: AppColors.textPrimary,
-            fontFamily: 'pico',
+            fontFamily: 'momo',
           ),
         ),
         const SizedBox(height: 12),
@@ -261,7 +261,7 @@ class MultipleHostsOverlay extends StatelessWidget {
                 const Text(
                   'Varios Hosts Encontrados',
                   style: TextStyle(
-                    fontFamily: 'pico',
+                    fontFamily: 'momo',
                     color: AppColors.textPrimary,
                     fontSize: 16,
                   ),
@@ -291,14 +291,14 @@ class MultipleHostsOverlay extends StatelessWidget {
                             Text(
                               host.name,
                               style: const TextStyle(
-                                fontFamily: 'pico',
+                                fontFamily: 'momo',
                                 fontSize: 14,
                               ),
                             ),
                             Text(
                               host.ip,
                               style: TextStyle(
-                                fontFamily: 'pico',
+                                fontFamily: 'momo',
                                 fontSize: 10,
                                 color: AppColors.textPrimary.withValues(
                                   alpha: 0.7,
@@ -321,7 +321,7 @@ class MultipleHostsOverlay extends StatelessWidget {
                     label: const Text(
                       'Escanear QR em vez disso',
                       style: TextStyle(
-                        fontFamily: 'pico',
+                        fontFamily: 'momo',
                         color: AppColors.textPrimary,
                       ),
                     ),

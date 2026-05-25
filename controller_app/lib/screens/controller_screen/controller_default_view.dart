@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import '../../models/controller_branding.dart';
 import '../../models/player_face.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../theme/app_colors.dart';
@@ -17,6 +18,7 @@ typedef ControllerButtonStateCallback = void Function(String id, String state);
 class ControllerDefaultView extends StatefulWidget {
   const ControllerDefaultView({
     super.key,
+    required this.brandingMode,
     required this.movementMode,
     required this.onMovementModeChanged,
     required this.onStickChanged,
@@ -37,6 +39,7 @@ class ControllerDefaultView extends StatefulWidget {
     required this.buttonOrder,
   });
 
+  final ControllerBrandingMode brandingMode;
   final MovementMode movementMode;
   final ValueChanged<MovementMode> onMovementModeChanged;
   final ValueChanged<Offset> onStickChanged;
@@ -123,8 +126,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
               children: [
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  child:
-                  Row(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -132,28 +134,28 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                         padding: const EdgeInsets.only(top: 0),
                         child: Container(
                           alignment: Alignment.topCenter,
-                        child: SizedBox(
-                          width: 32,
-                          height: 48,
-                          child: Material(
-                            color: AppColors.backgroundColor.withValues(
-                              alpha: 0.05,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              side: BorderSide(
-                                color: Colors.transparent,
-                                width: AppColors.borderThickness,
+                          child: SizedBox(
+                            width: 32,
+                            height: 48,
+                            child: Material(
+                              color: AppColors.backgroundColor.withValues(
+                                alpha: 0.05,
                               ),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                _getNextModeIcon(widget.movementMode),
-                                size: 18,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(
+                                  color: Colors.transparent,
+                                  width: AppColors.borderThickness,
                                 ),
-                              splashRadius: 10,
-                              onPressed: _toggleMovementMode,
-                              tooltip: _getNextModeLabel(widget.movementMode),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  _getNextModeIcon(widget.movementMode),
+                                  size: 18,
+                                ),
+                                splashRadius: 10,
+                                onPressed: _toggleMovementMode,
+                                tooltip: _getNextModeLabel(widget.movementMode),
                               ),
                             ),
                           ),
@@ -169,7 +171,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.normal,
-                              fontFamily: 'pico',
+                              fontFamily: 'momo',
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -183,7 +185,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                               borderColor: AppColors.textPrimary,
                             ),
                           ),
-                        ]
+                        ],
                       ),
                       const SizedBox(width: 14),
                       Padding(
@@ -214,8 +216,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                           ),
                         ),
                       ),
-                    ]
-                  )
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 14),
                 FittedBox(
@@ -230,7 +232,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                         playerColor: null,
                       ),
                       const SizedBox(height: 8),
-                      if (widget.connectionState == ControllerConnectionState.disconnected)
+                      if (widget.connectionState ==
+                          ControllerConnectionState.disconnected)
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -282,6 +285,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
           Expanded(
             flex: 12,
             child: ActionButtons(
+              brandingMode: widget.brandingMode,
               visibleButtons: widget.visibleButtons,
               buttonOrder: widget.buttonOrder,
               onButtonStateChanged: widget.onButtonStateChanged,
@@ -432,7 +436,7 @@ class _DPadButton extends StatelessWidget {
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: AppColors.textPrimary,
-          fontFamily: 'pico',
+          fontFamily: 'momo',
         ),
       ),
     );
