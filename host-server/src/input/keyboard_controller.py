@@ -21,10 +21,12 @@ class KeyboardController:
     VK_CONTROL = 0x11
     VK_MENU = 0x12
     VK_DELETE = 0x2E
+    VK_ESCAPE = 0x1B
     SW_MAXIMIZE = 3
     SW_MINIMIZE = 6
     KEYEVENTF_EXTENDEDKEY = 0x0001
     KEYEVENTF_KEYUP = 0x0002
+
 
     def __init__(self):
         self._is_windows = platform.system().lower() == "windows"
@@ -92,6 +94,8 @@ class KeyboardController:
                 ])
             elif action_id == "task_manager":
                 self._open_task_manager()
+            elif action_id == "escape":
+                self._press(self.VK_ESCAPE, extended=True)
             elif action_id == "virtual_keyboard":
                 self._open_virtual_keyboard()
             elif action_id == "maximize_window":

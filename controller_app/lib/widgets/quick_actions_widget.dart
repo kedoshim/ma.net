@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/quick_actions_definition.dart';
@@ -231,6 +232,34 @@ class _QuickActionTile extends StatefulWidget {
 
 class _QuickActionTileState extends State<_QuickActionTile> {
   bool _pressed = false;
+  Timer? _initialDelayTimer;
+  Timer? _repeatTimer;
+
+  bool get _isRepeatable =>
+      widget.action.id == 'volume_up' || widget.action.id == 'volume_down';
+
+  void _startRepeat() {
+    if (!_isRepeatable) return;
+    widget.onPressed(widget.action.id);
+    _initialDelayTimer = Timer(const Duration(milliseconds: 400), () {
+      _repeatTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        widget.onPressed(widget.action.id);
+      });
+    });
+  }
+
+  void _stopRepeat() {
+    _initialDelayTimer?.cancel();
+    _initialDelayTimer = null;
+    _repeatTimer?.cancel();
+    _repeatTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopRepeat();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -238,12 +267,21 @@ class _QuickActionTileState extends State<_QuickActionTile> {
     final fgColor = AppColors.textPrimary;
 
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
+      onTapDown: (_) {
+        setState(() => _pressed = true);
+        _startRepeat();
+      },
       onTapUp: (_) {
         setState(() => _pressed = false);
-        widget.onPressed(widget.action.id);
+        if (!_isRepeatable) {
+          widget.onPressed(widget.action.id);
+        }
+        _stopRepeat();
       },
-      onTapCancel: () => setState(() => _pressed = false),
+      onTapCancel: () {
+        setState(() => _pressed = false);
+        _stopRepeat();
+      },
       child: AnimatedScale(
         scale: _pressed ? 0.9 : 1.0,
         duration: const Duration(milliseconds: 100),

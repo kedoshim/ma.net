@@ -77,6 +77,12 @@ const List<QuickActionDefinition> quickActionDefinitions = [
     icon: Icons.data_thresholding_outlined,
     group: QuickActionGroup.windowsSystem,
   ),
+  QuickActionDefinition(
+    id: 'escape',
+    title: 'Escape',
+    icon: Icons.arrow_back_rounded,
+    group: QuickActionGroup.windowsSystem,
+  ),
   // QuickActionDefinition(
   //   id: 'virtual_keyboard',
   //   title: 'Virtual Keyboard',
