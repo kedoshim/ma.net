@@ -345,11 +345,9 @@ class _QRCodePanelState extends State<QRCodePanel> {
                   children: [
                     Expanded(
                       child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          widget.scale.eighth,
-                          widget.scale.eighth * 0.5,
-                          widget.scale.eighth,
-                          widget.scale.eighth * 0.5,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: widget.scale.eighth,
+                          vertical: 0,
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -359,9 +357,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                               style: AppTheme.titleMedium.copyWith(
                                 fontFamily: 'momo',
                                 fontSize: widget.scale.eighth * 0.9,
-                                color: AppColors.textPrimary.withValues(
-                                  alpha: 0.8,
-                                ),
+                                color: AppColors.textPrimary,
                               ),
                             ),
                             SizedBox(height: widget.scale.eighth * 0.5),
