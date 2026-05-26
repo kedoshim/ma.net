@@ -164,8 +164,8 @@ class _LayoutSelectorWidgetState extends State<LayoutSelectorWidget> {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.textPrimary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(18),
+            color: AppColors.backgroundColor.withValues(alpha: 0.03),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -263,9 +263,6 @@ class _HoverPreviewOverlay extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.screenBackground,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppColors.textPrimary.withValues(alpha: 0.15),
-                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.12),
@@ -538,7 +535,7 @@ class _LayoutBrowserDialogState extends State<_LayoutBrowserDialog> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const _SectionTitle(title: 'Quick Layouts'),
+                            const _SectionTitle(title: 'Layouts básicos'),
                             const SizedBox(height: 12),
                             Wrap(
                               spacing: 16,
@@ -677,7 +674,7 @@ class _LayoutCard extends StatelessWidget {
               color: isActive
                   ? AppColors.highlightColor
                   : AppColors.textPrimary,
-              width: 2,
+              width: 4,
             ),
           ),
           child: Column(
@@ -710,11 +707,6 @@ class _LayoutCard extends StatelessWidget {
                                 alpha: 0.55,
                               ),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: AppColors.textPrimary.withValues(
-                                  alpha: 0.2,
-                                ),
-                              ),
                             ),
                             child: Text(
                               badgeLabel!,
@@ -808,7 +800,6 @@ class _StructuredLayoutPreview extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: surface,
-        border: Border.all(color: outline),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,

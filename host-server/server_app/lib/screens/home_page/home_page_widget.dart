@@ -835,7 +835,7 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
             ],
           ),
           if (widget.layoutCatalog != null) ...[
-            const SizedBox(width: 18),
+            // const SizedBox(width: 18),
             LayoutSelectorWidget(
               api: widget.layoutApi,
               catalog: widget.layoutCatalog!,
@@ -861,7 +861,7 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.1),
+                    color: AppColors.textPrimary.withValues(alpha: 0.03),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
