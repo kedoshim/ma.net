@@ -264,6 +264,8 @@ class ControllerButtonBrand extends StatelessWidget {
     final effectiveFontSize =
         fontSize ?? (presentation.hasSymbol ? size : size * 0.72);
 
+    final makeXInputButtonsColorful = true;
+
     return Semantics(
       label: presentation.semanticLabel,
       child: Align(
@@ -277,7 +279,7 @@ class ControllerButtonBrand extends StatelessWidget {
                 style: TextStyle(
                   fontSize: effectiveFontSize,
                   fontWeight: FontWeight.w800,
-                  color: foreground,
+                  color: makeXInputButtonsColorful ? presentation.accentColor : foreground,
                   fontFamily: 'momo',
                 ),
               )
