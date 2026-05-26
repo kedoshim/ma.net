@@ -102,6 +102,9 @@ class _ControllerScreenState extends State<ControllerScreen>
   bool _listenerAttached = false;
   bool tapHapticsEnabled = true;
   int totalSlots = 4;
+  int _connectionFailedCount = 0;
+  bool _hasReceivedMessage = false;
+  bool _showDialogOnFail = false;
   Color? playerColor;
   ColorTheme _currentTheme = ColorTheme.blue;
   PlayerFaceData _playerFace = PlayerFaceData.random();
@@ -158,6 +161,15 @@ class _ControllerScreenState extends State<ControllerScreen>
     }
   }
 
+  void _handleConnectionFailure() {
+    if (!mounted) return;
+    _connectionFailedCount++;
+    if (_connectionFailedCount >= 3) {
+      _connectionFailedCount = 0;
+      _showConnectionTipsDialog();
+    }
+  }
+
   Future<void> _checkSetupRequired() async {
     await _loadInitialPreferences();
 
@@ -199,20 +211,24 @@ class _ControllerScreenState extends State<ControllerScreen>
         setState(
           () => _connectionState = ControllerConnectionState.disconnected,
         );
+        _handleConnectionFailure();
       }
     });
   }
 
-  Future<void> _connectWebSocket() async {
+  Future<bool> _connectWebSocket() async {
     if (ws != null || _listenerAttached) {
-      return;
+      return true;
     }
 
     setState(() => _connectionState = ControllerConnectionState.searching);
 
     try {
       _listenerAttached = true;
-      ws = await ControllerConnectionManager.instance.getConnection();
+      _hasReceivedMessage = false;
+      ws = await ControllerConnectionManager.instance.getConnection().timeout(
+        const Duration(seconds: 4),
+      );
 
       setState(() {
         _connectionState = ControllerConnectionState.connected;
@@ -229,8 +245,10 @@ class _ControllerScreenState extends State<ControllerScreen>
       if (_isMouseModeVisible) {
         _send({'type': 'set_mouse_mode', 'active': true});
       }
+      return true;
     } catch (_) {
       _handleDisconnect();
+      return false;
     }
   }
 
@@ -239,9 +257,14 @@ class _ControllerScreenState extends State<ControllerScreen>
       return;
     }
 
+    bool failedToConnect = !_hasReceivedMessage && _listenerAttached;
+    bool shouldShowDialog = _showDialogOnFail;
+    _showDialogOnFail = false;
+
     ControllerConnectionManager.instance.disconnect();
     _listenerAttached = false;
     ws = null;
+    _hasReceivedMessage = false;
 
     setState(() {
       _connectionState = ControllerConnectionState.disconnected;
@@ -252,6 +275,15 @@ class _ControllerScreenState extends State<ControllerScreen>
 
     _clearPlayerSlot();
     _autoConnectEnabled = false;
+
+    if (failedToConnect) {
+      if (shouldShowDialog) {
+        _showConnectionTipsDialog();
+        _connectionFailedCount = 0;
+      } else {
+        _handleConnectionFailure();
+      }
+    }
   }
 
   Future<void> _connectToHost(DiscoveredHost host) async {
@@ -264,12 +296,97 @@ class _ControllerScreenState extends State<ControllerScreen>
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => QRScannerScreen(
-          onConnected: () {
+          onConnected: () async {
             _autoConnectEnabled = true;
-            _connectWebSocket();
+            _showDialogOnFail = true;
+            await _connectWebSocket();
           },
         ),
       ),
+    );
+  }
+
+  void _showConnectionTipsDialog() {
+    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+
+    showDialog(
+      context: dialogContext,
+      useRootNavigator: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.screenBackground,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            SizedBox(width: 8),
+            Text(
+              'O celular não conectou :P',
+              style: TextStyle(
+                fontFamily: 'momo',
+                color: AppColors.textPrimary,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Algumas dicas para tentar resolver:',
+                style: TextStyle(
+                  color: AppColors.textPrimary.withValues(alpha: 0.8),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildTipRow(
+                Icons.wifi_rounded,
+                '1. Verifique se ambos estão na mesma rede Wi-Fi.',
+              ),
+              const SizedBox(height: 12),
+              _buildTipRow(
+                Icons.shield_outlined,
+                '2. O Firewall do Windows pode estar bloqueando a conexão.',
+              ),
+              const SizedBox(height: 12),
+              _buildTipRow(
+                Icons.portable_wifi_off_outlined,
+                '3. Tente usar o roteador (Hotspot) do próprio computador se o Wi-Fi falhar.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Entendi',
+              style: TextStyle(
+                fontFamily: 'momo',
+                color: AppColors.highlightColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipRow(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: AppColors.textPrimary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+          ),
+        ),
+      ],
     );
   }
 
@@ -318,6 +435,10 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _handleWebSocketMessage(dynamic message) {
+    _hasReceivedMessage = true;
+    _connectionFailedCount = 0;
+    _showDialogOnFail = false;
+
     if (message is! String) {
       return;
     }
@@ -828,24 +949,31 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   Widget _buildControllerCanvas() {
+    final minimumPadding = kIsWeb ? 8.0 : 12.0;
+
     return ScaffoldMessenger(
       key: _controllerMessengerKey,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            _buildControllerSurface(),
-            if (_connectionState ==
-                ControllerConnectionState.multipleHostsFound)
-              MultipleHostsOverlay(
-                hosts: _discoveredHosts,
-                onHostSelected: (host) {
-                  _autoConnectEnabled = true;
-                  _connectToHost(host);
-                },
-                onOpenQrScanner: kIsWeb ? null : _openQRScanner,
-              ),
-          ],
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(minimumPadding),
+            child: Stack(
+              children: [
+                _buildControllerSurface(),
+                if (_connectionState ==
+                    ControllerConnectionState.multipleHostsFound)
+                  MultipleHostsOverlay(
+                    hosts: _discoveredHosts,
+                    onHostSelected: (host) {
+                      _autoConnectEnabled = true;
+                      _connectToHost(host);
+                    },
+                    onOpenQrScanner: kIsWeb ? null : _openQRScanner,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -865,28 +993,21 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   Widget _buildResponsiveControllerFrame() {
-    final minimumPadding = kIsWeb ? 8.0 : 12.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        final isPortrait = size.height > size.width;
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(minimumPadding),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final size = constraints.biggest;
-            final isPortrait = size.height > size.width;
+        if (!kIsWeb || !isPortrait) {
+          return _buildControllerNavigator();
+        }
 
-            if (!kIsWeb || !isPortrait) {
-              return _buildControllerNavigator();
-            }
-
-            return _RotatedLandscapeViewport(
-              mediaQuery: MediaQuery.of(context),
-              viewportSize: size,
-              child: _buildControllerNavigator(),
-            );
-          },
-        ),
-      ),
+        return _RotatedLandscapeViewport(
+          mediaQuery: MediaQuery.of(context),
+          viewportSize: size,
+          child: _buildControllerNavigator(),
+        );
+      },
     );
   }
 
