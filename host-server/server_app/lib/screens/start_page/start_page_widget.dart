@@ -86,6 +86,14 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                       maxHeight: 750,
                     ),
                     padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: AppColors.screenBackground,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: AppColors.textPrimary,
+                        width: 10,
+                      ),
+                    ),
                     child: const ModeSelectionContent(isMandatory: true),
                   ),
                 ),
@@ -666,8 +674,11 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: AppColors.textPrimary,
+                    width: 2,
+                  ),
                 ),
-                elevation: _chosen != null ? 4 : 0,
               ),
               child: Text(
                 'Confirmar Seleção',
@@ -746,7 +757,7 @@ class _ModeCardState extends State<_ModeCard>
         ? glowColor
         : (isHovered
               ? glowColor.withValues(alpha: 0.5)
-              : AppColors.textPrimary.withValues(alpha: 0.12));
+              : AppColors.textPrimary);
 
     final backgroundColor = isSelected
         ? glowColor.withValues(alpha: 0.08)

@@ -236,7 +236,7 @@ class ControllerBranding {
           canonicalId: id,
           shortLabel: id,
           semanticLabel: id,
-          accentColor: const AppColors.textPrimary,
+          accentColor: AppColors.textPrimary,
         );
     }
   }

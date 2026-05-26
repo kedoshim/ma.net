@@ -10,28 +10,35 @@ class AppTheme {
     fontSize: 22,
     fontWeight: FontWeight.bold,
     color: primaryText,
+    fontFamily: 'momo',
   );
 
   static TextStyle titleMedium = const TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w500,
     color: primaryText,
+    fontFamily: 'momo',
   );
 
   static TextStyle titleSmall = const TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w500,
     color: primaryText,
+    fontFamily: 'momo',
   );
 
   static TextStyle bodyMedium = const TextStyle(
     fontSize: 16,
+    fontWeight: FontWeight.w200,
     color: primaryText,
+    fontFamily: 'momo_sans',
   );
 
   static TextStyle bodySmall = const TextStyle(
     fontSize: 14,
+    fontWeight: FontWeight.w200,
     color: primaryText,
+    fontFamily: 'momo_sans',
   );
 
   static ThemeData get theme => ThemeData(
