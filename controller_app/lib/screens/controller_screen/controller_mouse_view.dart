@@ -64,7 +64,7 @@ class ControllerMouseView extends StatelessWidget {
             Expanded(
               flex: 2,
               child: ControllerModeHub(
-                icon: Icons.mouse_outlined,
+                icon: Icons.close_rounded,
                 title: 'mouse mode',
                 onTap: onExit,
                 totalSlots: totalSlots,
