@@ -4,4 +4,6 @@
 *.h
 *.cc
 *.swift
-host-server/data/controller_presets.json
+*.exe
+host-server/data/
+host-server/server_app/assets/server/python_server.exe
