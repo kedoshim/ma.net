@@ -54,6 +54,14 @@ def _preset(
     visible_ids,
     button_order=None,
 ):
+    raw_order = []
+    for item in button_order or []:
+        canonical = _canonical_button_id(item)
+        if canonical in BUTTON_ORDER and canonical not in raw_order:
+            raw_order.append(canonical)
+    remaining = [item for item in BUTTON_ORDER if item not in raw_order]
+    final_order = [*raw_order, *remaining]
+
     return {
         "id": preset_id,
         "name": name,
@@ -62,7 +70,7 @@ def _preset(
         "layout": {
             "movementMode": movement_mode,
             "visibleButtons": _build_visibility(visible_ids),
-            "buttonOrder": list(button_order or BUTTON_ORDER),
+            "buttonOrder": final_order,
         },
     }
 
@@ -74,6 +82,7 @@ BUILT_IN_PRESETS = [
         category="builtin",
         movement_mode="floatingJoystick",
         visible_ids=["A", "B", "X", "Y", "LB", "RB"],
+        button_order=["LB", "RB", "Y", "B", "X", "A"],
     ),
     _preset(
         "builtin-simple-trigger",
@@ -81,6 +90,7 @@ BUILT_IN_PRESETS = [
         category="builtin",
         movement_mode="floatingJoystick",
         visible_ids=["A", "B", "X", "Y", "LT", "RT"],
+        button_order=["LT", "RT", "Y", "B", "X", "A"],
     ),
     _preset(
         "builtin-full",
@@ -97,6 +107,7 @@ BUILT_IN_PRESETS = [
             "LT",
             "RT",
         ],
+        button_order=["LT", "RT", "LB", "RB", "Y", "B", "X", "A"],
     ),
 ]
 
@@ -107,28 +118,16 @@ GAME_PRESETS = [
         name="Overcooked",
         category="game",
         movement_mode="floatingJoystick",
-        visible_ids=["A", "B", "X", "Y", "LB", "RB"],
-    ),
-    _preset(
-        "game-speedrunners",
-        name="SpeedRunners",
-        category="game",
-        movement_mode="dpad",
-        visible_ids=["A", "B", "X", "Y", "LB", "RB"],
+        visible_ids=["A", "B", "X", "Y",],
+        button_order=["Y", "B", "X", "A"],
     ),
     _preset(
         "game-pico-park",
         name="Pico Park",
         category="game",
-        movement_mode="floatingJoystick",
-        visible_ids=["A", "B", "X", "Y"],
-    ),
-    _preset(
-        "game-party-animals",
-        name="Party Animals",
-        category="game",
-        movement_mode="floatingJoystick",
-        visible_ids=["A", "B", "X", "Y", "LB", "RB", "LT", "RT"],
+        movement_mode="dpad",
+        visible_ids=["A", "B"],
+        button_order=["B", "A"],
     ),
     _preset(
         "game-boomerang-fu",
@@ -136,6 +135,7 @@ GAME_PRESETS = [
         category="game",
         movement_mode="floatingJoystick",
         visible_ids=["A", "B", "X", "Y"],
+        button_order=["B", "Y", "X", "A"],
     ),
 ]
 
