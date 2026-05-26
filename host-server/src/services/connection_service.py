@@ -311,6 +311,7 @@ class ConnectionService:
         addrs_by_interface = psutil.net_if_addrs()
         stats_by_interface = psutil.net_if_stats()
         windows_meta = self._load_windows_network_metadata()
+        wifi_ssids = self._get_wifi_ssids(set(addrs_by_interface.keys()))
 
         options: list[ConnectionOption] = []
         name_counts: dict[str, int] = {}
@@ -341,7 +342,10 @@ class ConnectionService:
                     state=state,
                 )
 
-                display_name_key = self._build_display_name_key(kind, name_counts)
+                profile_name = meta.get("profile_name", "")
+                if kind == "wifi" and iface_name in wifi_ssids:
+                    profile_name = wifi_ssids[iface_name]
+                display_name_key = self._build_display_name_key(kind, name_counts, profile_name)
                 connection_id = self._build_connection_id(interface_id, snic.address)
 
                 options.append(
@@ -415,6 +419,7 @@ class ConnectionService:
                 check=False,
                 text=True,
                 timeout=3,
+                creationflags=0x08000000,
             )
         except Exception as exc:
             LOG.debug("Failed to inspect Windows network metadata: %s", exc)
@@ -456,6 +461,36 @@ class ConnectionService:
             }
 
         return metadata
+
+    def _get_wifi_ssids(self, known_ifaces: set[str]) -> dict[str, str]:
+        if os.name != "nt":
+            return {}
+        try:
+            result = subprocess.run(
+                ["netsh", "wlan", "show", "interfaces"],
+                capture_output=True,
+                check=False,
+                text=True,
+                creationflags=0x08000000,
+            )
+            ssids = {}
+            current_iface = None
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if ":" in line:
+                    key, val = line.split(":", 1)
+                    key = key.strip().lower()
+                    val = val.strip()
+                    
+                    if val in known_ifaces:
+                        current_iface = val
+                    elif key == "ssid" and current_iface:
+                        if val:
+                            ssids[current_iface] = val
+            return ssids
+        except Exception as exc:
+            LOG.debug("Failed to get wifi ssids: %s", exc)
+            return {}
 
     def _normalize_interface_id(self, iface_name: str, meta: dict[str, Any]) -> str:
         source = f"{iface_name}|{meta.get('description', '')}".strip().lower()
@@ -519,6 +554,7 @@ class ConnectionService:
         self,
         kind: ConnectionKind,
         counts: dict[str, int],
+        profile_name: str = "",
     ) -> str:
         base_name = {
             "wifi": "connection_label_wifi",
@@ -526,6 +562,9 @@ class ConnectionService:
             "hotspot": "connection_label_hotspot",
             "unknown": "connection_label_backup",
         }.get(kind, "connection_label_backup")
+
+        if profile_name:
+            return f"{base_name}__{profile_name}"
 
         counts[base_name] = counts.get(base_name, 0) + 1
         if counts[base_name] == 1:

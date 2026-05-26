@@ -70,6 +70,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   bool _locked = true;
   String _controllerMode = 'x360';
   late final ValueNotifier<ControllerBrandingMode> _brandingModeNotifier;
+  bool _isShowingNoNetworkDialog = false;
 
   List<ServerAlert> _alerts = [];
 
@@ -150,6 +151,49 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
   void _handlePipelineUpdate() {
     if (!mounted) return;
+    
+    final state = _startupPipeline.state.value;
+    final hasNoConnections = !state.isLoadingConnections && 
+                             state.connectionSnapshot?.connections.isEmpty == true;
+
+    if (hasNoConnections && !_isShowingNoNetworkDialog) {
+      _isShowingNoNetworkDialog = true;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            backgroundColor: AppColors.screenBackground,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.wifi_off_rounded, size: 64, color: AppColors.textPrimary.withValues(alpha: 0.5)),
+                const SizedBox(height: 24),
+                Text(
+                  'Computador desconectado da rede',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.titleSmall.copyWith(color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Conecte-se a uma rede para continuar usando os controles.',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.bodyMedium.copyWith(color: AppColors.textPrimary.withValues(alpha: 0.7)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ).then((_) {
+        _isShowingNoNetworkDialog = false;
+      });
+    } else if (!hasNoConnections && _isShowingNoNetworkDialog) {
+      Navigator.of(context).pop();
+      _isShowingNoNetworkDialog = false;
+    }
+
     setState(() {});
   }
 
@@ -490,6 +534,14 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                   child: const Text('Cancelar'),
                                                 ),
                                                 ElevatedButton(
+                                                  style: ButtonStyle(
+                                                    backgroundColor: WidgetStateProperty.resolveWith((states) {
+                                                      if (states.contains(WidgetState.hovered)) {
+                                                        return AppColors.highlightColor;
+                                                      }
+                                                      return null;
+                                                    }),
+                                                  ),
                                                   onPressed: () =>
                                                       Navigator.of(c).pop(true),
                                                   child: const Text(
@@ -809,11 +861,8 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.backgroundColor,
+                    color: AppColors.textPrimary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: AppColors.textPrimary.withValues(alpha: 0.2),
-                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
