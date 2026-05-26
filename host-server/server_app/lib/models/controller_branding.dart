@@ -160,42 +160,42 @@ class ControllerBranding {
             canonicalId: 'LB',
             shortLabel: 'L1',
             semanticLabel: 'L1',
-            accentColor: Color(0xFF64748B),
+            accentColor: AppColors.textPrimary,
           );
         case 'RB':
           return const ControllerButtonPresentation(
             canonicalId: 'RB',
             shortLabel: 'R1',
             semanticLabel: 'R1',
-            accentColor: Color(0xFF64748B),
+            accentColor: AppColors.textPrimary,
           );
         case 'LT':
           return const ControllerButtonPresentation(
             canonicalId: 'LT',
             shortLabel: 'L2',
             semanticLabel: 'L2',
-            accentColor: Color(0xFF64748B),
+            accentColor: AppColors.textPrimary,
           );
         case 'RT':
           return const ControllerButtonPresentation(
             canonicalId: 'RT',
             shortLabel: 'R2',
             semanticLabel: 'R2',
-            accentColor: Color(0xFF64748B),
+            accentColor: AppColors.textPrimary,
           );
         case 'LSB':
           return const ControllerButtonPresentation(
             canonicalId: 'LSB',
             shortLabel: 'L3',
             semanticLabel: 'L3',
-            accentColor: Color(0xFF64748B),
+            accentColor: AppColors.textPrimary,
           );
         case 'RSB':
           return const ControllerButtonPresentation(
             canonicalId: 'RSB',
             shortLabel: 'R3',
             semanticLabel: 'R3',
-            accentColor: Color(0xFF64748B),
+            accentColor: AppColors.textPrimary,
           );
       }
     }
@@ -234,7 +234,7 @@ class ControllerBranding {
           canonicalId: id,
           shortLabel: id,
           semanticLabel: id,
-          accentColor: const Color(0xFF64748B),
+          accentColor: AppColors.textPrimary,
         );
     }
   }
