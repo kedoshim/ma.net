@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -409,3 +408,4 @@ GEMINI.md
 *.spec
 manet_server/data/
 manet_network_service.exe
+release-temp/
