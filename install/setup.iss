@@ -2,11 +2,11 @@
 AppName=MaNet
 AppId={{A388A7D5-5E82-439B-A908-1F1988B08017}
 UsePreviousAppDir=no
-AppVersion=1.0
+AppVersion={#MyAppVersion}
 DefaultDirName={autopf}\MaNet
 DefaultGroupName=MaNet
 OutputDir=../dist-installer
-OutputBaseFilename=MaNet-Setup
+OutputBaseFilename=MaNet-Setup-v{#MyAppVersion}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
