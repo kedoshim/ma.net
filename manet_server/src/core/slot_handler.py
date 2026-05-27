@@ -36,6 +36,7 @@ async def notify_device_unassigned(manager, device_id):
         LOG.error("Failed to notify device unassigned: %s", e)
 
 def reset_slot_gamepad(slot):
+    LOG.info("Resetting gamepad states for slot %s", getattr(slot, 'slot_id', 'unknown'))
     try:
         slot.gamepad.reset()
         slot.gamepad.update()

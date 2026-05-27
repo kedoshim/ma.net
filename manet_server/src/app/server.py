@@ -15,14 +15,11 @@ from src.services.network_diagnostics_service import NetworkDiagnosticsService
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger("piko-proto") 
-
-logging.getLogger("aiohttp.access").setLevel(logging.WARNING) 
-logging.getLogger("aiohttp.server").setLevel(logging.WARNING)
 
 
 def create_app(config):
+    LOG.info("Initializing MaNet Server dependencies...")
     manager, admin_panel, _ = build_dependencies(config)
     connection_service = ConnectionService(
         port=config.http_port,
@@ -33,6 +30,7 @@ def create_app(config):
         connection_service,
     )
 
+    LOG.info("Creating aiohttp web application...")
     app = web.Application()
 
     cors = aiohttp_cors.setup(app, defaults={
@@ -62,6 +60,7 @@ def create_app(config):
 
     file_routes = FileRoutes()
 
+    LOG.info("Registering application routes...")
     register_all_routes(
         app,
         server_routes,
@@ -76,13 +75,16 @@ def create_app(config):
     lifecycle = AppLifecycle(manager)
     lifecycle.register_lifecycle(app)
 
+    LOG.info("Application setup complete.")
     return app, manager
 
 
 def run_server(config):
+    LOG.info(f"Starting server on port {config.http_port} (Debug mode: {config.debug})")
     app, manager = create_app(config)
 
     if config.debug:
+        LOG.info("Starting Debug CLI thread...")
         debug_cli = DebugCLI(manager, config.http_port)
 
         threading.Thread(
@@ -91,10 +93,17 @@ def run_server(config):
         ).start()
 
     try:
+        LOG.info("Running aiohttp server...")
         web.run_app(
             app,
             host="0.0.0.0",
-            port=config.http_port
+            port=config.http_port,
+            print=None  # Suppresses the default aiohttp stdout print to keep logs clean
         )
+    except Exception as e:
+        LOG.exception("Server encountered a fatal exception during runtime.")
+        raise
     finally:
+        LOG.info("Server shutting down, cleaning up gamepads...")
         manager.cleanup_gamepads()
+        LOG.info("Gamepad cleanup complete. Goodbye.")

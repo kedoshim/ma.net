@@ -26,16 +26,18 @@ class ControllerManager:
         self.main_loop = loop
 
     def initialize_slots(self):
+        LOGGER.info("Initializing %d gamepad slots...", self.config.initial_slots)
         for i in range(self.config.initial_slots):
             self._create_empty_slot(i)
 
     def register_device_ws(self, device_id, ws):
+        LOGGER.info("WebSocket connected for device %s", device_id)
         self.device_ws_map[device_id] = ws
 
-
     def unregister_device_ws(self, device_id):
+        if device_id in self.device_ws_map:
+            LOGGER.info("WebSocket disconnected for device %s", device_id)
         self.device_ws_map.pop(device_id, None)
-
 
     def get_ws_by_device(self, device_id):
         return self.device_ws_map.get(device_id)
@@ -63,13 +65,20 @@ class ControllerManager:
         }
 
     def broadcast_active_layout(self):
+        LOGGER.info("Broadcasting active layout to all devices")
         self.broadcast_to_devices(self.build_active_layout_payload())
 
     def cleanup_gamepads(self):
+        LOGGER.info("Cleaning up all gamepads...")
         for slot in self.slots:
             try:
                 slot.gamepad.reset()
                 slot.gamepad.update()
+                
+                # CRITICAL FIX: Unregister the native callback before destruction
+                if hasattr(slot.gamepad, 'unregister_notification'):
+                    slot.gamepad.unregister_notification()
+                    
             except Exception:
                 LOGGER.exception("Error resetting/updating gamepad for slot %s", getattr(slot, 'slot_id', None))
 
@@ -129,6 +138,7 @@ class ControllerManager:
             slot.connected = True
             slot.player_name = player_name or slot.player_name
             self._apply_identity_to_slot(slot, device_id)
+            LOGGER.info("Re-assigned device %s to existing slot %s", device_id, slot.slot_id)
             return slot
 
         for slot in self.slots:
@@ -138,6 +148,7 @@ class ControllerManager:
                 slot.connected = True
                 self._apply_identity_to_slot(slot, device_id)
                 self.device_map[device_id] = slot.slot_id
+                LOGGER.info("Assigned device %s to available slot %s", device_id, slot.slot_id)
                 return slot
 
         if self.config.auto_expand_slots:
@@ -168,6 +179,7 @@ class ControllerManager:
         slot.connected = False
         if slot.assigned_device_id:
             self.unregister_device_ws(slot.assigned_device_id)
+            LOGGER.info("Disconnected device from slot %s", slot_id)
         slot.reserved_until = (
             time.time() +
             self.config.slot_reservation_timeout
@@ -184,6 +196,8 @@ class ControllerManager:
         if b.assigned_device_id is not None and not b.connected and a.assigned_device_id is not None and a.connected:
             self.move_slot(slot_a, slot_b)
             return
+
+        LOGGER.info("Swapping assignments between slot %s and slot %s", slot_a, slot_b)
 
         a.assigned_device_id, b.assigned_device_id = (
             b.assigned_device_id,
@@ -241,6 +255,7 @@ class ControllerManager:
         slot.connected = True
         self._apply_identity_to_slot(slot, device_id)
         self.device_map[device_id] = slot_index
+        LOGGER.info("Manually assigned device %s to slot %s", device_id, slot_index)
         self.notify_device(device_id, {
             "type": "assigned",
             "slot": slot_index,
@@ -255,6 +270,7 @@ class ControllerManager:
         slot = self.slots[slot_index]
         if slot.assigned_device_id is not None:
             device_id = slot.assigned_device_id
+            LOGGER.info("Unassigned device %s from slot %s", device_id, slot_index)
             slot.connected = False
             slot.assigned_device_id = None
             slot.player_name = None
@@ -278,6 +294,7 @@ class ControllerManager:
     def request_mouse_mode(self, device_id):
         if self.mouse_mode_owner_device_id in (None, device_id):
             self.mouse_mode_owner_device_id = device_id
+            LOGGER.info("Device %s acquired mouse mode", device_id)
             return True
         return False
 
@@ -286,6 +303,7 @@ class ControllerManager:
             return False
 
         self.mouse_mode_owner_device_id = None
+        LOGGER.info("Device %s released mouse mode", device_id)
         return True
 
     def is_mouse_mode_owner(self, device_id):
@@ -323,6 +341,8 @@ class ControllerManager:
 
         if from_slot.assigned_device_id is None:
             return
+
+        LOGGER.info("Moving device %s from slot %s to %s", from_slot.assigned_device_id, from_index, to_index)
 
         if to_slot.assigned_device_id is not None:
             if to_slot.connected:

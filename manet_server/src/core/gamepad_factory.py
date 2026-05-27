@@ -91,6 +91,9 @@ class NullGamepad:
 
     def register_notification(self, callback_function=None):
         return
+    
+    def unregister_notification(self):
+        return
 
 async def notify_rumble(manager, slot, large, small):
     """
@@ -170,6 +173,7 @@ async def notify_rumble(manager, slot, large, small):
 
 
 def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loop, slot_index: int):
+    
     if main_loop is None:
         raise RuntimeError("Main loop not initialized")
 
@@ -228,4 +232,5 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
         callback_function=rumble_callback
     )
 
+    LOG.info("Successfully created %s gamepad for slot %s", gamepad_type, slot_index)
     return gamepad, gamepad_type
