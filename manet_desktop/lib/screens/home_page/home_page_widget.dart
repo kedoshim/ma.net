@@ -14,6 +14,7 @@ import '../../services/server_process_service.dart';
 import '../../services/sound_effect_service.dart';
 import '../../services/startup_connection_pipeline.dart';
 import '../start_page/start_page_widget.dart';
+import '../start_page/mode_selection_dialog.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/layout_selector_widget.dart';
 import '../../widgets/server_options_popup.dart';
@@ -273,6 +274,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                     child: ModeSelectionContent(
                       isMandatory: false,
                       initialMode: _controllerMode,
+                      showHeader: false,
+                      showConfirmButton: false,
                     ),
                   ),
                 ),
@@ -288,17 +291,17 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       setState(() {
         _modeChangeState = ModeChangeState.loading;
       });
-      
+
       try {
         await _api.resetControllers(mode: chosen);
-        
+
         if (!mounted) return;
         setState(() {
           _controllerMode = chosen;
           _modeChangeState = ModeChangeState.success;
         });
         _brandingModeNotifier.value = ControllerBranding.modeFromWire(chosen);
-        
+
         // Aguarda 2 segundos para exibir o check de sucesso antes de sumir
         await Future.delayed(const Duration(seconds: 2));
         if (mounted) {
@@ -385,7 +388,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       double paddingPerRow = columns == 8 ? 15.0 : (columns == 6 ? 25.0 : 40.0);
       double extraPadding = extraRows * paddingPerRow;
 
-      double maxPadding = screenWidth * 0.25; 
+      double maxPadding = screenWidth * 0.25;
       dynamicHorizontalPadding = (50.0 + extraPadding).clamp(50.0, maxPadding);
     }
 
@@ -538,7 +541,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                       brandingModeListenable:
                                           _brandingModeNotifier,
                                       alerts: _alerts,
-                                      modeChangeState: _modeChangeState, // 4. Passa o estado aqui
+                                      modeChangeState:
+                                          _modeChangeState, // 4. Passa o estado aqui
                                       onOpenAlerts: () {
                                         _markAlertsSeen();
                                         showDialog(
@@ -618,16 +622,28 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         }
 
                                         if (_controllerMode == 'x360' &&
-                                            newSlots > 4 && _alerts.every((a) => a.message != 'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.')) {
+                                            newSlots > 4 &&
+                                            _alerts.every(
+                                              (a) =>
+                                                  a.message !=
+                                                  'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
+                                            )) {
                                           _addAlert(
                                             'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
                                             isError: false,
                                           );
                                         }
 
-                                        if (_controllerMode == 'ds4' && _alerts.every((a) => a.message != 'Controles d•input podem apresentar problemas de compatibilidade em alguns jogos. Se tiver problemas, tente x•input.')) {
-                                          _alerts.removeWhere((a) => 
-                                            a.message == 'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.'
+                                        if (_controllerMode == 'ds4' &&
+                                            _alerts.every(
+                                              (a) =>
+                                                  a.message !=
+                                                  'Controles d•input podem apresentar problemas de compatibilidade em alguns jogos. Se tiver problemas, tente x•input.',
+                                            )) {
+                                          _alerts.removeWhere(
+                                            (a) =>
+                                                a.message ==
+                                                'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
                                           );
                                         }
 
@@ -833,9 +849,9 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
               GestureDetector(
                 onTap: () async {
                   if (_isApplying) return;
-                  
+
                   final newLockedState = !_draftLocked;
-                  
+
                   // Ativa o estado de carregamento imediatamente
                   setState(() {
                     _draftLocked = newLockedState;
@@ -916,29 +932,29 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                 child: _isApplying
                     ? const CircularProgressIndicator(strokeWidth: 2)
                     : _hasChanges
-                        ? InkWell(
-                            onTap: () async {
-                              setState(() => _isApplying = true);
-                              try {
-                                await widget.onApply(_draftSlots, _draftLocked);
-                              } finally {
-                                if (mounted) setState(() => _isApplying = false);
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
+                    ? InkWell(
+                        onTap: () async {
+                          setState(() => _isApplying = true);
+                          try {
+                            await widget.onApply(_draftSlots, _draftLocked);
+                          } finally {
+                            if (mounted) setState(() => _isApplying = false);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
             ],
           ),
@@ -959,11 +975,11 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                 _AlertIcon(alerts: widget.alerts, onTap: widget.onOpenAlerts),
                 const SizedBox(width: 12),
               ],
-              
+
               // 6. Novo AnimatedSwitcher para a animação de alteração de modo
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => 
+                transitionBuilder: (child, animation) =>
                     ScaleTransition(scale: animation, child: child),
                 child: widget.modeChangeState == ModeChangeState.loading
                     ? Container(
@@ -977,22 +993,22 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                         ),
                       )
                     : widget.modeChangeState == ModeChangeState.success
-                        ? Container(
-                            key: const ValueKey('success'),
-                            margin: const EdgeInsets.only(right: 8.0),
-                            width: 18,
-                            height: 18,
-                            decoration: const BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.check_rounded,
-                              color: Colors.white,
-                              size: 12,
-                            ),
-                          )
-                        : const SizedBox.shrink(key: ValueKey('idle')),
+                    ? Container(
+                        key: const ValueKey('success'),
+                        margin: const EdgeInsets.only(right: 8.0),
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('idle')),
               ),
 
               InkWell(
@@ -1000,9 +1016,16 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                 onTap: () {
                   widget.onOpenSettings();
 
-                  if (widget.controllerMode == 'ds4' && widget.alerts.every((a) => a.message != 'Controles d•input podem apresentar problemas de compatibilidade em alguns jogos. Se tiver problemas, tente x•input.')) {
-                    widget.alerts.removeWhere((a) => 
-                      a.message == 'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.'
+                  if (widget.controllerMode == 'ds4' &&
+                      widget.alerts.every(
+                        (a) =>
+                            a.message !=
+                            'Controles d•input podem apresentar problemas de compatibilidade em alguns jogos. Se tiver problemas, tente x•input.',
+                      )) {
+                    widget.alerts.removeWhere(
+                      (a) =>
+                          a.message ==
+                          'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
                     );
                   }
                 },

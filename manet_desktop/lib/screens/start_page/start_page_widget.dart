@@ -4,6 +4,9 @@ import 'package:manet_desktop/services/server_process_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_colors.dart';
 import '../../services/sound_effect_service.dart';
@@ -11,6 +14,7 @@ import 'start_page_model.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../models/player_face.dart';
 import '../../widgets/app_error_widget.dart';
+import 'mode_selection_dialog.dart';
 
 class StartPageWidget extends StatefulWidget {
   const StartPageWidget({super.key});
@@ -22,59 +26,67 @@ class StartPageWidget extends StatefulWidget {
 class _StartPageWidgetState extends State<StartPageWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late StartPageModel _model;
+  Offset _globalMousePos = Offset.zero;
+
   final TextEditingController _portController = TextEditingController(
     text: '8765',
   );
   bool _isLoading = false;
+  String _appVersion = '';
   final ServerProcessService _serverService = ServerProcessService.instance;
 
   @override
   void initState() {
     super.initState();
     _model = StartPageModel();
+    _loadTheme();
+    _initPackageInfo();
+  }
+
+  Future<void> _initPackageInfo() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      setState(() {
+        _appVersion = info.version;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeName = prefs.getString('selected_theme');
+    if (themeName != null) {
+      final theme = ColorTheme.values.firstWhere(
+        (e) => e.name == themeName,
+        orElse: () => ColorTheme.blue,
+      );
+      setState(() {
+        AppColors.setTheme(theme);
+      });
+    }
   }
 
   Future<String?> _showModeSelectionDialog() async {
-    return await showGeneralDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'Selecao de modo',
-      transitionDuration: const Duration(milliseconds: 450),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return SafeArea(
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Material(
-                  color: AppColors.screenBackground,
-                  borderRadius: BorderRadius.circular(24),
-                  clipBehavior: Clip.antiAlias,
-                  child: Container(
-                    width: MediaQuery.sizeOf(context).width * 0.85,
-                    height: MediaQuery.sizeOf(context).height * 0.85,
-                    constraints: const BoxConstraints(
-                      maxWidth: 1000,
-                      maxHeight: 750,
-                    ),
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: AppColors.screenBackground,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: AppColors.textPrimary,
-                        width: 10,
-                      ),
-                    ),
-                    child: const ModeSelectionContent(isMandatory: true),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+    return await Navigator.push<String>(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 600),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const ModeSelectionPage(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          const curve = Curves.easeOutCubic;
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
     );
   }
 
@@ -221,451 +233,518 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         FocusScope.of(context).unfocus();
         FocusManager.instance.primaryFocus?.unfocus();
       },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: AppColors.screenBackground,
-        body: Container(
-          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3)),
-          child: SafeArea(
-            top: true,
-            child: Align(
-              alignment: AlignmentDirectional(0.0, 0.0),
-              child: Container(
-                width: MediaQuery.sizeOf(context).width * 0.3,
-                decoration: BoxDecoration(),
-                child: Column(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => _handleStartup(isDebug: false),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.screenBackground,
-                        foregroundColor: AppColors.textPrimary,
-                        side: BorderSide(
-                          color: AppColors.textPrimary,
-                          width: 3.0,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                        minimumSize: const Size(double.infinity, 60.0),
-                        elevation: 0.0,
-                      ),
-                      child: _isLoading
-                          ? SizedBox(
-                              width: 24.0,
-                              height: 24.0,
-                              child: CircularProgressIndicator(
-                                color: AppColors.textPrimary,
-                                strokeWidth: 3.0,
-                              ),
-                            )
-                          : Text(
-                              'iniciar',
-                              style: AppTheme.titleSmall.copyWith(
-                                fontFamily: 'momo',
-                                letterSpacing: 0.0,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
+      child: MouseRegion(
+        onHover: (e) => setState(() => _globalMousePos = e.position),
+        child: Scaffold(
+          key: scaffoldKey,
+          backgroundColor: AppColors.screenBackground,
+          body: Stack(
+            children: [
+              Row(
+                children: [
+                  Expanded(flex: 1, child: _buildLeftPanel()),
+                  Expanded(
+                    flex: 2,
+                    child: MascotWidget(
+                      globalMousePos: _globalMousePos,
+                      colors: const [
+                        Color(0xFFFF6B6B), // Coral Soft
+                        Color(0xFF4D96FF), // Azure Soft
+                        Color(0xFF6BCB77), // Green Soft
+                        Color(0xFFFFD93D), // Yellow Toy
+                        Color(0xFF9279FF), // Purple Soft
+                        Color(0xFFFF8AAE), // Pink Bubblegum
+                      ],
+                      faces: const [
+                        ':)',
+                        ':D',
+                        'X)',
+                        ':P',
+                        ':o',
+                        '^-^',
+                        ';)',
+                        'B)',
+                        ':3',
+                        ':]',
+                        ':>',
+                        '=)',
+                        '=D',
+                        '=P',
+                        '=3',
+                        '8)',
+                        '8D',
+                        'XD',
+                        'xD',
+                        'XP',
+                        'xP',
+                        ':c',
+                        ':(',
+                        ':/',
+                        ':|',
+                        ':*',
+                        ':\$',
+                        'o_o',
+                        'O_O',
+                        '0_0',
+                        '>_<',
+                        '-_-',
+                        'u_u',
+                        'UwU',
+                        'OwO',
+                        'T_T',
+                        'Q_Q',
+                        '@_@',
+                        '*_*',
+                        '^o^',
+                        '^.^',
+                        '^w^',
+                        '>:)',
+                        '<:)',
+                        ':v',
+                        ':7',
+                        ':9',
+                        '._.',
+                        '._o',
+                        '>_>',
+                      ],
                     ),
-                    if (kDebugMode) ...[
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: () => _handleStartup(isDebug: true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.screenBackground,
-                          foregroundColor: AppColors.textPrimary,
-                          side: BorderSide(
-                            color: AppColors.textPrimary,
-                            width: 2.0,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8.0),
-                          ),
-                          minimumSize: const Size(double.infinity, 48.0),
-                          elevation: 0.0,
-                        ),
-                        child: Text(
-                          'iniciar debug',
-                          style: AppTheme.titleSmall.copyWith(
-                            fontFamily: 'momo',
-                            letterSpacing: 0.0,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
+                ],
+              ),
+              Positioned(
+                bottom: 16,
+                right: 24,
+                child: Text(
+                  'v$_appVersion',
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontFamily: 'momo',
+                    fontSize: 14,
+                    color: AppColors.textPrimary.withValues(alpha: 0.3),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
   }
-}
 
-class ModeSelectionContent extends StatefulWidget {
-  final bool isMandatory;
-  final String? initialMode;
-
-  const ModeSelectionContent({
-    super.key,
-    this.isMandatory = false,
-    this.initialMode,
-  });
-
-  @override
-  State<ModeSelectionContent> createState() => _ModeSelectionContentState();
-}
-
-class _ModeSelectionContentState extends State<ModeSelectionContent> {
-  String? _chosen;
-
-  @override
-  void initState() {
-    super.initState();
-    _chosen = widget.initialMode;
-  }
-
-  void _confirm() {
-    if (_chosen != null) {
-      Navigator.of(context).pop(_chosen);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          'Escolha o modo de controle',
-          style: AppTheme.titleMedium.copyWith(
-            fontFamily: 'momo',
-            color: AppColors.textPrimary,
+  Widget _buildLeftPanel() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 48.0, vertical: 64.0),
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(
+            color: AppColors.textPrimary.withValues(alpha: 0.1),
+            width: 2,
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Selecione como os controles virtuais serão reconhecidos pelo sistema.',
-          style: AppTheme.bodyMedium.copyWith(
-            color: AppColors.textPrimary.withValues(alpha: 0.7),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ma•net',
+            style: AppTheme.titleLarge.copyWith(
+              fontFamily: 'momo',
+              fontSize: 72,
+              fontWeight: FontWeight.w900,
+              color: AppColors.textPrimary,
+              letterSpacing: -2,
+            ),
           ),
-        ),
-        const SizedBox(height: 32),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          const SizedBox(height: 8),
+          Container(
+            width: 48,
+            height: 8,
+            decoration: BoxDecoration(
+              color: AppColors.highlightColor,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const Spacer(),
+          PlayfulButton(
+            text: 'iniciar a festa',
+            isLoading: _isLoading,
+            onPressed: () => _handleStartup(isDebug: false),
+          ),
+          if (kDebugMode) ...[
+            const SizedBox(height: 16),
+            PlayfulButton(
+              text: 'iniciar debug',
+              isLoading: false,
+              isSmall: true,
+              onPressed: () => _handleStartup(isDebug: true),
+            ),
+          ],
+          const SizedBox(height: 32),
+          Row(
             children: [
-              Expanded(
-                child: _ModeCard(
-                  mode: 'x360',
-                  title: 'XInput',
-                  faceConfig: const _FaceConfig(
-                    faceText: 'X)',
-                    color: Color(0xFF10B981), // Emerald Green
-                  ),
-                  isSelected: _chosen == 'x360',
-                  onTap: () => setState(() => _chosen = 'x360'),
-                  pros: const [
-                    'Melhor compatibilidade até 4 manetes',
-                    'Suporte a vibração',
-                    'Ideal para jogos modernos',
-                  ],
-                  cons: const ['Pode não funcionar com mais de 4 manetes'],
-                ),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: _ModeCard(
-                  mode: 'ds4',
-                  title: 'DInput',
-                  faceConfig: const _FaceConfig(
-                    faceText: ':D',
-                    color: Color(0xFFEF4444), // Red
-                  ),
-                  isSelected: _chosen == 'ds4',
-                  onTap: () => setState(() => _chosen = 'ds4'),
-                  pros: const ['Funciona com qualquer número de manetes'],
-                  cons: const [
-                    'Pode não ser reconhecido por todos os jogos',
-                    'Sem suporte a vibração',
-                  ],
-                ),
-              ),
+              PlayfulIconButton(icon: FontAwesomeIcons.discord, onTap: () {}),
+              const SizedBox(width: 16),
+              PlayfulIconButton(icon: FontAwesomeIcons.github, onTap: () {}),
             ],
           ),
-        ),
-        const SizedBox(height: 32),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            if (!widget.isMandatory) ...[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 16,
+          const Spacer(),
+          _buildColorSelectors(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorSelectors() {
+    return Row(
+      children: ColorTheme.values.map((theme) {
+        final themeData = AppColors.getTheme(theme);
+        final isSelected = AppColors.screenBackground == themeData.background;
+
+        return Padding(
+          padding: const EdgeInsets.only(right: 16.0),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () async {
+                setState(() {
+                  AppColors.setTheme(theme);
+                });
+
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('selected_theme', theme.name);
+
+                try {
+                  SoundEffectService.instance.playThemeSelect();
+                } catch (_) {}
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                width: isSelected ? 36 : 28,
+                height: isSelected ? 36 : 28,
+                decoration: BoxDecoration(
+                  color: themeData.background,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.textPrimary,
+                    width: isSelected ? 4 : 2,
                   ),
-                ),
-                child: Text(
-                  'Cancelar',
-                  style: AppTheme.bodyMedium.copyWith(
-                    fontFamily: 'momo',
-                    color: AppColors.textPrimary.withValues(alpha: 0.7),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-            ],
-            ElevatedButton(
-              onPressed: _chosen != null ? _confirm : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.highlightColor,
-                foregroundColor: AppColors.textPrimary,
-                disabledBackgroundColor: AppColors.textPrimary.withValues(
-                  alpha: 0.1,
-                ),
-                disabledForegroundColor: AppColors.textPrimary.withValues(
-                  alpha: 0.4,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 20,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: AppColors.textPrimary, width: 2),
-                ),
-              ),
-              child: Text(
-                'Confirmar Seleção',
-                style: AppTheme.titleSmall.copyWith(
-                  fontFamily: 'momo',
-                  fontSize: 16,
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.textPrimary.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : [],
                 ),
               ),
             ),
-          ],
-        ),
-      ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
 
-class _FaceConfig {
-  final String faceText;
-  final Color color;
-  const _FaceConfig({required this.faceText, required this.color});
-}
+class PlayfulButton extends StatefulWidget {
+  final String text;
+  final bool isLoading;
+  final VoidCallback onPressed;
+  final bool isSmall;
 
-class _ModeCard extends StatefulWidget {
-  final String mode;
-  final String title;
-  final _FaceConfig faceConfig;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final List<String> pros;
-  final List<String> cons;
-
-  const _ModeCard({
-    required this.mode,
-    required this.title,
-    required this.faceConfig,
-    required this.isSelected,
-    required this.onTap,
-    required this.pros,
-    required this.cons,
+  const PlayfulButton({
+    super.key,
+    required this.text,
+    required this.isLoading,
+    required this.onPressed,
+    this.isSmall = false,
   });
 
   @override
-  State<_ModeCard> createState() => _ModeCardState();
+  State<PlayfulButton> createState() => _PlayfulButtonState();
 }
 
-class _ModeCardState extends State<_ModeCard>
+class _PlayfulButtonState extends State<PlayfulButton>
     with SingleTickerProviderStateMixin {
   bool _isHovered = false;
-  late AnimationController _floatController;
-
-  @override
-  void initState() {
-    super.initState();
-    // Slight offset in animation duration to prevent synchronous perfection
-    final duration = 2000 + (widget.mode == 'x360' ? 0 : 300);
-    _floatController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: duration),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _floatController.dispose();
-    super.dispose();
-  }
+  bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = widget.isSelected;
-    final isHovered = _isHovered;
-
-    final scale = isSelected ? 1.02 : (isHovered ? 1.01 : 1.0);
-    final glowColor = widget.faceConfig.color;
-    final borderColor = isSelected
-        ? glowColor
-        : (isHovered
-              ? glowColor.withValues(alpha: 0.5)
-              : AppColors.textPrimary);
-
-    final backgroundColor = isSelected
-        ? glowColor.withValues(alpha: 0.08)
-        : AppColors.backgroundColor.withValues(alpha: 0.04);
+    final scale = _isPressed ? 0.92 : (_isHovered ? 1.04 : 1.0);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          widget.onPressed();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 150),
           curve: Curves.easeOutCubic,
-          transformAlignment: Alignment.center,
           transform: Matrix4.identity()..scale(scale),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor, width: isSelected ? 3 : 2),
-            boxShadow: isSelected || isHovered
-                ? [
-                    BoxShadow(
-                      color: glowColor.withValues(
-                        alpha: isSelected ? 0.25 : 0.1,
-                      ),
-                      blurRadius: isSelected ? 24 : 12,
-                      spreadRadius: isSelected ? 4 : 0,
-                      offset: const Offset(0, 8),
+          transformAlignment: Alignment.center,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.highlightColor,
+              borderRadius: BorderRadius.circular(widget.isSmall ? 16 : 24),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: widget.isSmall ? 3 : 5,
+              ),
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.isSmall ? 24 : 40,
+              vertical: widget.isSmall ? 16 : 24,
+            ),
+            child: widget.isLoading
+                ? SizedBox(
+                    width: widget.isSmall ? 16 : 28,
+                    height: widget.isSmall ? 16 : 28,
+                    child: CircularProgressIndicator(
+                      color: AppColors.textPrimary,
+                      strokeWidth: 4,
                     ),
-                  ]
-                : [],
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Title
-                      Text(
-                        widget.title,
-                        style: AppTheme.titleMedium.copyWith(
-                          fontFamily: 'momo',
-                          color: isSelected ? glowColor : AppColors.textPrimary,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      // Animated Face
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Center(
-                          child: AnimatedBuilder(
-                            animation: _floatController,
-                            builder: (context, child) {
-                              // Sway and bobbing
-                              final floatY =
-                                  math.sin(_floatController.value * math.pi) *
-                                  8.0;
-                              final floatX =
-                                  math.cos(_floatController.value * math.pi) *
-                                  3.0;
-                              return Transform.translate(
-                                offset: Offset(floatX, floatY),
-                                child: child,
-                              );
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(24),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: widget.faceConfig.color.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                    blurRadius: isSelected ? 20 : 10,
-                                    spreadRadius: isSelected ? 4 : 0,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: PlayerFaceIndicator(
-                                face: PlayerFaceData(
-                                  color: widget.faceConfig.color,
-                                  faceText: widget.faceConfig.faceText,
-                                  rotation: PlayerFaceRotation.normal,
-                                ),
-                                size: 100,
-                                roundedSquare: true,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      // Pros and Cons
-                      _buildFeatureList(widget.pros, true),
-                      const SizedBox(height: 12),
-                      _buildFeatureList(widget.cons, false),
-                    ],
+                  )
+                : Text(
+                    widget.text,
+                    style: AppTheme.titleMedium.copyWith(
+                      fontFamily: 'momo',
+                      fontSize: widget.isSmall ? 20 : 32,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      height: 1.0,
+                    ),
                   ),
-                ),
-              );
-            },
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildFeatureList(List<String> items, bool isPro) {
-    final icon = isPro
-        ? Icons.add_circle_outline_rounded
-        : Icons.remove_circle_outline_rounded;
-    final color = isPro ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+class PlayfulIconButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback onTap;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: items.map((item) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 6.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  item,
-                  style: AppTheme.bodyMedium.copyWith(
-                    fontSize: 13,
-                    color: AppColors.textPrimary.withValues(alpha: 0.85),
+  const PlayfulIconButton({super.key, required this.icon, required this.onTap});
+
+  @override
+  State<PlayfulIconButton> createState() => _PlayfulIconButtonState();
+}
+
+class _PlayfulIconButtonState extends State<PlayfulIconButton> {
+  bool _isHovered = false;
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = _isPressed ? 0.9 : (_isHovered ? 1.1 : 1.0);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.identity()..scale(scale),
+          transformAlignment: Alignment.center,
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: _isHovered ? AppColors.textPrimary : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.textPrimary, width: 3),
+          ),
+          child: Icon(
+            widget.icon,
+            color: _isHovered
+                ? AppColors.screenBackground
+                : AppColors.textPrimary,
+            size: 28,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MascotWidget extends StatefulWidget {
+  final List<Color> colors;
+  final List<String> faces;
+  final Offset globalMousePos;
+
+  const MascotWidget({
+    super.key,
+    required this.colors,
+    required this.faces,
+    required this.globalMousePos,
+  });
+
+  @override
+  State<MascotWidget> createState() => _MascotWidgetState();
+}
+
+class _MascotWidgetState extends State<MascotWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _popController;
+  late AnimationController _tickController;
+
+  int _faceIndex = 0;
+  int _colorIndex = 0;
+  final double _mascotSize = 400.0;
+
+  Offset _currentOffset = Offset.zero;
+  Offset _lastOffset = Offset.zero;
+  final math.Random _random = math.Random();
+
+  @override
+  void initState() {
+    super.initState();
+    _popController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _tickController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 16),
+    )..repeat();
+
+    _faceIndex = _random.nextInt(widget.faces.length);
+    _colorIndex = _random.nextInt(widget.colors.length);
+  }
+
+  @override
+  void dispose() {
+    _popController.dispose();
+    _tickController.dispose();
+    super.dispose();
+  }
+
+  void _onTap() {
+    int newFace;
+    int newColor;
+
+    // Garante que não repita a face ou a cor anterior
+    do {
+      newFace = _random.nextInt(widget.faces.length);
+    } while (newFace == _faceIndex);
+
+    do {
+      newColor = _random.nextInt(widget.colors.length);
+    } while (newColor == _colorIndex);
+
+    setState(() {
+      _faceIndex = newFace;
+      _colorIndex = newColor;
+    });
+
+    _popController.forward(from: 0.0);
+    try {
+      SoundEffectService.instance.playHover();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_popController, _tickController]),
+      builder: (context, child) {
+        final renderBox = context.findRenderObject() as RenderBox?;
+        final center = renderBox != null
+            ? renderBox.localToGlobal(
+                Offset(renderBox.size.width / 2, renderBox.size.height / 2),
+              )
+            : Offset.zero;
+
+        var delta = widget.globalMousePos - center;
+
+        // Lógica de movimento 2D flat (estilo analógico)
+        const maxTravel = 90.0;
+        Offset targetOffset;
+        if (delta.distance > 800) {
+          targetOffset = Offset.zero;
+        } else {
+          // Clamping independente para X e Y para permitir um alcance mais quadrado
+          targetOffset = Offset(
+            delta.dx.clamp(-maxTravel, maxTravel),
+            delta.dy.clamp(-maxTravel, maxTravel),
+          );
+        }
+
+        // Interpolação suave (Spring logic)
+        _currentOffset = Offset(
+          _currentOffset.dx + (targetOffset.dx - _currentOffset.dx) * 0.18,
+          _currentOffset.dy + (targetOffset.dy - _currentOffset.dy) * 0.18,
+        );
+
+        // Física de wobble: reação à velocidade do movimento
+        final velocity = _currentOffset - _lastOffset;
+        _lastOffset = _currentOffset;
+
+        final wobbleX = velocity.dx * 0.45;
+        final wobbleY = velocity.dy * 0.45;
+
+        // Física de clique (pop/squash)
+        final t = _popController.value;
+        final bounce = math.sin(t * math.pi * 3) * (1 - t);
+        final scaleX = 1.0 + bounce * 0.18;
+        final scaleY = 1.0 - bounce * 0.18;
+
+        return Center(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: _onTap,
+              child: Container(
+                width: _mascotSize,
+                height: _mascotSize,
+                decoration: BoxDecoration(
+                  color: AppColors.lightColor,
+                  borderRadius: BorderRadius.circular(_mascotSize * 0.25),
+                  border: Border.all(color: AppColors.textPrimary, width: 10),
+                ),
+                child: Center(
+                  child: Transform(
+                    transform: Matrix4.identity()
+                      ..translate(_currentOffset.dx, _currentOffset.dy)
+                      ..scale(scaleX, scaleY),
+                    alignment: Alignment.center,
+                    child: PlayerFaceIndicator(
+                      face: PlayerFaceData(
+                        color:
+                            widget.colors[_colorIndex % widget.colors.length],
+                        faceText:
+                            widget.faces[_faceIndex % widget.faces.length],
+                        rotation: PlayerFaceRotation.normal,
+                      ),
+                      size: _mascotSize * 0.45,
+                      roundedSquare: false,
+                      faceTranslateX: wobbleX,
+                      faceTranslateY: wobbleY,
+                    ),
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         );
-      }).toList(),
+      },
     );
   }
 }

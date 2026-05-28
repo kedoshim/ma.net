@@ -353,7 +353,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'Entra aí!',
+                              'Entra aí :)',
                               style: AppTheme.titleMedium.copyWith(
                                 fontFamily: 'momo',
                                 fontSize: widget.scale.eighth * 0.9,
@@ -505,6 +505,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                           // ],
                           SizedBox(height: widget.scale.eighth * 0.5),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Expanded(
                                 child: ElevatedButton.icon(
@@ -537,7 +538,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                                   ),
                                 ),
                               ),
-                              SizedBox(width: widget.scale.eighth * 0.5),
+                              // SizedBox(width: widget.scale.eighth * 0.5),
                               // _DiagnosticsButton(
                               //   scale: widget.scale,
                               //   snapshot: diagnostics,
