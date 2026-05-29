@@ -505,22 +505,6 @@ class ControllerManager:
             LOGGER.info("Resizing slots to %s", slots)
             self._resize_slots(slots)
 
-        self._assign_pooled_devices()
-
-    def _assign_pooled_devices(self):
-        pool = self.get_unassigned_devices()
-        for device in pool:
-            device_id = device['deviceId']
-            player_name = device.get('name')
-            slot = self.assign_slot(device_id, player_name)
-            if slot is not None:
-                LOGGER.info("Automatically assigned pooled device %s to slot %s", device_id, slot.slot_id)
-                self.notify_device(device_id, {
-                    "type": "assigned",
-                    "slot": slot.slot_id,
-                    **self.get_slot_identity(slot),
-                    "total_slots": len(self.slots)
-                })
 
     def _recreate_all_gamepads(self, new_slot_count: int):
 
