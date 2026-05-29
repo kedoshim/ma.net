@@ -164,8 +164,7 @@ class _LayoutSelectorWidgetState extends State<LayoutSelectorWidget> {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: AppColors.backgroundColor.withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(15),
             border: Border.all(
               color: AppColors.highlightColor,
               width: 1.5,

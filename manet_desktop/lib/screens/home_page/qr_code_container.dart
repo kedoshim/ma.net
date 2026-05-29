@@ -181,12 +181,13 @@ class _QRCodePanelState extends State<QRCodePanel> {
 
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFFFFFCF5),
+      backgroundColor: AppColors.screenBackground,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(widget.scale.quarter),
         ),
+        side: const BorderSide(color: AppColors.textPrimary, width: 4),
       ),
       builder: (context) {
         return _ConnectionsSheet(
@@ -202,12 +203,13 @@ class _QRCodePanelState extends State<QRCodePanel> {
   Future<void> _showDiagnosticsSheet(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFFFFFBF4),
+      backgroundColor: AppColors.screenBackground,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(widget.scale.quarter),
         ),
+        side: const BorderSide(color: AppColors.textPrimary, width: 4),
       ),
       builder: (context) {
         return _DiagnosticsSheet(
@@ -297,12 +299,13 @@ class _QRCodePanelState extends State<QRCodePanel> {
   Future<void> _showFaqSheet(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFFFFFCF5),
+      backgroundColor: AppColors.screenBackground,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(widget.scale.quarter),
         ),
+        side: const BorderSide(color: AppColors.textPrimary, width: 4),
       ),
       builder: (context) {
         return _FaqSheet(
@@ -327,12 +330,9 @@ class _QRCodePanelState extends State<QRCodePanel> {
       width: double.infinity,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.textPrimary.withValues(alpha: 0.02),
+        color: AppColors.screenBackground,
         borderRadius: BorderRadius.circular(widget.scale.eighth * 1.5),
-        border: Border.all(
-          color: AppColors.textPrimary,
-          width: widget.scale.eighth / 4,
-        ),
+        border: Border.all(color: AppColors.textPrimary, width: 5),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -985,7 +985,7 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
                   width: widget.scale.quarter * 1.2,
                   height: widget.scale.eighth / 2,
                   decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.12),
+                    color: AppColors.textPrimary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(widget.scale.eighth),
                   ),
                 ),
@@ -1114,13 +1114,11 @@ class _DiagnosticCard extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(scale.eighth * 0.85),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.lightColor,
         borderRadius: BorderRadius.circular(scale.eighth),
         border: Border.all(
-          color: isWarn
-              ? const Color(0xFFEAB454).withValues(alpha: 0.45)
-              : AppColors.textPrimary.withValues(alpha: 0.12),
-          width: scale.eighth / 5,
+          color: isWarn ? const Color(0xFFEAB454) : AppColors.textPrimary,
+          width: 3,
         ),
       ),
       child: Column(
@@ -1305,7 +1303,7 @@ class _ConnectionsSheetState extends State<_ConnectionsSheet> {
                   width: widget.scale.quarter * 1.2,
                   height: widget.scale.eighth / 2,
                   decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.12),
+                    color: AppColors.textPrimary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(widget.scale.eighth),
                   ),
                 ),
@@ -1404,15 +1402,13 @@ class _CompactConnectionCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(scale.eighth * 0.8),
       decoration: BoxDecoration(
-        color: connection.selected
-            ? AppColors.backgroundColor
-            : Colors.transparent,
+        color: AppColors.lightColor,
         borderRadius: BorderRadius.circular(scale.eighth * 0.8),
         border: Border.all(
           color: connection.selected
               ? AppColors.highlightColor
-              : AppColors.textPrimary.withValues(alpha: 0.15),
-          width: scale.eighth / 5,
+              : AppColors.textPrimary,
+          width: connection.selected ? 5 : 3,
         ),
       ),
       child: Row(
@@ -1586,7 +1582,7 @@ class _FaqSheet extends StatelessWidget {
                   width: scale.quarter * 1.2,
                   height: scale.eighth / 2,
                   decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.12),
+                    color: AppColors.textPrimary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(scale.eighth),
                   ),
                 ),
@@ -1656,12 +1652,9 @@ class _FaqItem extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(scale.eighth * 0.85),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.lightColor,
         borderRadius: BorderRadius.circular(scale.eighth),
-        border: Border.all(
-          color: AppColors.textPrimary.withValues(alpha: 0.12),
-          width: scale.eighth / 5,
-        ),
+        border: Border.all(color: AppColors.textPrimary, width: 3),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
