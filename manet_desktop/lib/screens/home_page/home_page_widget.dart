@@ -77,6 +77,28 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   late final ValueNotifier<ControllerBrandingMode> _brandingModeNotifier;
   bool _isShowingNoNetworkDialog = false;
 
+  static const String _xinput4PlusAlertMsg = 'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.';
+
+  void _syncAlerts({bool notify = true}) {
+    final hasXinputAlert = _alerts.any((a) => a.message == _xinput4PlusAlertMsg);
+
+    if (_controllerMode == 'x360' && _slots > 4) {
+      if (!hasXinputAlert) {
+        if (notify) {
+          _addAlert(_xinput4PlusAlertMsg);
+        } else {
+          _alerts.insert(0, ServerAlert(message: _xinput4PlusAlertMsg, isError: false));
+        }
+      }
+    } else if (hasXinputAlert) {
+      if (notify) {
+        setState(() => _alerts.removeWhere((a) => a.message == _xinput4PlusAlertMsg));
+      } else {
+        _alerts.removeWhere((a) => a.message == _xinput4PlusAlertMsg);
+      }
+    }
+  }
+
   // 2. Variável de estado para a animação do botão de modo
   ModeChangeState _modeChangeState = ModeChangeState.idle;
 
@@ -119,6 +141,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _brandingModeNotifier = ValueNotifier(
       ControllerBranding.modeFromWire(_controllerMode),
     );
+    _syncAlerts(notify: false);
   }
 
   Future<void> _loadPresets() async {
@@ -294,6 +317,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
           _controllerMode = chosen;
           _modeChangeState = ModeChangeState.success;
         });
+        _syncAlerts();
         _brandingModeNotifier.value = ControllerBranding.modeFromWire(chosen);
 
         // Aguarda 2 segundos para exibir o check de sucesso antes de sumir
@@ -567,91 +591,87 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         });
                                       },
                                       onApply: (newSlots, newLocked) async {
-                                        final assigned = await _api
+                                        try{
+                                          final assigned = await _api
                                             .fetchSlots();
-                                        final active = assigned.slots
-                                            .where((s) => s.device != null)
-                                            .length;
-                                        if (newSlots < assigned.slots.length &&
-                                            active > 0) {
-                                          final ok = await showDialog<bool>(
+
+                                          final active = assigned.slots
+                                              .where((s) => s.device != null)
+                                              .length;
+                                          if (newSlots < assigned.slots.length &&
+                                              active > 0) {
+                                            final ok = await showDialog<bool>(
+                                              context: context,
+                                              builder: (c) => AlertDialog(
+                                                backgroundColor:
+                                                    AppColors.screenBackground,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(24),
+                                                  side: const BorderSide(
+                                                    color: AppColors.textPrimary,
+                                                    width: 4,
+                                                  ),
+                                                ),
+                                                title: Text(
+                                                  'Remover controles?',
+                                                  style: AppTheme.titleSmall
+                                                      .copyWith(
+                                                        color:
+                                                            AppColors.textPrimary,
+                                                        fontFamily: 'momo',
+                                                        fontWeight: FontWeight.w900,
+                                                      ),
+                                                ),
+                                                content: Text(
+                                                  'Remover controles pode desconectar jogadores atuais',
+                                                  style: AppTheme.bodyMedium
+                                                      .copyWith(
+                                                        color:
+                                                            AppColors.textPrimary,
+                                                      ),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.of(
+                                                      c,
+                                                    ).pop(false),
+                                                    style: TextButton.styleFrom(
+                                                      foregroundColor: AppColors.textPrimary,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                    ),
+                                                    child: const Text('Cancelar', style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold)),
+                                                  ),
+                                                  ElevatedButton(
+                                                    onPressed: () =>
+                                                        Navigator.of(c).pop(true),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: AppColors.highlightColor,
+                                                      foregroundColor: AppColors.textPrimary,
+                                                      elevation: 0,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        side: const BorderSide(color: AppColors.textPrimary, width: 3),
+                                                      ),
+                                                    ),
+                                                    child: const Text('Confirmar', style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.w900)),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (ok != true) return;
+                                          }
+                                        }catch (e) {
+                                          if (!mounted) return;
+                                          showDialog(
                                             context: context,
-                                            builder: (c) => AlertDialog(
-                                              backgroundColor:
-                                                  AppColors.screenBackground,
-                                              title: Text(
-                                                'Remover controles?',
-                                                style: AppTheme.titleSmall
-                                                    .copyWith(
-                                                      color:
-                                                          AppColors.textPrimary,
-                                                    ),
-                                              ),
-                                              content: Text(
-                                                'Remover controles pode desconectar jogadores atuais',
-                                                style: AppTheme.bodyMedium
-                                                    .copyWith(
-                                                      color:
-                                                          AppColors.textPrimary,
-                                                    ),
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () => Navigator.of(
-                                                    c,
-                                                  ).pop(false),
-                                                  child: const Text('Cancelar'),
-                                                ),
-                                                ElevatedButton(
-                                                  style: ButtonStyle(
-                                                    backgroundColor:
-                                                        WidgetStateProperty.resolveWith((
-                                                          states,
-                                                        ) {
-                                                          if (states.contains(
-                                                            WidgetState.hovered,
-                                                          )) {
-                                                            return AppColors
-                                                                .highlightColor;
-                                                          }
-                                                          return null;
-                                                        }),
-                                                  ),
-                                                  onPressed: () =>
-                                                      Navigator.of(c).pop(true),
-                                                  child: const Text(
-                                                    'Confirmar',
-                                                  ),
-                                                ),
-                                              ],
+                                            barrierDismissible: false,
+                                            builder: (context) => AppErrorWidget(
+                                              title: 'Erro de Conexão',
+                                              message: 'O servidor parou de responder ou encontrou um erro fatal.',
+                                              logs: e.toString(),
+                                              onRetry: () => Navigator.of(context).pushReplacementNamed('/'), // Return to start
                                             ),
-                                          );
-                                          if (ok != true) return;
-                                        }
-
-                                        if (_controllerMode == 'x360' &&
-                                            newSlots > 4 &&
-                                            _alerts.every(
-                                              (a) =>
-                                                  a.message !=
-                                                  'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
-                                            )) {
-                                          _addAlert(
-                                            'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
-                                            isError: false,
-                                          );
-                                        }
-
-                                        if (_controllerMode == 'ds4' &&
-                                            _alerts.every(
-                                              (a) =>
-                                                  a.message !=
-                                                  'Controles d•input podem apresentar problemas de compatibilidade em alguns jogos. Se tiver problemas, tente x•input.',
-                                            )) {
-                                          _alerts.removeWhere(
-                                            (a) =>
-                                                a.message ==
-                                                'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
                                           );
                                         }
 
@@ -659,6 +679,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                           _slots = newSlots;
                                           _locked = newLocked;
                                         });
+
+                                        _syncAlerts();
 
                                         try {
                                           await _api.resetControllers(
@@ -1023,19 +1045,6 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                 // SYNTAX FIX & SCOPE FIX HERE:
                 onTap: () {
                   widget.onOpenSettings();
-
-                  if (widget.controllerMode == 'ds4' &&
-                      widget.alerts.every(
-                        (a) =>
-                            a.message !=
-                            'Controles d•input podem apresentar problemas de compatibilidade em alguns jogos. Se tiver problemas, tente x•input.',
-                      )) {
-                    widget.alerts.removeWhere(
-                      (a) =>
-                          a.message ==
-                          'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.',
-                    );
-                  }
                 },
                 borderRadius: BorderRadius.circular(16),
                 child: Container(

@@ -209,9 +209,8 @@ class HTTPRoutes:
     async def slots_handler(self, request):
         pool = self.manager.get_unassigned_devices()
         slots = self.manager.get_slots_state()
-        print("Slots state:")
-        for slot in slots:
-            print(slot)
+        # Removed debug prints that caused UnicodeEncodeError on Windows
+        # when player names contained special characters.
         return web.json_response({
             'pool': pool,
             'slots': slots

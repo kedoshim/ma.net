@@ -98,12 +98,17 @@ class DebugCLI:
 
             elif cmd == "slots":
                 for slot in self.manager.slots:
-                    print(
+                    # Use string formatting to avoid crash on unicode names
+                    status = (
                         f"[{slot.slot_id}] "
                         f"name={slot.player_name} "
                         f"device={slot.assigned_device_id} "
                         f"connected={slot.connected}"
                     )
+                    try:
+                        print(status)
+                    except UnicodeEncodeError:
+                        print(status.encode('ascii', 'replace').decode('ascii'))
 
             elif cmd == "qrcode":
                 self.print_access_debug(self.port)

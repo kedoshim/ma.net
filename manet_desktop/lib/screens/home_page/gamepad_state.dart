@@ -37,12 +37,13 @@ class GamepadState extends ChangeNotifier {
   List<DeviceModel> pool = [];
   List<SlotModel> slots = [];
   StreamSubscription? _subscription;
+  String? lastErrorMessage;
   final Map<String, DeviceInputState> _inputStates = {};
 
   GamepadState(this._api);
 
   void _log(String action) {
-    debugPrint( 
+    debugPrint(
       '[GAMEPAD STATE] $action | pool=${pool.length} slots=${slots.length}',
     );
   }
@@ -81,10 +82,16 @@ class GamepadState extends ChangeNotifier {
         print('Slot ${slot.slot} - ${slot.type}');
       }
       notifyListeners();
-    } catch (e, stack) {
-      _log('fetchSlots error: $e');
-      debugPrintStack(stackTrace: stack);
+    } catch (e) {
+      lastErrorMessage = e.toString();
+      notifyListeners();
+      rethrow; // Re-throw so the UI can catch it and show the error dialog
     }
+  }
+
+  void clearError() {
+    lastErrorMessage = null;
+    notifyListeners();
   }
 
   Future<void> assignDevice(DeviceModel device, int slotIndex) async {

@@ -64,7 +64,7 @@ class WebSocketRoutes:
         else:
             slot.connected = True
 
-            print(f"Player {slot.slot_id + 1} connected ({player_name or device_id})")
+            LOG.info("Player %d connected (%s)", slot.slot_id + 1, player_name or device_id)
             LOG.info(
                 "Assigned slot %s to %s",
                 slot.slot_id,
@@ -228,14 +228,14 @@ class WebSocketRoutes:
         finally:
             current_slot = self.manager.get_slot_by_device(device_id)
             if current_slot:
-                print(f"Player {current_slot.slot_id + 1} disconnected")
+                LOG.info("Player %d disconnected", current_slot.slot_id + 1)
                 current_slot.last_stick_x = 0
                 current_slot.last_stick_y = 0
                 current_slot.last_input_at = time.time()
                 reset_slot_gamepad(current_slot)
                 self.manager.disconnect_slot(current_slot.slot_id)
             else:
-                print(f"Unassigned device disconnected")
+                LOG.info("Unassigned device disconnected")
 
             self.manager.unregister_device(device_id)
             self.manager.unregister_device_ws(device_id)
