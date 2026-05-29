@@ -316,6 +316,147 @@ class _QRCodePanelState extends State<QRCodePanel> {
     );
   }
 
+  Widget _buildTitle() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Entra aí :)',
+          style: AppTheme.titleMedium.copyWith(
+            fontFamily: 'momo',
+            fontSize: widget.scale.eighth * 0.9,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        Container(
+          width: widget.scale.eighth * 1.5,
+          height: widget.scale.eighth / 4,
+          decoration: BoxDecoration(
+            color: AppColors.highlightColor,
+            borderRadius: BorderRadius.circular(widget.scale.eighth / 8),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQR() {
+    return ClipRRect(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 280),
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        child: widget.qrImage != null
+            ? Image(
+                key: ValueKey(widget.qrEndpointUrl ?? 'qr_image'),
+                image: widget.qrImage!,
+                width: double.infinity,
+                fit: BoxFit.contain,
+              )
+            : Container(
+                key: const ValueKey('qr_placeholder'),
+                width: double.infinity,
+                color: AppColors.textPrimary.withValues(alpha: 0.06),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Center(
+                    child: Text(
+                      widget.isLoadingConnection ? 'Criando QR...' : 'Sem QR',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontFamily: 'momo',
+                        fontSize: widget.scale.eighth * 0.8,
+                        color: AppColors.textPrimary.withValues(alpha: 0.44),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildLink(
+    String connectionUrl, {
+    MainAxisAlignment alignment = MainAxisAlignment.center,
+  }) {
+    return Row(
+      mainAxisAlignment: alignment,
+      children: [
+        Flexible(
+          child: InkWell(
+            onTap: _openLink,
+            borderRadius: BorderRadius.circular(widget.scale.eighth / 2),
+            child: Text(
+              connectionUrl.replaceAll('http://', ''),
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.bodyMedium.copyWith(
+                fontFamily: 'monomaniac',
+                fontSize: widget.scale.eighth * 0.7,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        _CopyLinkButton(
+          url: connectionUrl,
+          iconSize: widget.scale.eighth * 0.7,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNetworkInfoRow(ConnectionInfo? selectedConnection) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: _buildNetworkInfoSimple(selectedConnection, widget.scale),
+        ),
+        IconButton(
+          icon: Icon(
+            Icons.more_horiz,
+            color: AppColors.textPrimary.withValues(alpha: 0.7),
+          ),
+          onPressed: () => _showConnectionsSheet(context),
+          tooltip: 'Outras formas de conectar',
+          splashRadius: widget.scale.eighth,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHelpButton({bool isHorizontal = false}) {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.highlightColor,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        padding: EdgeInsets.symmetric(
+          horizontal: isHorizontal ? widget.scale.eighth * 1.25 : 16.0,
+          vertical: widget.scale.eighth * (isHorizontal ? 0.6 : 0.6),),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(widget.scale.eighth * 0.8),
+          side: BorderSide(
+            color: AppColors.textPrimary,
+            width: widget.scale.eighth / 5,
+          ),
+        ),
+      ),
+      onPressed: () => _showFaqSheet(context),
+      icon: Icon(Icons.help_outline_rounded, size: widget.scale.eighth * 0.9),
+      label: Text(
+        'Ajuda',
+        style: AppTheme.bodyMedium.copyWith(
+          fontFamily: 'momo',
+          fontSize: widget.scale.eighth * 0.8,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final selectedConnection = _selectedConnection;
@@ -324,7 +465,6 @@ class _QRCodePanelState extends State<QRCodePanel> {
         (widget.isLoadingConnection
             ? 'Scanning local network...'
             : 'Unavailable');
-    final diagnostics = _diagnostics;
 
     return Container(
       width: double.infinity,
@@ -334,246 +474,119 @@ class _QRCodePanelState extends State<QRCodePanel> {
         borderRadius: BorderRadius.circular(widget.scale.eighth * 1.5),
         border: Border.all(color: AppColors.textPrimary, width: 5),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: widget.scale.eighth,
-                          vertical: 0,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Entra aí :)',
-                                  style: AppTheme.titleMedium.copyWith(
-                                    fontFamily: 'momo',
-                                    fontSize: widget.scale.eighth * 0.9,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                Container(
-                                  width: widget.scale.eighth * 1.5,
-                                  height: widget.scale.eighth / 4,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.highlightColor,
-                                    borderRadius: BorderRadius.circular(
-                                      widget.scale.eighth / 8,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: widget.scale.eighth * 0.5),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ClipRRect(
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 280),
-                                    switchInCurve: Curves.easeInOut,
-                                    switchOutCurve: Curves.easeInOut,
-                                    child: widget.qrImage != null
-                                        ? Image(
-                                            key: ValueKey(
-                                              widget.qrEndpointUrl ??
-                                                  'qr_image',
-                                            ),
-                                            image: widget.qrImage!,
-                                            width: double.infinity,
-                                            fit: BoxFit.contain,
-                                          )
-                                        : Container(
-                                            key: const ValueKey(
-                                              'qr_placeholder',
-                                            ),
-                                            width: double.infinity,
-                                            color: AppColors.textPrimary
-                                                .withValues(alpha: 0.06),
-                                            child: AspectRatio(
-                                              aspectRatio: 1,
-                                              child: Center(
-                                                child: Text(
-                                                  widget.isLoadingConnection
-                                                      ? 'Criando QR...'
-                                                      : 'Sem QR',
-                                                  textAlign: TextAlign.center,
-                                                  style: AppTheme.bodyMedium
-                                                      .copyWith(
-                                                        fontFamily: 'momo',
-                                                        fontSize:
-                                                            widget
-                                                                .scale
-                                                                .eighth *
-                                                            0.8,
-                                                        color: AppColors
-                                                            .textPrimary
-                                                            .withValues(
-                                                              alpha: 0.44,
-                                                            ),
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                                SizedBox(height: widget.scale.eighth * 0.25),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Flexible(
-                                      child: InkWell(
-                                        onTap: _openLink,
-                                        borderRadius: BorderRadius.circular(
-                                          widget.scale.eighth / 2,
-                                        ),
-                                        child: Text(
-                                          connectionUrl.replaceAll(
-                                            'http://',
-                                            '',
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                          style: AppTheme.bodyMedium.copyWith(
-                                            fontFamily: 'monomaniac',
-                                            fontSize: widget.scale.eighth * 0.7,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    _CopyLinkButton(
-                                      url: connectionUrl,
-                                      iconSize: widget.scale.eighth * 0.7,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(widget.scale.eighth * 1.5 - 5),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isHorizontal =
+                constraints.maxWidth > constraints.maxHeight * 1.25;
 
-                    Divider(
-                      height: 1,
-                      thickness: widget.scale.eighth / 4,
-                      color: AppColors.textPrimary,
+            if (isHorizontal) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Padding(
+                      padding: EdgeInsets.all(widget.scale.eighth),
+                      child: _buildQR(),
                     ),
-
-                    Container(
+                  ),
+                  VerticalDivider(
+                    width: 1,
+                    thickness: widget.scale.eighth / 4,
+                    color: AppColors.textPrimary,
+                  ),
+                  Expanded(
+                    flex: 7,
+                    child: Container(
                       decoration: BoxDecoration(
                         color: AppColors.textPrimary.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(widget.scale.eighth),
-                        ),
                       ),
-                      padding: EdgeInsets.fromLTRB(
-                        widget.scale.eighth,
-                        widget.scale.eighth * 0.5,
-                        widget.scale.eighth,
-                        widget.scale.eighth * 0.5,
-                      ),
+                      padding: EdgeInsets.all(widget.scale.eighth),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          _buildNetworkInfoRow(selectedConnection),
+                          SizedBox(height: widget.scale.eighth),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Expanded(
-                                child: _buildNetworkInfoSimple(
-                                  selectedConnection,
-                                  widget.scale,
+                                child: _buildLink(
+                                  connectionUrl,
+                                  alignment: MainAxisAlignment.start,
                                 ),
                               ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.more_horiz,
-                                  color: AppColors.textPrimary.withValues(
-                                    alpha: 0.7,
-                                  ),
-                                ),
-                                onPressed: () => _showConnectionsSheet(context),
-                                tooltip: 'Outras formas de conectar',
-                                splashRadius: widget.scale.eighth,
-                              ),
-                            ],
-                          ),
-                          // if (_showTip) ...[
-                          //   SizedBox(height: widget.scale.eighth * 0.5),
-                          //   _OnboardingTip(
-                          //     scale: widget.scale,
-                          //     onDismiss: _dismissTip,
-                          //   ),
-                          // ],
-                          SizedBox(height: widget.scale.eighth * 0.5),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.highlightColor,
-                                    foregroundColor: AppColors.textPrimary,
-                                    elevation: 0,
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: widget.scale.eighth * 0.6,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        widget.scale.eighth * 0.8,
-                                      ),
-                                      side: BorderSide(
-                                        color: AppColors.textPrimary,
-                                        width: widget.scale.eighth / 5,
-                                      ),
-                                    ),
-                                  ),
-                                  onPressed: () => _showFaqSheet(context),
-                                  icon: Icon(
-                                    Icons.help_outline_rounded,
-                                    size: widget.scale.eighth * 0.9,
-                                  ),
-                                  label: Text(
-                                    'Ajuda',
-                                    style: AppTheme.bodyMedium.copyWith(
-                                      fontFamily: 'momo',
-                                      fontSize: widget.scale.eighth * 0.8,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              // SizedBox(width: widget.scale.eighth * 0.5),
-                              // _DiagnosticsButton(
-                              //   scale: widget.scale,
-                              //   snapshot: diagnostics,
-                              //   isLoading: widget.isLoadingDiagnostics,
-                              //   onPressed: () => _showDiagnosticsSheet(context),
-                              // ),
+                              SizedBox(width: widget.scale.eighth),
+                              _buildHelpButton(isHorizontal: true),
                             ],
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
+                ],
+              );
+            }
+
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: widget.scale.eighth,
+                            vertical: widget.scale.eighth * 0.5,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildQR(),
+                              SizedBox(height: widget.scale.eighth * 0.25),
+                              _buildLink(connectionUrl),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: widget.scale.eighth / 4,
+                        color: AppColors.textPrimary,
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.textPrimary.withValues(alpha: 0.05),
+                        ),
+                        padding: EdgeInsets.fromLTRB(
+                          widget.scale.eighth,
+                          widget.scale.eighth * 0.5,
+                          widget.scale.eighth,
+                          widget.scale.eighth * 0.5,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildNetworkInfoRow(selectedConnection),
+                            SizedBox(height: widget.scale.eighth * 0.5),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [Expanded(child: _buildHelpButton())],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

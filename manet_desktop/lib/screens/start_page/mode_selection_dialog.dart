@@ -59,167 +59,183 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(40.0),
-      child: Column(
-        children: [
-          if (widget.showHeader) ...[
-            Text(
-              'preparar a festa!',
-              style: AppTheme.titleMedium.copyWith(
-                fontFamily: 'momo',
-                fontSize: 42,
-                fontWeight: FontWeight.w900,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.textPrimary.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'Como os celulares serão reconhecidos no computador?',
-                style: AppTheme.bodyMedium.copyWith(
-                  color: AppColors.textPrimary.withValues(alpha: 0.6),
-                  fontWeight: FontWeight.bold,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxHeight < 750;
+        final isVeryCompact = constraints.maxHeight < 500;
+        final outerPadding = isCompact ? 20.0 : 40.0;
+        final headerSpacing = isCompact ? 16.0 : 50.0;
+
+        return Padding(
+          padding: EdgeInsets.all(outerPadding),
+          child: Column(
+            children: [
+              if (widget.showHeader) ...[
+                Text(
+                  'preparar a festa!',
+                  style: AppTheme.titleMedium.copyWith(
+                    fontFamily: 'momo',
+                    fontSize: isCompact ? 32 : 42,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (!isVeryCompact) ...[
+                  SizedBox(height: isCompact ? 12 : 20),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.textPrimary.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Como os celulares serão reconhecidos no computador?',
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: AppColors.textPrimary.withValues(alpha: 0.6),
+                        fontWeight: FontWeight.bold,
+                        fontSize: isCompact ? 12 : null,
+                      ),
+                    ),
+                  ),
+                ],
+                SizedBox(height: headerSpacing),
+              ],
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 0 : 40),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _ModeCard(
+                          isCompact: isCompact,
+                          isVeryCompact: isVeryCompact,
+                          mode: 'x360',
+                          title: 'x•input',
+                          headline: 'Recomendado: até 4 controles',
+                          faceConfig: const _FaceConfig(
+                            faceText: 'X)',
+                            color: Color(0xFF4D96FF), // Azure
+                          ),
+                          isSelected: _chosen == 'x360',
+                          onTap: () {
+                            setState(() => _chosen = 'x360');
+                            if (!widget.showConfirmButton) {
+                              Navigator.of(context).pop('x360');
+                            }
+                          },
+                          details: 'Alta compatibilidade e vibração.',
+                        ),
+                      ),
+                      SizedBox(width: isCompact ? 16 : 32),
+                      Expanded(
+                        child: _ModeCard(
+                          isCompact: isCompact,
+                          isVeryCompact: isVeryCompact,
+                          mode: 'ds4',
+                          title: 'd•Input',
+                          headline: 'Ideal para: 5+ controles',
+                          faceConfig: const _FaceConfig(
+                            faceText: ':D',
+                            color: Color(0xFFFF6B6B), // Coral
+                          ),
+                          isSelected: _chosen == 'ds4',
+                          onTap: () {
+                            setState(() => _chosen = 'ds4');
+                            if (!widget.showConfirmButton) {
+                              Navigator.of(context).pop('ds4');
+                            }
+                          },
+                          details: 'Sem limites, mas sem vibração.',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 50),
-          ],
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _ModeCard(
-                      mode: 'x360',
-                      title: 'x•input',
-                      headline: 'Recomendado: até 4 controles',
-                      faceConfig: const _FaceConfig(
-                        faceText: 'X)',
-                        color: Color(0xFF4D96FF), // Azure
-                      ),
-                      isSelected: _chosen == 'x360',
-                      onTap: () {
-                        setState(() => _chosen = 'x360');
-                        if (!widget.showConfirmButton) {
-                          Navigator.of(context).pop('x360');
-                        }
-                      },
-                      details: 'Alta compatibilidade e vibração.',
-                    ),
-                  ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: _ModeCard(
-                      mode: 'ds4',
-                      title: 'd•Input',
-                      headline: 'Ideal para: 5+ controles',
-                      faceConfig: const _FaceConfig(
-                        faceText: ':D',
-                        color: Color(0xFFFF6B6B), // Coral
-                      ),
-                      isSelected: _chosen == 'ds4',
-                      onTap: () {
-                        setState(() => _chosen = 'ds4');
-                        if (!widget.showConfirmButton) {
-                          Navigator.of(context).pop('ds4');
-                        }
-                      },
-                      details: 'Sem limites, mas sem vibração.',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (widget.showConfirmButton) ...[
-            const SizedBox(height: 50),
-            SizedBox(
-              height: 80,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (!widget.isMandatory)
-                    Positioned(
-                      left: 0,
-                      child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 16,
+              if (widget.showConfirmButton) ...[
+                SizedBox(height: isCompact ? 20 : 50),
+                SizedBox(
+                  height: isCompact ? 60 : 80,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (!widget.isMandatory)
+                        Positioned(
+                          left: 0,
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 16 : 24,
+                                vertical: isCompact ? 12 : 16,
+                              ),
+                            ),
+                            child: Text(
+                              'Cancelar',
+                              style: AppTheme.bodyMedium.copyWith(
+                                fontFamily: 'momo',
+                                color: AppColors.textPrimary.withValues(alpha: 0.7),
+                              ),
+                            ),
                           ),
                         ),
-                        child: Text(
-                          'Cancelar',
-                          style: AppTheme.bodyMedium.copyWith(
-                            fontFamily: 'momo',
-                            color: AppColors.textPrimary.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ),
-                    ),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    transitionBuilder:
-                        (Widget child, Animation<double> animation) {
-                          return ScaleTransition(
-                            scale: CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.elasticOut,
-                            ),
-                            child: FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            ),
-                          );
-                        },
-                    child: _chosen != null
-                        ? Padding(
-                            key: const ValueKey('confirm_btn_anim'),
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: ElevatedButton(
-                              onPressed: _confirm,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.highlightColor,
-                                foregroundColor: AppColors.textPrimary,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 48,
-                                  vertical: 20,
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 600),
+                        transitionBuilder:
+                            (Widget child, Animation<double> animation) {
+                              return ScaleTransition(
+                                scale: CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.elasticOut,
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  side: BorderSide(
-                                    color: AppColors.textPrimary,
-                                    width: 5,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              );
+                            },
+                        child: _chosen != null
+                            ? Padding(
+                                key: const ValueKey('confirm_btn_anim'),
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: ElevatedButton(
+                                  onPressed: _confirm,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.highlightColor,
+                                    foregroundColor: AppColors.textPrimary,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: isCompact ? 32 : 48,
+                                      vertical: isCompact ? 16 : 20,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      side: BorderSide(
+                                        color: AppColors.textPrimary,
+                                        width: 5,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'vamos jogar!',
+                                    style: AppTheme.titleSmall.copyWith(
+                                      fontFamily: 'momo',
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              child: Text(
-                                'vamos jogar!',
-                                style: AppTheme.titleSmall.copyWith(
-                                  fontFamily: 'momo',
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(key: ValueKey('empty_btn')),
+                              )
+                            : const SizedBox.shrink(key: ValueKey('empty_btn')),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -232,6 +248,8 @@ class _FaceConfig {
 
 class _ModeCard extends StatefulWidget {
   final String mode;
+  final bool isCompact;
+  final bool isVeryCompact;
   final String title;
   final String headline;
   final _FaceConfig faceConfig;
@@ -240,6 +258,8 @@ class _ModeCard extends StatefulWidget {
   final String details;
 
   const _ModeCard({
+    this.isCompact = false,
+    this.isVeryCompact = false,
     required this.mode,
     required this.title,
     required this.headline,
@@ -307,11 +327,11 @@ class _ModeCardState extends State<_ModeCard> with TickerProviderStateMixin {
           curve: Curves.easeOutCubic,
           transformAlignment: Alignment.center,
           transform: Matrix4.identity()..scale(scale),
-          margin: const EdgeInsets.all(12),
-          padding: const EdgeInsets.all(32),
+          margin: EdgeInsets.all(widget.isCompact ? 8 : 12),
+          padding: EdgeInsets.all(widget.isVeryCompact ? 12 : (widget.isCompact ? 20 : 32)),
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(widget.isCompact ? 20 : 28),
             border: Border.all(color: borderColor, width: borderWidth),
           ),
           child: LayoutBuilder(
@@ -322,21 +342,20 @@ class _ModeCardState extends State<_ModeCard> with TickerProviderStateMixin {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 8),
                       Text(
                         widget.title,
                         style: AppTheme.titleMedium.copyWith(
                           fontFamily: 'momo',
-                          fontSize: 32,
+                          fontSize: widget.isVeryCompact ? 20 : (widget.isCompact ? 26 : 32),
                           fontWeight: FontWeight.w900,
                           color: isSelected
                               ? brandColor
                               : AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: widget.isVeryCompact ? 12 : (widget.isCompact ? 16 : 24)),
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: EdgeInsets.symmetric(vertical: widget.isVeryCompact ? 8 : (widget.isCompact ? 12 : 16)),
                         child: Center(
                           child: AnimatedBuilder(
                             animation: _floatController,
@@ -354,8 +373,8 @@ class _ModeCardState extends State<_ModeCard> with TickerProviderStateMixin {
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
-                              width: 100,
-                              height: 100,
+                              width: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
+                              height: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
                               decoration: const BoxDecoration(),
                               child: PlayerFaceIndicator(
                                 face: PlayerFaceData(
@@ -363,7 +382,7 @@ class _ModeCardState extends State<_ModeCard> with TickerProviderStateMixin {
                                   faceText: widget.faceConfig.faceText,
                                   rotation: PlayerFaceRotation.normal,
                                 ),
-                                size: 100,
+                                size: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
                                 roundedSquare: true,
                                 borderColor: AppColors.textPrimary,
                               ),
@@ -371,27 +390,29 @@ class _ModeCardState extends State<_ModeCard> with TickerProviderStateMixin {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: widget.isVeryCompact ? 12 : (widget.isCompact ? 16 : 24)),
                       Text(
                         widget.headline,
                         textAlign: TextAlign.center,
                         style: AppTheme.bodyMedium.copyWith(
-                          fontSize: 18,
+                          fontSize: widget.isVeryCompact ? 13 : (widget.isCompact ? 16 : 18),
                           fontWeight: FontWeight.w900,
                           color: isSelected
                               ? brandColor
                               : AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        widget.details,
-                        textAlign: TextAlign.center,
-                        style: AppTheme.bodySmall.copyWith(
-                          fontSize: 14,
-                          color: AppColors.textPrimary.withValues(alpha: 0.6),
+                      if (!widget.isVeryCompact) ...[
+                        SizedBox(height: widget.isCompact ? 4 : 8),
+                        Text(
+                          widget.details,
+                          textAlign: TextAlign.center,
+                          style: AppTheme.bodySmall.copyWith(
+                            fontSize: widget.isCompact ? 12 : 14,
+                            color: AppColors.textPrimary.withValues(alpha: 0.6),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

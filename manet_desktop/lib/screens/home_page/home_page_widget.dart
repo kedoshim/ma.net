@@ -356,6 +356,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isCompact = screenWidth < screenHeight * 1.25;
 
     int columns = _slots > 12 ? 8 : (_slots > 8 ? 6 : (_slots > 4 ? 6 : 4));
     int rows = (_slots > 0 ? (_slots / columns).ceil() : 1);
@@ -515,7 +517,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                         child: Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: dynamicHorizontalPadding,
-                            vertical: 50.0,
+                            vertical: isCompact ? 16.0 : 50.0,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.max,
