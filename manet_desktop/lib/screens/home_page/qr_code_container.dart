@@ -340,6 +340,31 @@ class _QRCodePanelState extends State<QRCodePanel> {
     );
   }
 
+
+  Widget _buildEncoragementText() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Entra aí :)',
+          style: AppTheme.titleMedium.copyWith(
+            fontFamily: 'momo',
+            fontSize: widget.scale.eighth * 0.9,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        Container(
+          width: widget.scale.eighth * 1.5,
+          height: widget.scale.eighth / 4,
+          decoration: BoxDecoration(
+            color: AppColors.highlightColor,
+            borderRadius: BorderRadius.circular(widget.scale.eighth / 8),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildQR() {
     return ClipRRect(
       child: AnimatedSwitcher(
@@ -435,7 +460,8 @@ class _QRCodePanelState extends State<QRCodePanel> {
         elevation: 0,
         padding: EdgeInsets.symmetric(
           horizontal: isHorizontal ? widget.scale.eighth * 1.25 : 16.0,
-          vertical: widget.scale.eighth * (isHorizontal ? 0.6 : 0.6),),
+          vertical: widget.scale.eighth * (isHorizontal ? 0.6 : 0.6),
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(widget.scale.eighth * 0.8),
           side: BorderSide(
@@ -494,7 +520,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                   ),
                   VerticalDivider(
                     width: 1,
-                    thickness: widget.scale.eighth / 4,
+                    thickness: AppColors.borderThickness,
                     color: AppColors.textPrimary,
                   ),
                   Expanded(
@@ -546,6 +572,8 @@ class _QRCodePanelState extends State<QRCodePanel> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              _buildEncoragementText(),
+                              SizedBox(height: widget.scale.eighth),
                               _buildQR(),
                               SizedBox(height: widget.scale.eighth * 0.25),
                               _buildLink(connectionUrl),
