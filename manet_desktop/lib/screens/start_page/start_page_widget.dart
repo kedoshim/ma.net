@@ -248,12 +248,14 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                     child: MascotWidget(
                       globalMousePos: _globalMousePos,
                       colors: const [
-                        Color(0xFFFF6B6B), // Coral Soft
-                        Color(0xFF4D96FF), // Azure Soft
-                        Color(0xFF6BCB77), // Green Soft
-                        Color(0xFFFFD93D), // Yellow Toy
-                        Color(0xFF9279FF), // Purple Soft
-                        Color(0xFFFF8AAE), // Pink Bubblegum
+                        Color(0xFFFF6B6B),
+                        Color(0xFFFFA94D),
+                        Color(0xFFFFE066),
+                        Color(0xFF8CE99A),
+                        Color(0xFF66D9E8),
+                        Color(0xFF74C0FC),
+                        Color(0xFFA78BFA),
+                        Color(0xFFF783AC),
                       ],
                       faces: const [
                         ':)',
