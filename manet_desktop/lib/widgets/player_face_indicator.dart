@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/player_face.dart';
+import '../theme/app_colors.dart';
 
 class PlayerFaceIndicator extends StatelessWidget {
   final PlayerFaceData face;
@@ -52,12 +53,10 @@ class PlayerFaceIndicator extends StatelessWidget {
             decoration: BoxDecoration(
               color: face.color,
               borderRadius: borderRadius,
-              border: borderColor != null
-                  ? Border.all(
-                      color: borderColor!,
-                      width: math.max(1.5, size * 0.04),
-                    )
-                  : null,
+              border: Border.all(
+                color: borderColor ?? AppColors.textPrimary,
+                width: math.max(1.5, size * 0.04),
+              ),
             ),
             child: Center(
               child: Padding(
