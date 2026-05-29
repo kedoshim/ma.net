@@ -99,7 +99,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                   Expanded(
                     child: _ModeCard(
                       mode: 'x360',
-                      title: 'XInput',
+                      title: 'x•input',
                       headline: 'Recomendado: até 4 controles',
                       faceConfig: const _FaceConfig(
                         faceText: 'X)',
@@ -119,7 +119,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                   Expanded(
                     child: _ModeCard(
                       mode: 'ds4',
-                      title: 'DInput',
+                      title: 'd•Input',
                       headline: 'Ideal para: 5+ controles',
                       faceConfig: const _FaceConfig(
                         faceText: ':D',
