@@ -352,13 +352,28 @@ class _QRCodePanelState extends State<QRCodePanel> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              'Entra aí :)',
-                              style: AppTheme.titleMedium.copyWith(
-                                fontFamily: 'momo',
-                                fontSize: widget.scale.eighth * 0.9,
-                                color: AppColors.textPrimary,
-                              ),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Entra aí :)',
+                                  style: AppTheme.titleMedium.copyWith(
+                                    fontFamily: 'momo',
+                                    fontSize: widget.scale.eighth * 0.9,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                Container(
+                                  width: widget.scale.eighth * 1.5,
+                                  height: widget.scale.eighth / 4,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.highlightColor,
+                                    borderRadius: BorderRadius.circular(
+                                      widget.scale.eighth / 8,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             SizedBox(height: widget.scale.eighth * 0.5),
                             Column(
@@ -510,8 +525,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                               Expanded(
                                 child: ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.textPrimary
-                                        .withValues(alpha: 0.1),
+                                    backgroundColor: AppColors.highlightColor,
                                     foregroundColor: AppColors.textPrimary,
                                     elevation: 0,
                                     padding: EdgeInsets.symmetric(
@@ -520,6 +534,10 @@ class _QRCodePanelState extends State<QRCodePanel> {
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
                                         widget.scale.eighth * 0.8,
+                                      ),
+                                      side: BorderSide(
+                                        color: AppColors.textPrimary,
+                                        width: widget.scale.eighth / 5,
                                       ),
                                     ),
                                   ),

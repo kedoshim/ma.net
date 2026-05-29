@@ -425,13 +425,27 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             0.0,
                             0.0,
                           ),
-                          child: Text(
-                            'ma•net',
-                            style: AppTheme.bodyMedium.copyWith(
-                              fontFamily: 'momo',
-                              fontSize: 40.0,
-                              letterSpacing: 0.0,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'ma•net',
+                                style: AppTheme.bodyMedium.copyWith(
+                                  fontFamily: 'momo',
+                                  fontSize: 40.0,
+                                  letterSpacing: 0.0,
+                                ),
+                              ),
+                              Container(
+                                width: 32,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: AppColors.highlightColor,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const Spacer(),
@@ -1036,8 +1050,12 @@ class _LobbyToolbarState extends State<_LobbyToolbar> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.03),
+                    color: AppColors.textPrimary.withValues(alpha: 0.02),
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.highlightColor.withValues(alpha: 0.6),
+                      width: 2,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
