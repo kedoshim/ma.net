@@ -16,11 +16,11 @@ import '../../services/startup_connection_pipeline.dart';
 import '../start_page/start_page_widget.dart';
 import '../start_page/mode_selection_dialog.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/layout_selector_widget.dart';
 import '../../widgets/server_options_popup.dart';
 import '../../widgets/app_error_widget.dart';
 import 'lobby_toolbar.dart';
 import 'server_alerts.dart';
+import 'onboarding_overlay.dart';
 
 class HomePageScreen extends StatelessWidget {
   final String host;
@@ -141,6 +141,10 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       ControllerBranding.modeFromWire(_controllerMode),
     );
     _syncAlerts(notify: false);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      OnboardingOverlay.checkAndShow(context);
+    });
   }
 
   Future<void> _loadPresets() async {
