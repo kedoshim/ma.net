@@ -253,31 +253,25 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       barrierLabel: 'Selecao de modo',
       transitionDuration: const Duration(milliseconds: 450),
       pageBuilder: (context, animation, secondaryAnimation) {
-        return SafeArea(
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            body: Center(
+        return Center(
+          child: Dialog(
+            backgroundColor: AppColors.screenBackground,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+              side: const BorderSide(
+                color: AppColors.textPrimary,
+                width: AppColors.borderThickness,
+              ),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900, maxHeight: 600),
               child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Material(
-                  color: AppColors.screenBackground,
-                  borderRadius: BorderRadius.circular(24),
-                  clipBehavior: Clip.antiAlias,
-                  child: Container(
-                    width: MediaQuery.sizeOf(context).width * 0.85,
-                    height: MediaQuery.sizeOf(context).height * 0.85,
-                    constraints: const BoxConstraints(
-                      maxWidth: 1000,
-                      maxHeight: 750,
-                    ),
-                    padding: const EdgeInsets.all(32),
-                    child: ModeSelectionContent(
-                      isMandatory: false,
-                      initialMode: _controllerMode,
-                      showHeader: false,
-                      showConfirmButton: false,
-                    ),
-                  ),
+                padding: const EdgeInsets.all(32),
+                child: ModeSelectionContent(
+                  isMandatory: false,
+                  initialMode: _controllerMode,
+                  showHeader: false,
+                  showConfirmButton: false,
                 ),
               ),
             ),
