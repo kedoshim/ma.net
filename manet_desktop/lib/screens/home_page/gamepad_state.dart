@@ -39,8 +39,9 @@ class GamepadState extends ChangeNotifier {
   StreamSubscription? _subscription;
   String? lastErrorMessage;
   final Map<String, DeviceInputState> _inputStates = {};
+  final void Function(int slots)? onSlotsUpdated;
 
-  GamepadState(this._api);
+  GamepadState(this._api, {this.onSlotsUpdated});
 
   void _log(String action) {
     debugPrint(
@@ -55,6 +56,7 @@ class GamepadState extends ChangeNotifier {
         final state = AssignementStat.fromJson(data['data']);
         pool = state.pool;
         slots = state.slots;
+        onSlotsUpdated?.call(slots.length);
         notifyListeners();
       } else if (data['type'] == 'input_event') {
         final deviceId = data['deviceId'];
@@ -81,6 +83,7 @@ class GamepadState extends ChangeNotifier {
         final slot = slots[i];
         print('Slot ${slot.slot} - ${slot.type}');
       }
+      onSlotsUpdated?.call(slots.length);
       notifyListeners();
     } catch (e) {
       lastErrorMessage = e.toString();

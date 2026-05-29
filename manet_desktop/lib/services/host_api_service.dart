@@ -447,7 +447,9 @@ class HostApiService {
       body: json.encode(body),
     );
     if (response.statusCode != 200) {
-      throw Exception('Failed to reset controllers');
+      throw Exception(
+        'Failed to reset controllers (HTTP ${response.statusCode})',
+      );
     }
   }
 

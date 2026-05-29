@@ -76,22 +76,30 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   late final ValueNotifier<ControllerBrandingMode> _brandingModeNotifier;
   bool _isShowingNoNetworkDialog = false;
 
-  static const String _xinput4PlusAlertMsg = 'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.';
+  static const String _xinput4PlusAlertMsg =
+      'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.';
 
   void _syncAlerts({bool notify = true}) {
-    final hasXinputAlert = _alerts.any((a) => a.message == _xinput4PlusAlertMsg);
+    final hasXinputAlert = _alerts.any(
+      (a) => a.message == _xinput4PlusAlertMsg,
+    );
 
     if (_controllerMode == 'x360' && _slots > 4) {
       if (!hasXinputAlert) {
         if (notify) {
           _addAlert(_xinput4PlusAlertMsg);
         } else {
-          _alerts.insert(0, ServerAlert(message: _xinput4PlusAlertMsg, isError: false));
+          _alerts.insert(
+            0,
+            ServerAlert(message: _xinput4PlusAlertMsg, isError: false),
+          );
         }
       }
     } else if (hasXinputAlert) {
       if (notify) {
-        setState(() => _alerts.removeWhere((a) => a.message == _xinput4PlusAlertMsg));
+        setState(
+          () => _alerts.removeWhere((a) => a.message == _xinput4PlusAlertMsg),
+        );
       } else {
         _alerts.removeWhere((a) => a.message == _xinput4PlusAlertMsg);
       }
@@ -528,8 +536,20 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             children: [
                               Expanded(
                                 child: ChangeNotifierProvider(
-                                  create: (_) =>
-                                      GamepadState(_api)..initialize(),
+                                  create: (_) => GamepadState(
+                                    _api,
+                                    onSlotsUpdated: (newCount) {
+                                      if (_slots != newCount) {
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              if (mounted)
+                                                setState(
+                                                  () => _slots = newCount,
+                                                );
+                                            });
+                                      }
+                                    },
+                                  )..initialize(),
                                   child: AdaptiveStageLayout(
                                     lobbyToolbar: LobbyToolbar(
                                       serverSlots: _slots,
@@ -540,8 +560,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                       brandingModeListenable:
                                           _brandingModeNotifier,
                                       alerts: _alerts,
-                                      modeChangeState:
-                                          _modeChangeState,
+                                      modeChangeState: _modeChangeState,
                                       onOpenAlerts: () {
                                         _markAlertsSeen();
                                         showDialog(
@@ -558,86 +577,144 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         });
                                       },
                                       onApply: (newSlots, newLocked) async {
-                                        try{
-                                          final assigned = await _api
-                                            .fetchSlots();
+                                        final slotsChanged = newSlots != _slots;
+                                        final lockedChanged =
+                                            newLocked != _locked;
 
-                                          final active = assigned.slots
-                                              .where((s) => s.device != null)
-                                              .length;
-                                          if (newSlots < assigned.slots.length &&
-                                              active > 0) {
-                                            final ok = await showDialog<bool>(
-                                              context: context,
-                                              builder: (c) => AlertDialog(
-                                                backgroundColor:
-                                                    AppColors.screenBackground,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(24),
-                                                  side: const BorderSide(
-                                                    color: AppColors.textPrimary,
-                                                    width: 4,
-                                                  ),
-                                                ),
-                                                title: Text(
-                                                  'Remover controles?',
-                                                  style: AppTheme.titleSmall
-                                                      .copyWith(
-                                                        color:
-                                                            AppColors.textPrimary,
-                                                        fontFamily: 'momo',
-                                                        fontWeight: FontWeight.w900,
-                                                      ),
-                                                ),
-                                                content: Text(
-                                                  'Remover controles pode desconectar jogadores atuais',
-                                                  style: AppTheme.bodyMedium
-                                                      .copyWith(
-                                                        color:
-                                                            AppColors.textPrimary,
-                                                      ),
-                                                ),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () => Navigator.of(
-                                                      c,
-                                                    ).pop(false),
-                                                    style: TextButton.styleFrom(
-                                                      foregroundColor: AppColors.textPrimary,
-                                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                        if (!slotsChanged && !lockedChanged)
+                                          return;
+
+                                        try {
+                                          if (slotsChanged) {
+                                            final assigned = await _api
+                                                .fetchSlots();
+                                            final active = assigned.slots
+                                                .where((s) => s.device != null)
+                                                .length;
+                                            if (newSlots <
+                                                    assigned.slots.length &&
+                                                active > 0) {
+                                              final ok = await showDialog<bool>(
+                                                context: context,
+                                                builder: (c) => AlertDialog(
+                                                  backgroundColor: AppColors
+                                                      .screenBackground,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          24,
+                                                        ),
+                                                    side: const BorderSide(
+                                                      color:
+                                                          AppColors.textPrimary,
+                                                      width: 4,
                                                     ),
-                                                    child: const Text('Cancelar', style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold)),
                                                   ),
-                                                  ElevatedButton(
-                                                    onPressed: () =>
-                                                        Navigator.of(c).pop(true),
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor: AppColors.highlightColor,
-                                                      foregroundColor: AppColors.textPrimary,
-                                                      elevation: 0,
-                                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius: BorderRadius.circular(12),
-                                                        side: const BorderSide(color: AppColors.textPrimary, width: 3),
+                                                  title: Text(
+                                                    'Remover controles?',
+                                                    style: AppTheme.titleSmall
+                                                        .copyWith(
+                                                          color: AppColors
+                                                              .textPrimary,
+                                                          fontFamily: 'momo',
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                        ),
+                                                  ),
+                                                  content: Text(
+                                                    'Remover controles pode desconectar jogadores atuais',
+                                                    style: AppTheme.bodyMedium
+                                                        .copyWith(
+                                                          color: AppColors
+                                                              .textPrimary,
+                                                        ),
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(
+                                                            c,
+                                                          ).pop(false),
+                                                      style: TextButton.styleFrom(
+                                                        foregroundColor:
+                                                            AppColors
+                                                                .textPrimary,
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 20,
+                                                              vertical: 12,
+                                                            ),
+                                                      ),
+                                                      child: const Text(
+                                                        'Cancelar',
+                                                        style: TextStyle(
+                                                          fontFamily: 'momo',
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
                                                       ),
                                                     ),
-                                                    child: const Text('Confirmar', style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.w900)),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
-                                            if (ok != true) return;
+                                                    ElevatedButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(
+                                                            c,
+                                                          ).pop(true),
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor:
+                                                            AppColors
+                                                                .highlightColor,
+                                                        foregroundColor:
+                                                            AppColors
+                                                                .textPrimary,
+                                                        elevation: 0,
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 20,
+                                                              vertical: 12,
+                                                            ),
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                12,
+                                                              ),
+                                                          side: const BorderSide(
+                                                            color: AppColors
+                                                                .textPrimary,
+                                                            width: 3,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      child: const Text(
+                                                        'Confirmar',
+                                                        style: TextStyle(
+                                                          fontFamily: 'momo',
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                              if (ok != true) return;
+                                            }
                                           }
-                                        }catch (e) {
+                                        } catch (e) {
                                           if (!mounted) return;
                                           showDialog(
                                             context: context,
                                             barrierDismissible: false,
                                             builder: (context) => AppErrorWidget(
                                               title: 'Erro de Conexão',
-                                              message: 'O servidor parou de responder ou encontrou um erro fatal.',
+                                              message:
+                                                  'O servidor parou de responder ou encontrou um erro fatal.',
                                               logs: e.toString(),
-                                              onRetry: () => Navigator.of(context).pushReplacementNamed('/'), // Return to start
+                                              onRetry: () =>
+                                                  Navigator.of(
+                                                    context,
+                                                  ).pushReplacementNamed(
+                                                    '/',
+                                                  ), // Return to start
                                             ),
                                           );
                                         }
@@ -651,9 +728,10 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
                                         try {
                                           await _api.resetControllers(
-                                            mode: _controllerMode,
-                                            slots: _slots,
-                                            fixed: _locked,
+                                            slots: slotsChanged ? _slots : null,
+                                            fixed: lockedChanged
+                                                ? _locked
+                                                : null,
                                           );
                                         } catch (e, st) {
                                           if (mounted) {
@@ -669,9 +747,12 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                   Navigator.of(c).pop();
                                                   try {
                                                     await _api.resetControllers(
-                                                      mode: _controllerMode,
-                                                      slots: _slots,
-                                                      fixed: _locked,
+                                                      slots: slotsChanged
+                                                          ? _slots
+                                                          : null,
+                                                      fixed: lockedChanged
+                                                          ? _locked
+                                                          : null,
                                                     );
                                                   } catch (_) {}
                                                 },
