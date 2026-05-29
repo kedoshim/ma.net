@@ -62,7 +62,7 @@ class AdaptiveStageLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth / constraints.maxHeight > 1.2;
+        final isWide = constraints.maxWidth > constraints.maxHeight * 1.25;
         if (isWide) {
           return WideStageLayout(
             connectionSnapshot: connectionSnapshot,
@@ -877,8 +877,8 @@ class DeviceInputIndicator extends StatelessWidget {
         : math.atan2(stickY, stickX);
 
     double maxOffset = size * 0.65;
-    double translateX = isOnPool ? 0 : stickX * maxOffset;
-    double translateY = isOnPool ? 0 : stickY * maxOffset;
+    double targetTx = isOnPool ? 0 : stickX * maxOffset;
+    double targetTy = isOnPool ? 0 : stickY * maxOffset;
 
     final isCentered = stickX == 0 && stickY == 0;
     final isPressed = input.buttonPressed;
@@ -895,44 +895,49 @@ class DeviceInputIndicator extends StatelessWidget {
         height: size,
         child: TweenAnimationBuilder<Offset>(
           tween: Tween(
-            begin: Offset(stickX, stickY),
-            end: Offset(stickX, stickY),
+            begin: Offset(targetTx, targetTy),
+            end: Offset(targetTx, targetTy),
           ),
           duration: isCentered
               ? const Duration(milliseconds: 350)
-              : const Duration(milliseconds: 150),
+              : const Duration(milliseconds: 100),
           curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
-          builder: (context, laggedStick, child) {
-            double faceTx = isOnPool
-                ? 0
-                : (laggedStick.dx - stickX) * maxOffset * 0.6;
-            double faceTy = isOnPool
-                ? 0
-                : (laggedStick.dy - stickY) * maxOffset * 0.6;
-
-            return AnimatedContainer(
-              duration: isCentered
-                  ? const Duration(milliseconds: 400)
-                  : const Duration(milliseconds: 100),
-              curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
-              transformAlignment: Alignment.center,
-              transform: Matrix4.identity()
-                ..rotateZ(angle)
-                ..scaleByDouble(stretch, squash, 1, 1)
-                ..rotateZ(-angle),
-              child: PlayerFaceIndicator(
-                face: device.face,
-                size: size,
-                roundedSquare: isOnPool,
-                scale: baseScale,
-                opacity: indicatorOpacity,
-                translateX: translateX,
-                translateY: translateY,
-                faceTranslateX: faceTx,
-                faceTranslateY: faceTy,
-                pressed: isPressed,
-                borderColor: borderColor,
+          builder: (context, fastStick, child) {
+            return TweenAnimationBuilder<Offset>(
+              tween: Tween(
+                begin: Offset(targetTx, targetTy),
+                end: Offset(targetTx, targetTy),
               ),
+              duration: isCentered
+                  ? const Duration(milliseconds: 450)
+                  : const Duration(milliseconds: 250),
+              curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
+              builder: (context, slowStick, child) {
+                double faceTx = (slowStick.dx - fastStick.dx) * 0.9;
+                double faceTy = (slowStick.dy - fastStick.dy) * 0.9;
+
+                return Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()
+                    ..translate(fastStick.dx, fastStick.dy)
+                    ..rotateZ(angle)
+                    ..scaleByDouble(stretch, squash, 1, 1)
+                    ..rotateZ(-angle),
+                  child: PlayerFaceIndicator(
+                    face: device.face,
+                    size: size,
+                    roundedSquare: isOnPool,
+                    scale: baseScale,
+                    opacity: indicatorOpacity,
+                    translateX: 0,
+                    translateY: 0,
+                    faceTranslateX: faceTx,
+                    faceTranslateY: faceTy,
+                    pressed: isPressed,
+                    borderColor: borderColor,
+                  ),
+                );
+              },
             );
           },
         ),

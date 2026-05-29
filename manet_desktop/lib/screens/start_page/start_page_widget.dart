@@ -658,7 +658,7 @@ class _MascotWidgetState extends State<MascotWidget>
 
     _popController.forward(from: 0.0);
     try {
-      SoundEffectService.instance.playHover();
+      SoundEffectService.instance.playDropPlayer();
     } catch (_) {}
   }
 
