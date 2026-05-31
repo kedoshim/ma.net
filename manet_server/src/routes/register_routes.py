@@ -15,6 +15,11 @@ def register_all_routes(app, server_routes, http_routes, websocket_routes, file_
 def register_server_routes(app, server_routes):
     app.router.add_get("/", server_routes.index)
     
+    # Ensure wasm and js have the correct MIME types, which is essential for offline CanvasKit/Skwasm on Windows
+    import mimetypes
+    mimetypes.add_type('application/wasm', '.wasm')
+    mimetypes.add_type('application/javascript', '.js')
+
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         web_static_path = os.path.join(sys._MEIPASS, 'web')
     else:

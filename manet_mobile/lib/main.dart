@@ -19,10 +19,13 @@ class ControllerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ma•net',
-      home: ControllerScreen(),
+      theme: ThemeData(
+        fontFamily: 'momo_sans',
+      ),
+      home: const ControllerScreen(),
     );
   }
 }
