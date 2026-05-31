@@ -79,7 +79,50 @@ def create_app(config):
     return app, manager
 
 
+def log_startup_diagnostics(config):
+    import sys
+    import os
+    import subprocess
+    from pathlib import Path
+    
+    app_version = "0.2.0"
+    server_version = "0.2.0"
+    frozen = getattr(sys, 'frozen', False)
+    exe_path = sys.executable
+    working_dir = os.getcwd()
+    meipass = getattr(sys, '_MEIPASS', None)
+    
+    vigem_installed = False
+    if sys.platform == "win32":
+        try:
+            # Check ViGEmBus service via sc query
+            res = subprocess.run(["sc", "query", "ViGEmBus"], capture_output=True, text=True, timeout=2.0)
+            if "1060" not in res.stdout and res.returncode == 0:
+                vigem_installed = True
+            else:
+                vigem_installed = Path(r"C:\Windows\System32\drivers\ViGEmBus.sys").exists()
+        except Exception:
+            vigem_installed = Path(r"C:\Windows\System32\drivers\ViGEmBus.sys").exists()
+            
+    LOG.info("=== STARTUP DIAGNOSTICS ===")
+    LOG.info(f"Application Version: {app_version}")
+    LOG.info(f"Server Version: {server_version}")
+    LOG.info(f"Is Bundled (frozen): {frozen}")
+    LOG.info(f"Executable Path: {exe_path}")
+    LOG.info(f"Working Directory: {working_dir}")
+    if meipass:
+        LOG.info(f"PyInstaller MEIPASS: {meipass}")
+    LOG.info(f"Python version: {sys.version}")
+    LOG.info(f"ViGEm Driver Detected: {vigem_installed}")
+    LOG.info(f"Config - Controller Mode: {config.controller_type}")
+    LOG.info(f"Config - Slots: {config.initial_slots} (Max: {config.max_slots})")
+    LOG.info(f"Config - Auto Expand: {config.auto_expand_slots}")
+    LOG.info(f"Config - HTTP Port: {config.http_port}")
+    LOG.info("===========================")
+
+
 def run_server(config):
+    log_startup_diagnostics(config)
     LOG.info(f"Starting server on port {config.http_port} (Debug mode: {config.debug})")
     app, manager = create_app(config)
 

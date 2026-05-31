@@ -1,8 +1,11 @@
+import logging
 import vgamepad as vg
 from src.input.input_mapper import (
     XINPUT_BUTTON_MAP,
     DS4_BUTTON_MAP,
 )
+
+LOG = logging.getLogger(__name__)
 
 DS4_DPAD_BUTTONS = {
     vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_NORTH,
@@ -10,6 +13,16 @@ DS4_DPAD_BUTTONS = {
     vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_WEST,
     vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_EAST,
 }
+
+
+def _update_gamepad_safe(gp):
+    try:
+        LOG.info("Updating virtual gamepad")
+        gp.update()
+        LOG.info("Input applied successfully")
+    except Exception:
+        LOG.exception("Failed to update virtual gamepad")
+        raise
 
 
 def apply_stick(slot, x, y):
@@ -20,7 +33,7 @@ def apply_stick(slot, x, y):
         x_value_float=x,
         y_value_float=y
     )
-    slot.gamepad.update()
+    _update_gamepad_safe(slot.gamepad)
 
 
 def apply_button(slot, btn, state):
@@ -44,7 +57,7 @@ def apply_button(slot, btn, state):
                 pass
             gp.reset()
 
-        gp.update()
+        _update_gamepad_safe(gp)
         return
 
     if btn in {"RT", "LT"}:
@@ -59,7 +72,7 @@ def apply_button(slot, btn, state):
             else:
                 gp.left_trigger_float(0.0)
 
-        gp.update()
+        _update_gamepad_safe(gp)
         return
 
     if btn not in XINPUT_BUTTON_MAP:
@@ -70,4 +83,4 @@ def apply_button(slot, btn, state):
     else:
         gp.release_button(button=XINPUT_BUTTON_MAP[btn])
 
-    gp.update()
+    _update_gamepad_safe(gp)

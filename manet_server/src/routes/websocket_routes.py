@@ -64,6 +64,7 @@ class WebSocketRoutes:
         else:
             slot.connected = True
 
+            LOG.info("Player connected")
             LOG.info("Player %d connected (%s)", slot.slot_id + 1, player_name or device_id)
             LOG.info(
                 "Assigned slot %s to %s",
@@ -96,131 +97,140 @@ class WebSocketRoutes:
                 except Exception:
                     continue
 
-                msg_type = data.get("type")
+                try:
+                    msg_type = data.get("type")
 
-                current_slot = self.manager.get_slot_by_device(device_id)
-                is_mouse_owner = self.manager.is_mouse_mode_owner(device_id)
-                if msg_type == "stick":
-                    if is_mouse_owner:
-                        continue
+                    current_slot = self.manager.get_slot_by_device(device_id)
+                    is_mouse_owner = self.manager.is_mouse_mode_owner(device_id)
 
-                    x = float(data.get("x", 0))
-                    y = float(data.get("y", 0))
+                    if msg_type in ("stick", "button"):
+                        LOG.info("Received input packet")
 
-                    if current_slot:
-                        current_slot.last_input_at = time.time()
-                        current_slot.last_stick_x = x
-                        current_slot.last_stick_y = y
-
-                        apply_stick(current_slot, x, y)
-
-                    input_msg = {
-                        "type": "input_event",
-                        "deviceId": device_id,
-                        "event": "stick",
-                        "x": x,
-                        "y": y
-                    }
-                    for client in list(self.admin_panel.admin_clients):
-                        try:
-                            await client.send_json(input_msg)
-                        except Exception:
-                            pass
-
-                elif msg_type == "button":
-                    if is_mouse_owner:
-                        continue
-
-                    if current_slot:
-                        apply_button(
-                            current_slot,
-                            data.get("id"),
-                            data.get("state"),
-                        )
-                    
-                    input_msg = {
-                        "type": "input_event",
-                        "deviceId": device_id,
-                        "event": "button",
-                        "state": data.get("state")
-                    }
-                    for client in list(self.admin_panel.admin_clients):
-                        try:
-                            await client.send_json(input_msg)
-                        except Exception:
-                            pass
-
-                elif msg_type == "keepalive":
-                    pass
-
-                elif msg_type == "raw":
-                    pass
-
-                elif msg_type == "face_update":
-                    self.manager.update_device_identity(device_id, data)
-                    self.admin_panel.broadcast_update()
-                elif msg_type == "set_mouse_mode":
-                    wants_active = data.get("active") == True
-
-                    if wants_active:
-                        if not self.manager.request_mouse_mode(device_id):
-                            await ws.send_json({
-                                "type": "error",
-                                "code": "mouse_mode_in_use",
-                                "ownerName": self.manager.get_mouse_mode_owner_name(),
-                            })
+                    if msg_type == "stick":
+                        if is_mouse_owner:
                             continue
-                    else:
-                        self.manager.release_mouse_mode(device_id)
 
-                    self.manager.broadcast_mouse_mode_status()
-                elif msg_type == "mouse_move":
-                    if is_mouse_owner:
-                        self.mouse.move(
-                            float(data.get("x", 0)),
-                            -float(data.get("y", 0)),
-                        )
-                elif msg_type == "mouse_left_down":
-                    if is_mouse_owner:
-                        self.mouse.left_down()
-                elif msg_type == "mouse_left_up":
-                    if is_mouse_owner:
-                        self.mouse.left_up()
-                elif msg_type == "mouse_right_down":
-                    if is_mouse_owner:
-                        self.mouse.right_down()
-                elif msg_type == "mouse_right_up":
-                    if is_mouse_owner:
-                        self.mouse.right_up()
-                elif msg_type == "mouse_scroll":
-                    if is_mouse_owner:
-                        self.mouse.scroll(float(data.get("delta", 0)))
-                elif msg_type == "toggle_window_visibility":
-                    if is_mouse_owner:
-                        self.admin_panel.broadcast_event({
-                            "type": "window_action",
-                            "action": "toggle_visibility",
+                        x = float(data.get("x", 0))
+                        y = float(data.get("y", 0))
+
+                        if current_slot:
+                            current_slot.last_input_at = time.time()
+                            current_slot.last_stick_x = x
+                            current_slot.last_stick_y = y
+
+                            LOG.info("Applying controller state")
+                            apply_stick(current_slot, x, y)
+
+                        input_msg = {
+                            "type": "input_event",
                             "deviceId": device_id,
-                        })
-                elif msg_type == "quick_action":
-                    if is_mouse_owner:
-                        action_id = data.get("action")
-                        if isinstance(action_id, str):
-                            self.keyboard.perform_action(action_id)
-                elif msg_type == "rumble_test":
-                    LOG.info("Received rumble_test from device %s", device_id)
+                            "event": "stick",
+                            "x": x,
+                            "y": y
+                        }
+                        for client in list(self.admin_panel.admin_clients):
+                            try:
+                                await client.send_json(input_msg)
+                            except Exception:
+                                pass
 
-                    async def _send_pulse():
-                        try:
-                            await ws.send_json({"type": "rumble", "weak": 0.3, "strong": 0.8})
-                            LOG.info("Sent rumble test to %s", device_id)
-                            await asyncio.sleep(0.12)
-                            await ws.send_json({"type": "rumble", "weak": 0.0, "strong": 0.0})
-                            LOG.info("Cleared rumble test for %s", device_id)
-                        except Exception:
-                            LOG.error("Failed to send rumble_test payload to %s", device_id)
+                    elif msg_type == "button":
+                        if is_mouse_owner:
+                            continue
 
-                    asyncio.create_task(_send_pulse())
+                        if current_slot:
+                            LOG.info("Applying controller state")
+                            apply_button(
+                                current_slot,
+                                data.get("id"),
+                                data.get("state"),
+                            )
+                        
+                        input_msg = {
+                            "type": "input_event",
+                            "deviceId": device_id,
+                            "event": "button",
+                            "state": data.get("state")
+                        }
+                        for client in list(self.admin_panel.admin_clients):
+                            try:
+                                await client.send_json(input_msg)
+                            except Exception:
+                                pass
+
+                    elif msg_type == "keepalive":
+                        pass
+
+                    elif msg_type == "raw":
+                        pass
+
+                    elif msg_type == "face_update":
+                        self.manager.update_device_identity(device_id, data)
+                        self.admin_panel.broadcast_update()
+                    elif msg_type == "set_mouse_mode":
+                        wants_active = data.get("active") == True
+
+                        if wants_active:
+                            if not self.manager.request_mouse_mode(device_id):
+                                await ws.send_json({
+                                    "type": "error",
+                                    "code": "mouse_mode_in_use",
+                                    "ownerName": self.manager.get_mouse_mode_owner_name(),
+                                })
+                                continue
+                        else:
+                            self.manager.release_mouse_mode(device_id)
+
+                        self.manager.broadcast_mouse_mode_status()
+                    elif msg_type == "mouse_move":
+                        if is_mouse_owner:
+                            self.mouse.move(
+                                float(data.get("x", 0)),
+                                -float(data.get("y", 0)),
+                            )
+                    elif msg_type == "mouse_left_down":
+                        if is_mouse_owner:
+                            self.mouse.left_down()
+                    elif msg_type == "mouse_left_up":
+                        if is_mouse_owner:
+                            self.mouse.left_up()
+                    elif msg_type == "mouse_right_down":
+                        if is_mouse_owner:
+                            self.mouse.right_down()
+                    elif msg_type == "mouse_right_up":
+                        if is_mouse_owner:
+                            self.mouse.right_up()
+                    elif msg_type == "mouse_scroll":
+                        if is_mouse_owner:
+                            self.mouse.scroll(float(data.get("delta", 0)))
+                    elif msg_type == "toggle_window_visibility":
+                        if is_mouse_owner:
+                            self.admin_panel.broadcast_event({
+                                "type": "window_action",
+                                "action": "toggle_visibility",
+                                "deviceId": device_id,
+                            })
+                    elif msg_type == "quick_action":
+                        if is_mouse_owner:
+                            action_id = data.get("action")
+                            if isinstance(action_id, str):
+                                self.keyboard.perform_action(action_id)
+                    elif msg_type == "rumble_test":
+                        LOG.info("Received rumble_test from device %s", device_id)
+
+                        async def _send_pulse():
+                            try:
+                                await ws.send_json({"type": "rumble", "weak": 0.3, "strong": 0.8})
+                                LOG.info("Sent rumble test to %s", device_id)
+                                await asyncio.sleep(0.12)
+                                await ws.send_json({"type": "rumble", "weak": 0.0, "strong": 0.0})
+                                LOG.info("Cleared rumble test for %s", device_id)
+                            except Exception:
+                                LOG.error("Failed to send rumble_test payload to %s", device_id)
+
+                        asyncio.create_task(_send_pulse())
+                except Exception as ex:
+                    LOG.exception("Exception during processing message: %s", msg.data)
 
         except asyncio.CancelledError:
             LOG.debug("Websocket cancelled")

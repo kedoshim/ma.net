@@ -60,14 +60,19 @@ def probe_gamepad_type(gamepad_type: str, timeout: float = 5.0) -> bool:
     This isolates native crashes to the child process and prevents the main
     server from dying when a gamepad creation would trigger a native fault.
     """
-    cmd = [sys.executable, "-c"]
-    if gamepad_type == "ds4":
-        code = "import vgamepad as vg; g=vg.VDS4Gamepad(); print('ok')"
+    frozen = getattr(sys, 'frozen', False)
+    if frozen:
+        cmd = [sys.executable, f"--probe-{gamepad_type}"]
     else:
-        code = "import vgamepad as vg; g=vg.VX360Gamepad(); print('ok')"
+        cmd = [sys.executable, "-c"]
+        if gamepad_type == "ds4":
+            code = "import vgamepad as vg; g=vg.VDS4Gamepad(); print('ok')"
+        else:
+            code = "import vgamepad as vg; g=vg.VX360Gamepad(); print('ok')"
+        cmd.append(code)
 
     try:
-        proc = subprocess.run(cmd + [code], capture_output=True, timeout=timeout)
+        proc = subprocess.run(cmd, capture_output=True, timeout=timeout)
         return proc.returncode == 0
     except subprocess.TimeoutExpired:
         return False
@@ -94,6 +99,11 @@ class NullGamepad:
     
     def unregister_notification(self):
         return
+
+    def __getattr__(self, name):
+        def _no_op(*args, **kwargs):
+            pass
+        return _no_op
 
 async def notify_rumble(manager, slot, large, small):
     """

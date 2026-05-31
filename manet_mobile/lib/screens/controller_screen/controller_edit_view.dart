@@ -307,7 +307,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'unused buttons',
+                'Botões disponíveis',
                 style: TextStyle(
                   fontFamily: 'momo',
                   fontSize: 22,
