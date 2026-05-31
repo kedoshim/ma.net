@@ -127,23 +127,59 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.screenBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.textPrimary, width: 4),
+        ),
         title: const Text(
           'Excluir layout',
-          style: TextStyle(fontFamily: 'momo'),
+          style: TextStyle(
+            fontFamily: 'momo',
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
         ),
-        content: Text('Deseja excluir "${preset.name}"?'),
+        content: Text(
+          'Deseja excluir "${preset.name}"?',
+          style: const TextStyle(color: AppColors.textPrimary),
+        ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
+              backgroundColor: const Color(0xFFFF6B6B), // Playful soft red
+              foregroundColor: AppColors.textPrimary,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(
+                  color: AppColors.textPrimary,
+                  width: 3,
+                ),
+              ),
             ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Excluir'),
+            child: const Text(
+              'Excluir',
+              style: TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ],
       ),

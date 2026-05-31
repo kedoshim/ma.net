@@ -65,15 +65,19 @@ class StartupConnectionPipeline {
   final EndpointPriorityResolver resolver;
   final QrCodeCacheService qrCache;
   final ValueNotifier<StartupConnectionState> state;
+  final void Function(ConnectionInfo oldConn, ConnectionInfo newConn)? onNetworkChanged;
 
   late final Future<SharedPreferences> _prefsFuture;
   final Stopwatch _startupWatch = Stopwatch();
   bool _firstQrRendered = false;
+  StreamSubscription? _adminWsSubscription;
+  bool _isDisposed = false;
 
   StartupConnectionPipeline({
     required this.api,
     EndpointPriorityResolver? resolver,
     QrCodeCacheService? qrCache,
+    this.onNetworkChanged,
   }) : resolver = resolver ?? EndpointPriorityResolver(),
        qrCache = qrCache ?? QrCodeCacheService.instance,
        state = ValueNotifier(const StartupConnectionState()) {
@@ -103,12 +107,73 @@ class StartupConnectionPipeline {
       _loadQrImage(endpoint, keepPlaceholder: true);
     }
 
+    _initAdminSocket();
+
     unawaited(_warmConnectionInfo(previousConnection));
     unawaited(_refreshConnections(previousConnection));
     unawaited(_refreshDiagnostics());
   }
 
+  void _initAdminSocket() {
+    if (_isDisposed) return;
+    _adminWsSubscription?.cancel();
+    
+    _adminWsSubscription = api.connectAdminSocket().listen(
+      _handleAdminSocketEvent,
+      onError: (e) {
+        debugPrint('[STARTUP PIPELINE] Admin WebSocket error: $e');
+        if (!_isDisposed) {
+          Future.delayed(const Duration(seconds: 4), _initAdminSocket);
+        }
+      },
+      onDone: () {
+        debugPrint('[STARTUP PIPELINE] Admin WebSocket disconnected, reconnecting...');
+        if (!_isDisposed) {
+          Future.delayed(const Duration(seconds: 4), _initAdminSocket);
+        }
+      },
+    );
+  }
+
+  void _handleAdminSocketEvent(Map<String, dynamic> data) {
+    if (_isDisposed) return;
+    try {
+      if (data['type'] == 'network_update') {
+        debugPrint('[STARTUP PIPELINE] Network update received from server.');
+        final payload = data['data'] as Map<String, dynamic>;
+        final snapshot = ConnectionSnapshot.fromJson(payload);
+        
+        final previousSelected = state.value.selectedConnection;
+        final newSelected = snapshot.selectedConnection;
+        
+        final ipChanged = previousSelected == null || previousSelected.ip != newSelected.ip;
+        final endpoint = api.getQrCodeUrl(newSelected.id);
+        
+        _setState(
+          state.value.copyWith(
+            connectionSnapshot: snapshot,
+            selectedConnection: newSelected,
+            qrEndpointUrl: endpoint,
+            isUsingStaleEndpoint: false,
+            isLoadingConnections: false,
+          ),
+        );
+        
+        _loadQrImage(endpoint);
+        _saveConnection(newSelected);
+        
+        if (ipChanged && previousSelected != null) {
+          onNetworkChanged?.call(previousSelected, newSelected);
+        }
+      }
+    } catch (e) {
+      debugPrint('[STARTUP PIPELINE] Error parsing admin socket event: $e');
+    }
+  }
+
   void dispose() {
+    _isDisposed = true;
+    _adminWsSubscription?.cancel();
     state.dispose();
   }
 

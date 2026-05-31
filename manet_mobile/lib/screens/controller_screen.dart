@@ -109,6 +109,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   ColorTheme _currentTheme = ColorTheme.blue;
   PlayerFaceData _playerFace = PlayerFaceData.random();
   ControllerBrandingMode _brandingMode = ControllerBrandingMode.xinput;
+  bool _hasVacantSlot = false;
 
   bool get _isTemporaryModeActive =>
       _activeMode != ControllerScreenMode.gameplay;
@@ -271,6 +272,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       _activeMode = ControllerScreenMode.gameplay;
       _mouseModeOwned = false;
       _mouseModeOwnerName = null;
+      _hasVacantSlot = false;
     });
 
     _clearPlayerSlot();
@@ -464,6 +466,11 @@ class _ControllerScreenState extends State<ControllerScreen>
         case 'slot_changed':
           _updatePlayerSlot(data['slot'], colorHex: data['color']);
           _ingestFaceData(data);
+          break;
+        case 'slot_status':
+          setState(() {
+            _hasVacantSlot = data['has_vacant_slot'] == true;
+          });
           break;
         case 'mouse_mode_status':
           setState(() {
@@ -932,6 +939,10 @@ class _ControllerScreenState extends State<ControllerScreen>
           totalSlots: totalSlots,
           visibleButtons: visibleButtons,
           buttonOrder: _buttonOrder,
+          hasVacantSlot: _hasVacantSlot,
+          onJoinGame: () {
+            _send({'type': 'request_slot'});
+          },
         );
     }
   }

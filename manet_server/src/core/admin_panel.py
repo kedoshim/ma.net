@@ -23,6 +23,10 @@ class AdminPanel:
             }
         })
         LOGGER.debug("Broadcasted admin slot update: pool=%d slots=%d", len(pool), len(slots))
+        try:
+            self.manager.broadcast_slot_status()
+        except Exception:
+            LOGGER.exception("Failed to broadcast slot status to devices")
 
     def broadcast_event(self, data):
         for client in self.admin_clients.copy():

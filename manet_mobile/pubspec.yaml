@@ -110,6 +110,12 @@ flutter:
       fonts:
         - asset: assets/fonts/Monomaniac_One/MonomaniacOne-Regular.ttf
           style: normal
+
+    - family: noto_symbols
+      fonts:
+        - asset: assets/fonts/Noto_Sans_Symbols/NotoSansSymbols-VariableFont_wght.ttf
+          style: normal
+          
   # fonts:
   #   - family: Schyler
   #     fonts:

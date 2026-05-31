@@ -21,6 +21,7 @@ import '../../widgets/app_error_widget.dart';
 import 'lobby_toolbar.dart';
 import 'server_alerts.dart';
 import 'onboarding_overlay.dart';
+import 'qr_code_container.dart';
 
 class HomePageScreen extends StatelessWidget {
   final String host;
@@ -139,7 +140,10 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _api = HostApiService(host: widget.host, port: widget.port);
     _hostWindowService = HostWindowService(api: _api);
     _hostWindowService.start();
-    _startupPipeline = StartupConnectionPipeline(api: _api);
+    _startupPipeline = StartupConnectionPipeline(
+      api: _api,
+      onNetworkChanged: _handleNetworkChanged,
+    );
     _startupPipeline.state.addListener(_handlePipelineUpdate);
     _startupPipeline.initialize();
     _loadTheme();
@@ -272,6 +276,136 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     setState(() {});
   }
 
+  void _handleNetworkChanged(ConnectionInfo oldConn, ConnectionInfo newConn) {
+    if (!mounted) return;
+
+    final parts = newConn.displayNameKey.split('__');
+    String networkName = parts.length > 1 ? parts.sublist(1).join('__') : '';
+    if (int.tryParse(networkName) != null) {
+      networkName = '';
+    }
+
+    String kindName = '';
+    if (newConn.kind == 'wifi') {
+      kindName = 'Wi-Fi${networkName.isNotEmpty ? " ($networkName)" : ""}';
+    } else if (newConn.kind == 'ethernet') {
+      kindName = 'Ethernet (Cabo)';
+    } else if (newConn.kind == 'hotspot') {
+      kindName = 'Hotspot${networkName.isNotEmpty ? " ($networkName)" : ""}';
+    } else {
+      kindName = 'Nova Rede';
+    }
+
+    _addAlert('Rede alterada para $kindName (Endereço: ${newConn.url.replaceAll("http://", "")})');
+
+    SoundEffectService.instance.playHover();
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 7),
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.screenBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.textPrimary, width: 4),
+            boxShadow: const [
+              BoxShadow(
+                color: AppColors.textPrimary,
+                offset: Offset(4, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.highlightColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.wifi_tethering_rounded,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Rede alterada! :)',
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontFamily: 'momo',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Conexão atualizada para $kindName.',
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontSize: 13,
+                        color: AppColors.textPrimary.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  _showConnectionsSheet(context);
+                },
+                child: Text(
+                  'Ver',
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontFamily: 'momo',
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.highlightColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showConnectionsSheet(BuildContext context) async {
+    final snapshot = _startupPipeline.state.value.connectionSnapshot;
+    final connections = snapshot?.connections ?? const <ConnectionInfo>[];
+    if (connections.isEmpty) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.screenBackground,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+        side: BorderSide(color: AppColors.textPrimary, width: 4),
+      ),
+      builder: (context) {
+        return ConnectionsSheet(
+          initialSnapshot: snapshot,
+          api: _api,
+          scale: const UIScale(200.0),
+          onSelectConnection: _selectConnection,
+        );
+      },
+    );
+  }
+
   Future<void> _selectConnection(String connectionId) async {
     await _startupPipeline.selectConnection(connectionId);
   }
@@ -369,7 +503,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final isCompact = screenWidth < screenHeight * 1.25;
+    final isCompact = screenWidth < screenHeight * 1.35;
 
     int columns = _slots > 12 ? 8 : (_slots > 8 ? 6 : (_slots > 4 ? 6 : 4));
     int rows = (_slots > 0 ? (_slots / columns).ceil() : 1);

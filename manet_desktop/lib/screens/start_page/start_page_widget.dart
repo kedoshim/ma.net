@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:manet_desktop/screens/home_page/home_page_widget.dart';
 import 'package:manet_desktop/services/server_process_service.dart';
+import 'package:manet_desktop/services/host_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -154,8 +156,25 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         return;
       }
 
+      // Pre-heat the server process in the background, defaulting to DInput (ds4)
+      Future<ServerStartupResult>? preheatFuture;
+      if (!isDebug) {
+        preheatFuture = _serverService.startServer(
+          port: port,
+          slots: 4,
+          fixed: true,
+          controllerMode: 'ds4',
+        );
+      }
+
       final chosen = await _showModeSelectionDialog();
-      if (chosen == null) return;
+      if (chosen == null) {
+        if (preheatFuture != null) {
+          // User cancelled selection, shut down the pre-heated background server
+          unawaited(_serverService.stopServer());
+        }
+        return;
+      }
       final mode = (chosen == 'ds4') ? 'ds4' : 'x360';
 
       if (isDebug) {
@@ -176,16 +195,21 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         return;
       }
 
-      final result = await _serverService.startServer(
-        port: port,
-        slots: 4,
-        fixed: true,
-        controllerMode: mode,
-      );
+      // Wait for preheat startup sequence to finish (often already complete or near complete!)
+      final result = await preheatFuture!;
 
       if (!mounted) return;
 
       if (result.isSuccess) {
+        // If the user selected XInput (x360) instead of DInput, trigger layout reset/switch on the fly!
+        if (mode == 'x360') {
+          final api = HostApiService(host: '127.0.0.1', port: port);
+          try {
+            await api.resetControllers(mode: 'x360', slots: 4, fixed: true);
+          } catch (e) {
+            // Server has bound successfully, so we navigate anyway, but log the reset failure
+          }
+        }
         _navigateToHome(port, mode);
       } else {
         _showStartupErrorDialog(result);

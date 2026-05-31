@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:manet_desktop/screens/home_page/gamepad_state.dart';
 import 'package:manet_desktop/services/host_api_service.dart';
@@ -62,7 +63,7 @@ class AdaptiveStageLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth > constraints.maxHeight * 1.25;
+        final isWide = constraints.maxWidth > constraints.maxHeight * 1.35;
         if (isWide) {
           return WideStageLayout(
             connectionSnapshot: connectionSnapshot,
@@ -511,9 +512,28 @@ class ControllerSlotWidget extends StatelessWidget {
   }
 }
 
-class DevicePoolArea extends StatelessWidget {
+class DevicePoolArea extends StatefulWidget {
   final UIScale scale;
   const DevicePoolArea({super.key, required this.scale});
+
+  @override
+  State<DevicePoolArea> createState() => _DevicePoolAreaState();
+}
+
+class _DevicePoolAreaState extends State<DevicePoolArea> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -536,10 +556,10 @@ class DevicePoolArea extends StatelessWidget {
         return Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(scale.eighth),
+            borderRadius: BorderRadius.circular(widget.scale.eighth),
             border: Border.all(
               color: isHovered ? AppColors.highlightColor : Colors.transparent,
-              width: scale.eighth / 4,
+              width: widget.scale.eighth / 4,
             ),
           ),
           child: Column(
@@ -547,12 +567,12 @@ class DevicePoolArea extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                height: scale.slot * 0.8,
+                height: 80.0,
                 width: double.infinity,
-                padding: EdgeInsets.all(scale.eighth),
+                padding: EdgeInsets.symmetric(horizontal: widget.scale.eighth, vertical: 10.0),
                 decoration: BoxDecoration(
                   color: AppTheme.primaryText.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(scale.eighth),
+                  borderRadius: BorderRadius.circular(widget.scale.eighth),
                 ),
                 child: state.pool.isEmpty
                     ? Center(
@@ -560,66 +580,85 @@ class DevicePoolArea extends StatelessWidget {
                           'banco de reservas',
                           style: TextStyle(
                             fontFamily: 'momo',
-                            fontSize: scale.eighth,
+                            fontSize: 14.0,
                             color: AppTheme.primaryText.withValues(alpha: 0.3),
                           ),
                         ),
                       )
-                    : ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: state.pool.length,
-                        separatorBuilder: (_, __) =>
-                            SizedBox(width: scale.eighth),
-                        itemBuilder: (context, index) {
-                          final device = state.pool[index];
-                          final inputState =
-                              state.getInputState(device.id) ??
-                              DeviceInputState.idle();
-
-                          return Draggable<DragData>(
-                            dragAnchorStrategy:
-                                (draggable, context, position) => Offset(
-                                  scale.quarter / 2,
-                                  scale.quarter / 2,
-                                ),
-                            data: DragData(
-                              device: device,
-                              source: DragSource.pool,
-                            ),
-                            feedback: MouseRegion(
-                              cursor: SystemMouseCursors.move,
-                              child: _buildDragFeedback(
-                                device,
-                                scale.quarter,
-                                true,
-                              ),
-                            ),
-                            childWhenDragging: Opacity(
-                              opacity: 0.5,
-                              child: DeviceInputIndicator(
-                                device: device,
-                                input: inputState,
-                                size: scale.half,
-                                isOnPool: true,
-                              ),
-                            ),
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: DeviceJoinPopEffect(
-                                device: device,
-                                child: DropBounceEffect(
-                                  key: ValueKey('drop_${device.id}'),
-                                  child: DeviceInputIndicator(
-                                    device: device,
-                                    input: inputState,
-                                    size: scale.half,
-                                    isOnPool: true,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
+                    : Listener(
+                        onPointerSignal: (pointerSignal) {
+                          if (pointerSignal is PointerScrollEvent) {
+                            final double delta = pointerSignal.scrollDelta.dy;
+                            if (_scrollController.hasClients) {
+                              final target = (_scrollController.offset + delta).clamp(
+                                0.0,
+                                _scrollController.position.maxScrollExtent,
+                              );
+                              _scrollController.jumpTo(target);
+                            }
+                          }
                         },
+                        child: Scrollbar(
+                          controller: _scrollController,
+                          thumbVisibility: null,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 4.0),
+                            child: ListView.separated(
+                              controller: _scrollController,
+                              scrollDirection: Axis.horizontal,
+                              itemCount: state.pool.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 12.0),
+                              itemBuilder: (context, index) {
+                                final device = state.pool[index];
+                                final inputState =
+                                    state.getInputState(device.id) ??
+                                    DeviceInputState.idle();
+
+                                return Draggable<DragData>(
+                                  dragAnchorStrategy:
+                                      (draggable, context, position) => const Offset(28.0, 28.0),
+                                  data: DragData(
+                                    device: device,
+                                    source: DragSource.pool,
+                                  ),
+                                  feedback: MouseRegion(
+                                    cursor: SystemMouseCursors.move,
+                                    child: _buildDragFeedback(
+                                      device,
+                                      56.0,
+                                      true,
+                                    ),
+                                  ),
+                                  childWhenDragging: Opacity(
+                                    opacity: 0.5,
+                                    child: DeviceInputIndicator(
+                                      device: device,
+                                      input: inputState,
+                                      size: 56.0,
+                                      isOnPool: true,
+                                    ),
+                                  ),
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: DeviceJoinPopEffect(
+                                      device: device,
+                                      child: DropBounceEffect(
+                                        key: ValueKey('drop_${device.id}'),
+                                        child: DeviceInputIndicator(
+                                          device: device,
+                                          input: inputState,
+                                          size: 56.0,
+                                          isOnPool: true,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       ),
               ),
             ],

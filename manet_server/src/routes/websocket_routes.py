@@ -81,6 +81,10 @@ class WebSocketRoutes:
 
         await ws.send_json(self.manager.build_mouse_mode_payload(device_id))
         await ws.send_json(self.manager.build_active_layout_payload())
+        await ws.send_json({
+            "type": "slot_status",
+            "has_vacant_slot": self.manager.has_vacant_slot(),
+        })
         self.admin_panel.broadcast_update()
 
         try:
@@ -229,6 +233,25 @@ class WebSocketRoutes:
                                 LOG.error("Failed to send rumble_test payload to %s", device_id)
 
                         asyncio.create_task(_send_pulse())
+
+                    elif msg_type == "request_slot":
+                        LOG.info("Device %s requested slot", device_id)
+                        slot = self.manager.assign_slot(device_id, player_name)
+                        if slot is not None:
+                            slot.connected = True
+                            await ws.send_json({
+                                "type": "assigned",
+                                "slot": slot.slot_id,
+                                **self.manager.get_slot_identity(slot),
+                                "total_slots": len(self.manager.slots)
+                            })
+                        else:
+                            await ws.send_json({
+                                "type": "unassigned",
+                                "total_slots": len(self.manager.slots),
+                                **self.manager.get_device_identity(device_id),
+                            })
+                        self.admin_panel.broadcast_update()
                 except Exception as ex:
                     LOG.exception("Exception during processing message: %s", msg.data)
 

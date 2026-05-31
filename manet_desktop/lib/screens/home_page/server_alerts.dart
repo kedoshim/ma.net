@@ -67,19 +67,28 @@ class _ServerAlertsDialogState extends State<ServerAlertsDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppColors.screenBackground,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: AppColors.textPrimary, width: 4),
+      ),
       title: Text(
         'Avisos e Erros',
-        style: AppTheme.titleSmall.copyWith(color: AppColors.textPrimary),
+        style: AppTheme.titleMedium.copyWith(
+          color: AppColors.textPrimary,
+          fontFamily: 'momo',
+          fontWeight: FontWeight.bold,
+        ),
       ),
       content: SizedBox(
-        width: double.maxFinite,
-        height: 300,
+        width: 420,
+        height: 450,
         child: widget.alerts.isEmpty
             ? Center(
                 child: Text(
                   'Nenhum alerta.',
                   style: AppTheme.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
+                    fontFamily: 'momo',
                   ),
                 ),
               )
@@ -87,28 +96,38 @@ class _ServerAlertsDialogState extends State<ServerAlertsDialog> {
                 itemCount: widget.alerts.length,
                 itemBuilder: (context, index) {
                   final alert = widget.alerts[index];
+                  final isError = alert.isError;
+                  final bgColor = isError
+                      ? const Color(0xFFFDE8E8) // Soft red background
+                      : const Color(0xFFFEF3C7); // Soft amber background
+                  final borderColor = isError
+                      ? const Color(0xFFF87171) // Red border
+                      : const Color(0xFFFBBF24); // Amber border
+
                   return Card(
-                    color: AppColors.screenBackground,
+                    color: bgColor,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                       side: BorderSide(
-                        color: alert.isError ? Colors.red : Colors.amber,
-                        width: 1.5,
+                        color: borderColor,
+                        width: 3.0,
                       ),
                     ),
-                    margin: const EdgeInsets.only(bottom: 8),
+                    margin: const EdgeInsets.only(bottom: 12),
                     child: ListTile(
                       leading: Icon(
-                        alert.isError
+                        isError
                             ? Icons.error_outline
                             : Icons.warning_amber_rounded,
-                        color: alert.isError ? Colors.red : Colors.amber,
+                        color: isError ? const Color(0xFFC53030) : const Color(0xFFB7791F),
                       ),
                       title: SelectableText(
                         alert.message,
                         style: AppTheme.bodyMedium.copyWith(
                           color: AppColors.textPrimary,
                           fontSize: 14,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                       trailing: IconButton(
@@ -127,9 +146,31 @@ class _ServerAlertsDialogState extends State<ServerAlertsDialog> {
               ),
       ),
       actions: [
-        TextButton(
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.highlightColor,
+            foregroundColor: AppColors.textPrimary,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(
+                color: AppColors.textPrimary,
+                width: 3,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 12,
+            ),
+          ),
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Fechar'),
+          child: const Text(
+            'Fechar',
+            style: TextStyle(
+              fontFamily: 'momo',
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
       ],
     );

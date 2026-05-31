@@ -72,7 +72,7 @@ def create_app(config):
     for route in list(app.router.routes()):
         cors.add(route)
 
-    lifecycle = AppLifecycle(manager)
+    lifecycle = AppLifecycle(manager, connection_service, admin_panel)
     lifecycle.register_lifecycle(app)
 
     LOG.info("Application setup complete.")

@@ -1,5 +1,6 @@
 import json
 import logging
+import sys
 from copy import deepcopy
 from pathlib import Path
 
@@ -137,29 +138,52 @@ GAME_PRESETS = [
         visible_ids=["A", "B", "X", "Y"],
         button_order=["B", "Y", "X", "A"],
     ),
+    _preset(
+        "game-lego-party",
+        name="Lego Party",
+        category="game",
+        movement_mode="floatingJoystick",
+        visible_ids=["A", "B", "X", "Y","RB","LB"],
+        button_order=["LB", "RB", "Y", "B", "X", "A"],
+    ),
 ]
 
 
 class ControllerPresetStore:
     def __init__(self, storage_path=None):
         root = Path(__file__).resolve().parents[2]
-        self.storage_path = Path(storage_path or root / "data" / "controller_presets.json")
+        is_frozen = getattr(sys, 'frozen', False)
+
+        if storage_path:
+            self.storage_path = Path(storage_path)
+        elif is_frozen:
+            # Under frozen mode (installer), save custom presets to user's home folder
+            # to avoid write permission errors in C:\Program Files
+            self.storage_path = Path.home() / ".manet" / "controller_presets.json"
+        else:
+            self.storage_path = root / "data" / "controller_presets.json"
+
         self._builtins = {
             preset["id"]: deepcopy(preset)
             for preset in [*BUILT_IN_PRESETS, *GAME_PRESETS]
         }
         self._custom = {}
         self._active_preset_id = "builtin-simple-shoulder"
+        self.bundled_path = root / "data" / "controller_presets.json"
         self._load()
 
     def _load(self):
-        if not self.storage_path.exists():
+        path_to_load = self.storage_path
+        if not path_to_load.exists() and hasattr(self, 'bundled_path') and self.bundled_path.exists():
+            path_to_load = self.bundled_path
+
+        if not path_to_load.exists():
             return
 
         try:
-            payload = json.loads(self.storage_path.read_text(encoding="utf-8"))
+            payload = json.loads(path_to_load.read_text(encoding="utf-8"))
         except Exception:
-            LOGGER.exception("Failed to load controller presets from %s", self.storage_path)
+            LOGGER.exception("Failed to load controller presets from %s", path_to_load)
             return
 
         custom_items = payload.get("customPresets", [])

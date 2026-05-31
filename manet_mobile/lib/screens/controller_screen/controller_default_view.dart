@@ -37,6 +37,8 @@ class ControllerDefaultView extends StatefulWidget {
     required this.totalSlots,
     required this.visibleButtons,
     required this.buttonOrder,
+    required this.hasVacantSlot,
+    required this.onJoinGame,
   });
 
   final ControllerBrandingMode brandingMode;
@@ -58,6 +60,8 @@ class ControllerDefaultView extends StatefulWidget {
   final int totalSlots;
   final Map<String, bool> visibleButtons;
   final List<String> buttonOrder;
+  final bool hasVacantSlot;
+  final VoidCallback? onJoinGame;
 
   @override
   State<ControllerDefaultView> createState() => _ControllerDefaultViewState();
@@ -93,8 +97,128 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
     }
   }
 
+  Widget _buildWaitingView() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxHeight: 280, maxWidth: 400),
+        decoration: BoxDecoration(
+          color: AppColors.lightColor,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: AppColors.textPrimary,
+            width: AppColors.borderThickness,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.more_horiz, size: 28),
+                  onPressed: widget.onOpenOptions,
+                  tooltip: 'Opções',
+                ),
+                const SizedBox(width: 16),
+                InkWell(
+                  onTap: widget.onOpenFaceEditor,
+                  borderRadius: BorderRadius.circular(24),
+                  child: PlayerFaceIndicator(
+                    face: widget.playerFace,
+                    size: 80,
+                    roundedSquare: true,
+                    borderColor: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 24),
+                  onPressed: widget.onOpenFaceEditor,
+                  tooltip: 'Editar rosto',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.hasVacantSlot ? 'Há uma vaga disponível!' : 'Você está no banco de reservas',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'momo',
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.hasVacantSlot
+                  ? 'Toque abaixo para entrar na partida.'
+                  : 'Aguarde um jogador sair ou o host liberar mais vagas.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textPrimary.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (widget.hasVacantSlot)
+              SizedBox(
+                width: 200,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.highlightColor,
+                    foregroundColor: AppColors.textPrimary,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(
+                        color: AppColors.textPrimary,
+                        width: AppColors.borderThickness,
+                      ),
+                    ),
+                  ),
+                  onPressed: () {
+                    HapticsManager.instance.softTap();
+                    widget.onJoinGame?.call();
+                  },
+                  child: const Text(
+                    'Entrar na partida',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'momo',
+                    ),
+                  ),
+                ),
+              )
+            else
+              const SizedBox(
+                height: 50,
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation(AppColors.textPrimary),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.playerIndex == null && widget.connectionState == ControllerConnectionState.connected) {
+      return _buildWaitingView();
+    }
+
     return Padding(
       padding: const EdgeInsets.all(4),
       child: Row(

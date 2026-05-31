@@ -78,6 +78,7 @@ class PlayerFaceIndicator extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontFamily: 'monomaniac',
+                          fontFamilyFallback: const ['noto_symbols'],
                           fontSize: size * 0.7,
                           height: 0.9,
                           color: Colors.black.withValues(alpha: 0.8),

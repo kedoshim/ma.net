@@ -161,6 +161,7 @@ class _PlayerFaceIndicatorState extends State<PlayerFaceIndicator>
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontFamily: 'monomaniac',
+                          fontFamilyFallback: const ['noto_symbols'],
                           fontSize: widget.size * 0.7,
                           height: 0.9,
                           color: Colors.black.withValues(alpha: 0.8),

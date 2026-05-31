@@ -190,7 +190,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
         side: const BorderSide(color: AppColors.textPrimary, width: 4),
       ),
       builder: (context) {
-        return _ConnectionsSheet(
+        return ConnectionsSheet(
           initialSnapshot: widget.connectionSnapshot,
           api: widget.api,
           scale: widget.scale,
@@ -366,66 +366,81 @@ class _QRCodePanelState extends State<QRCodePanel> {
   }
 
   Widget _buildQR() {
-    return ClipRRect(
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeInOut,
-        switchOutCurve: Curves.easeInOut,
-        child: widget.qrImage != null
-            ? Image(
-                key: ValueKey(widget.qrEndpointUrl ?? 'qr_image'),
-                image: widget.qrImage!,
-                width: double.infinity,
-                fit: BoxFit.contain,
-              )
-            : Container(
-                key: const ValueKey('qr_placeholder'),
-                width: double.infinity,
-                color: AppColors.textPrimary.withValues(alpha: 0.06),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: Center(
-                    child: Text(
-                      widget.isLoadingConnection ? 'Criando QR...' : 'Sem QR',
-                      textAlign: TextAlign.center,
-                      style: AppTheme.bodyMedium.copyWith(
-                        fontFamily: 'momo',
-                        fontSize: widget.scale.eighth * 0.8,
-                        color: AppColors.textPrimary.withValues(alpha: 0.44),
+    final qrSize = widget.scale.slot;
+    return Center(
+      child: Container(
+        width: qrSize,
+        height: qrSize,
+        child: ClipRRect(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeInOut,
+            switchOutCurve: Curves.easeInOut,
+            child: widget.qrImage != null
+                ? Image(
+                    key: ValueKey(widget.qrEndpointUrl ?? 'qr_image'),
+                    image: widget.qrImage!,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.contain,
+                  )
+                : Container(
+                    key: const ValueKey('qr_placeholder'),
+                    width: double.infinity,
+                    height: double.infinity,
+                    color: AppColors.textPrimary.withValues(alpha: 0.06),
+                    child: Center(
+                      child: Text(
+                        widget.isLoadingConnection ? 'Criando QR...' : 'Sem QR',
+                        textAlign: TextAlign.center,
+                        style: AppTheme.bodyMedium.copyWith(
+                          fontFamily: 'momo',
+                          fontSize: widget.scale.eighth * 0.8,
+                          color: AppColors.textPrimary.withValues(alpha: 0.44),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildLink(
     String connectionUrl, {
+    CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.center,
     MainAxisAlignment alignment = MainAxisAlignment.center,
   }) {
-    return Row(
-      mainAxisAlignment: alignment,
+    return Column(
+      crossAxisAlignment: crossAxisAlignment,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Flexible(
-          child: InkWell(
-            onTap: _openLink,
-            borderRadius: BorderRadius.circular(widget.scale.eighth / 2),
-            child: Text(
-              connectionUrl.replaceAll('http://', ''),
-              overflow: TextOverflow.ellipsis,
-              style: AppTheme.bodyMedium.copyWith(
-                fontFamily: 'monomaniac',
-                fontSize: widget.scale.eighth * 0.7,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+        Text(
+          'ou acesse o link:',
+          style: AppTheme.bodyMedium.copyWith(
+            fontSize: widget.scale.eighth * 0.55,
+            color: AppColors.textPrimary.withValues(alpha: 0.5),
+            height: 1.0,
           ),
         ),
-        _CopyLinkButton(
-          url: connectionUrl,
-          iconSize: widget.scale.eighth * 0.7,
+        SizedBox(height: widget.scale.eighth * 0.25),
+        Row(
+          mainAxisAlignment: alignment,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: _InteractiveLinkText(
+                url: connectionUrl,
+                onTap: _openLink,
+                fontSize: widget.scale.eighth * 0.75,
+              ),
+            ),
+            _CopyLinkButton(
+              url: connectionUrl,
+              iconSize: widget.scale.eighth * 0.75,
+            ),
+          ],
         ),
       ],
     );
@@ -541,6 +556,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                               Expanded(
                                 child: _buildLink(
                                   connectionUrl,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   alignment: MainAxisAlignment.start,
                                 ),
                               ),
@@ -614,6 +630,50 @@ class _QRCodePanelState extends State<QRCodePanel> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _InteractiveLinkText extends StatefulWidget {
+  final String url;
+  final VoidCallback onTap;
+  final double fontSize;
+
+  const _InteractiveLinkText({
+    required this.url,
+    required this.onTap,
+    required this.fontSize,
+  });
+
+  @override
+  State<_InteractiveLinkText> createState() => _InteractiveLinkTextState();
+}
+
+class _InteractiveLinkTextState extends State<_InteractiveLinkText> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Text(
+          widget.url.replaceAll('http://', ''),
+          overflow: TextOverflow.ellipsis,
+          style: AppTheme.bodyMedium.copyWith(
+            fontFamily: 'monomaniac',
+            fontSize: widget.fontSize,
+            fontWeight: FontWeight.w600,
+            color: _isHovered ? AppColors.highlightColor : AppColors.textPrimary,
+            decoration: TextDecoration.underline,
+            decorationColor: _isHovered ? AppColors.highlightColor : AppColors.textPrimary,
+            decorationThickness: 2,
+          ),
         ),
       ),
     );
@@ -1276,13 +1336,13 @@ class _ActionChip extends StatelessWidget {
   }
 }
 
-class _ConnectionsSheet extends StatefulWidget {
+class ConnectionsSheet extends StatefulWidget {
   final ConnectionSnapshot? initialSnapshot;
   final HostApiService api;
   final UIScale scale;
   final Future<void> Function(String connectionId) onSelectConnection;
 
-  const _ConnectionsSheet({
+  const ConnectionsSheet({
     required this.initialSnapshot,
     required this.api,
     required this.scale,
@@ -1290,10 +1350,10 @@ class _ConnectionsSheet extends StatefulWidget {
   });
 
   @override
-  State<_ConnectionsSheet> createState() => _ConnectionsSheetState();
+  State<ConnectionsSheet> createState() => _ConnectionsSheetState();
 }
 
-class _ConnectionsSheetState extends State<_ConnectionsSheet> {
+class _ConnectionsSheetState extends State<ConnectionsSheet> {
   late List<ConnectionInfo> _connections;
   bool _isRefreshing = false;
 
@@ -1440,6 +1500,24 @@ class _CompactConnectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final parts = connection.displayNameKey.split('__');
+    final kindKey = parts[0];
+    String networkName = parts.length > 1 ? parts.sublist(1).join('__') : '';
+    if (int.tryParse(networkName) != null) {
+      networkName = '';
+    }
+
+    String typeLabel = QRCodePanel.t(kindKey);
+    String? subtitleLabel;
+
+    if (connection.kind == 'wifi') {
+      subtitleLabel = networkName.isNotEmpty ? networkName : 'Mesma rede do PC';
+    } else if (connection.kind == 'hotspot') {
+      subtitleLabel = networkName.isNotEmpty ? networkName : 'Hotspot Ativo';
+    } else if (connection.kind == 'ethernet') {
+      subtitleLabel = 'Rede cabeada';
+    }
+
     return Container(
       padding: EdgeInsets.all(scale.eighth * 0.8),
       decoration: BoxDecoration(
@@ -1456,7 +1534,7 @@ class _CompactConnectionCard extends StatelessWidget {
         children: [
           Icon(
             _getIconForKind(connection.kind),
-            size: scale.eighth * 1.2,
+            size: scale.eighth * 1.4,
             color: AppColors.textPrimary.withValues(alpha: 0.7),
           ),
           SizedBox(width: scale.eighth * 0.8),
@@ -1465,16 +1543,27 @@ class _CompactConnectionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  QRCodePanel.displayName(connection),
+                  typeLabel,
                   style: AppTheme.bodyMedium.copyWith(
                     fontFamily: 'momo',
                     fontSize: scale.eighth * 0.85,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: scale.eighth / 2),
+                if (subtitleLabel != null) ...[
+                  SizedBox(height: scale.eighth / 4),
+                  Text(
+                    subtitleLabel,
+                    style: AppTheme.bodyMedium.copyWith(
+                      fontSize: scale.eighth * 0.7,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+                SizedBox(height: scale.eighth / 4),
                 Text(
-                  connection.url.replaceAll('http://', ''),
+                  connection.ip,
                   style: AppTheme.bodyMedium.copyWith(
                     fontFamily: 'monomaniac',
                     fontSize: scale.eighth * 0.75,
@@ -1575,6 +1664,94 @@ IconData _iconForName(String name) {
   }
 }
 
+class _StepCard extends StatelessWidget {
+  final UIScale scale;
+  final String step;
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _StepCard({
+    required this.scale,
+    required this.step,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(scale.eighth * 0.8),
+      decoration: BoxDecoration(
+        color: AppColors.lightColor,
+        borderRadius: BorderRadius.circular(scale.eighth),
+        border: Border.all(color: AppColors.textPrimary, width: 3),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: scale.eighth * 1.4,
+            height: scale.eighth * 1.4,
+            decoration: BoxDecoration(
+              color: AppColors.highlightColor,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.textPrimary, width: 2),
+            ),
+            child: Center(
+              child: Text(
+                step,
+                style: AppTheme.bodyMedium.copyWith(
+                  fontFamily: 'momo',
+                  fontSize: scale.eighth * 0.75,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: scale.eighth * 0.65),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: scale.eighth * 0.75, color: AppColors.textPrimary),
+                    SizedBox(width: scale.eighth * 0.3),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: AppTheme.bodyMedium.copyWith(
+                          fontFamily: 'momo',
+                          fontSize: scale.eighth * 0.75,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: scale.eighth / 4),
+                Text(
+                  description,
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontSize: scale.eighth * 0.65,
+                    color: AppColors.textPrimary.withValues(alpha: 0.8),
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FaqSheet extends StatelessWidget {
   final UIScale scale;
   final ConnectionInfo? selectedConnection;
@@ -1604,67 +1781,156 @@ class _FaqSheet extends StatelessWidget {
       }
     }
 
+    final stepCards = [
+      _StepCard(
+        scale: scale,
+        step: '1',
+        icon: Icons.wifi,
+        title: 'Fique na mesma rede',
+        description: 'Seu computador e os celulares precisam estar conectados no mesmo Wi-Fi.',
+      ),
+      _StepCard(
+        scale: scale,
+        step: '2',
+        icon: Icons.qr_code_scanner,
+        title: 'Escaneie o QR Code',
+        description: 'Abra a câmera do celular ou um leitor de QR Code e aponte para a tela.',
+      ),
+      _StepCard(
+        scale: scale,
+        step: '3',
+        icon: Icons.link,
+        title: 'Acesse pelo link',
+        description: 'Se o QR Code falhar, digite o link azul exibido na tela no navegador do celular.',
+      ),
+      _StepCard(
+        scale: scale,
+        step: '4',
+        icon: Icons.security,
+        title: 'Verifique o Firewall',
+        description: 'Se ainda não der certo, libere o MaNet no Firewall do Windows.',
+      ),
+    ];
+
+    Widget buildSteps(BoxConstraints constraints) {
+      if (constraints.maxWidth > 600) {
+        return Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: stepCards[0]),
+                SizedBox(width: scale.eighth),
+                Expanded(child: stepCards[1]),
+              ],
+            ),
+            SizedBox(height: scale.eighth),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: stepCards[2]),
+                SizedBox(width: scale.eighth),
+                Expanded(child: stepCards[3]),
+              ],
+            ),
+          ],
+        );
+      } else {
+        return Column(
+          children: [
+            stepCards[0],
+            SizedBox(height: scale.eighth),
+            stepCards[1],
+            SizedBox(height: scale.eighth),
+            stepCards[2],
+            SizedBox(height: scale.eighth),
+            stepCards[3],
+          ],
+        );
+      }
+    }
+
     return SafeArea(
       top: false,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            scale.eighth * 1.25,
-            scale.eighth * 1.25,
-            scale.eighth * 1.25,
-            scale.eighth * 1.5,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: scale.quarter * 1.2,
-                  height: scale.eighth / 2,
-                  decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(scale.eighth),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                scale.eighth * 1.25,
+                scale.eighth * 1.25,
+                scale.eighth * 1.25,
+                scale.eighth * 1.5,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: scale.quarter * 1.2,
+                      height: scale.eighth / 2,
+                      decoration: BoxDecoration(
+                        color: AppColors.textPrimary.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(scale.eighth),
+                      ),
+                    ),
                   ),
-                ),
+                  SizedBox(height: scale.eighth),
+                  Text(
+                    'Guia Rápido de Conexão',
+                    style: AppTheme.bodyMedium.copyWith(
+                      fontFamily: 'momo',
+                      fontSize: scale.eighth * 1.05,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: scale.eighth),
+                  LayoutBuilder(
+                    builder: (context, constraints) => buildSteps(constraints),
+                  ),
+                  SizedBox(height: scale.eighth * 1.5),
+                  Text(
+                    'Problemas Comuns',
+                    style: AppTheme.bodyMedium.copyWith(
+                      fontFamily: 'momo',
+                      fontSize: scale.eighth * 1.05,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: scale.eighth),
+                  _FaqItem(
+                    scale: scale,
+                    icon: Icons.wifi_off_rounded,
+                    title: 'O celular não conecta',
+                    description: 'O celular e o PC podem não estar se comunicando.',
+                    solution: wifiSolution,
+                  ),
+                  SizedBox(height: scale.eighth),
+                  _FaqItem(
+                    scale: scale,
+                    icon: Icons.videogame_asset_off_rounded,
+                    title: 'O controle não funciona no jogo',
+                    description:
+                        'Alguns jogos só reconhecem tipos específicos de controles.',
+                    solution:
+                        '• Tente trocar entre XInput e DInput nas configurações\n• Alguns jogos funcionam melhor com modos diferentes',
+                  ),
+                  SizedBox(height: scale.eighth),
+                  _FaqItem(
+                    scale: scale,
+                    icon: Icons.group_off_rounded,
+                    title: 'Mais de 4 jogadores não funcionam',
+                    description:
+                        'O Windows limita controles XInput a no máximo 4 jogadores.',
+                    solution:
+                        '• Sugerimos trocar o modo do servidor para DInput para jogar com mais pessoas',
+                  ),
+                ],
               ),
-              SizedBox(height: scale.eighth),
-              Text(
-                'Ajuda e Problemas Comuns',
-                style: AppTheme.bodyMedium.copyWith(
-                  fontFamily: 'momo',
-                  fontSize: scale.eighth * 1.05,
-                ),
-              ),
-              SizedBox(height: scale.eighth),
-              _FaqItem(
-                scale: scale,
-                icon: Icons.wifi_off_rounded,
-                title: 'O celular não conecta',
-                description: 'O celular e o PC podem não estar se comunicando.',
-                solution: wifiSolution,
-              ),
-              SizedBox(height: scale.eighth),
-              _FaqItem(
-                scale: scale,
-                icon: Icons.videogame_asset_off_rounded,
-                title: 'O controle não funciona no jogo',
-                description:
-                    'Alguns jogos só reconhecem tipos específicos de controles.',
-                solution:
-                    '• Tente trocar entre XInput e DInput nas configurações\n• Alguns jogos funcionam melhor com modos diferentes',
-              ),
-              SizedBox(height: scale.eighth),
-              _FaqItem(
-                scale: scale,
-                icon: Icons.group_off_rounded,
-                title: 'Mais de 4 jogadores não funcionam',
-                description:
-                    'O Windows limita controles XInput a no máximo 4 jogadores.',
-                solution:
-                    '• Sugerimos trocar o modo do servidor para DInput para jogar com mais pessoas',
-              ),
-            ],
+            ),
           ),
         ),
       ),

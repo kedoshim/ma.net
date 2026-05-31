@@ -56,6 +56,22 @@ class ControllerManager:
         for device_id in list(self.device_ws_map.keys()):
             self.notify_device(device_id, payload)
 
+    def has_vacant_slot(self) -> bool:
+        # Check if any existing slot is available
+        if any(slot.is_available() for slot in self.slots):
+            return True
+        # Check if we can expand the slots
+        if getattr(self.config, "auto_expand_slots", False) and len(self.slots) < getattr(self.config, "max_slots", 64):
+            return True
+        return False
+
+    def broadcast_slot_status(self):
+        payload = {
+            "type": "slot_status",
+            "has_vacant_slot": self.has_vacant_slot(),
+        }
+        self.broadcast_to_devices(payload)
+
     def build_active_layout_payload(self):
         preset = self.preset_store.get_active_preset()
         return {
