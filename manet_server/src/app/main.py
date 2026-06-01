@@ -97,11 +97,14 @@ def main():
     # Initialize logging early so core modules emit structured logs
     setup_logging(logging.DEBUG if args.debug else logging.INFO)
 
+    initial_slots = min(args.slots, 32)
+    max_slots = min(args.max_slots, 32)
+
     config = ServerConfig(
         web_page_static_path=args.static_path,
         http_port=args.port,
-        initial_slots=args.slots,
-        max_slots=args.max_slots,
+        initial_slots=initial_slots,
+        max_slots=max_slots,
         controller_type=args.controller_type,
         auto_expand_slots=args.auto_expand,
         debug=args.debug

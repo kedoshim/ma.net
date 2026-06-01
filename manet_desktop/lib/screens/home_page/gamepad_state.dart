@@ -40,8 +40,9 @@ class GamepadState extends ChangeNotifier {
   String? lastErrorMessage;
   final Map<String, DeviceInputState> _inputStates = {};
   final void Function(int slots)? onSlotsUpdated;
+  final void Function(String message)? onGamepadLimitReached;
 
-  GamepadState(this._api, {this.onSlotsUpdated});
+  GamepadState(this._api, {this.onSlotsUpdated, this.onGamepadLimitReached});
 
   void _log(String action) {
     debugPrint(
@@ -58,6 +59,9 @@ class GamepadState extends ChangeNotifier {
         slots = state.slots;
         onSlotsUpdated?.call(slots.length);
         notifyListeners();
+      } else if (data['type'] == 'gamepad_creation_limit_reached') {
+        final message = data['message'] as String? ?? 'Limite de controles atingido.';
+        onGamepadLimitReached?.call(message);
       } else if (data['type'] == 'input_event') {
         final deviceId = data['deviceId'];
         if (data['event'] == 'stick') {

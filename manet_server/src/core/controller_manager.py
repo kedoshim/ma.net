@@ -1,6 +1,6 @@
 import time
 from src.models.models import PlayerSlot
-from src.core.gamepad_factory import create_gamepad
+from src.core.gamepad_factory import create_gamepad, NullGamepad
 from src.core.player_identity import normalize_identity
 from src.core.controller_presets import ControllerPresetStore
 
@@ -28,7 +28,10 @@ class ControllerManager:
     def initialize_slots(self):
         LOGGER.info("Initializing %d gamepad slots...", self.config.initial_slots)
         for i in range(self.config.initial_slots):
-            self._create_empty_slot(i)
+            slot = self._create_empty_slot(i)
+            if slot is None:
+                LOGGER.error("Failed to initialize slot index=%d, aborting further slot creation", i)
+                break
 
     def register_device_ws(self, device_id, ws):
         LOGGER.info("WebSocket connected for device %s", device_id)
@@ -61,7 +64,7 @@ class ControllerManager:
         if any(slot.is_available() for slot in self.slots):
             return True
         # Check if we can expand the slots
-        if getattr(self.config, "auto_expand_slots", False) and len(self.slots) < getattr(self.config, "max_slots", 64):
+        if getattr(self.config, "auto_expand_slots", False) and len(self.slots) < getattr(self.config, "max_slots", 16):
             return True
         return False
 
@@ -180,6 +183,10 @@ class ControllerManager:
             index,
         )
 
+        if isinstance(gamepad, NullGamepad):
+            LOGGER.error("[LIFECYCLE] Failed to create physical/virtual gamepad at index=%d (got NullGamepad)", index)
+            return None
+
         slot = PlayerSlot(
             slot_id=index,
             gamepad=gamepad,
@@ -221,10 +228,21 @@ class ControllerManager:
         return None
 
     def create_and_assign_new_slot(self, device_id, player_name=None):
-        if len(self.slots) >= self.config.max_slots:
+        if len(self.slots) >= getattr(self.config, "max_slots", 16):
             return None
 
         slot = self._create_empty_slot(len(self.slots))
+        if slot is None:
+            created_count = len(self.slots)
+            self.config.max_slots = created_count
+            mode_display = "x•input" if self.config.controller_type == "x360" else ("d•input" if self.config.controller_type == "ds4" else "misto")
+            self.admin_panel.broadcast_event({
+                "type": "gamepad_creation_limit_reached",
+                "created": created_count,
+                "mode": self.config.controller_type,
+                "message": f"Não foi possível gerar mais controles. O limite foi ajustado para {created_count} controles no modo {mode_display}."
+            })
+            return None
 
         slot.assigned_device_id = device_id
         slot.player_name = player_name or self.get_resolved_player_name(device_id)
@@ -563,11 +581,12 @@ class ControllerManager:
             self.config.auto_expand_slots = not fixed
 
         if slots is not None:
+            slots = min(slots, 16)
             self.config.initial_slots = slots
 
         if slots is not None or fixed is not None:
             current_limit = slots if slots is not None else len(self.slots)
-            self.config.max_slots = current_limit if not self.config.auto_expand_slots else 64
+            self.config.max_slots = min(current_limit if not self.config.auto_expand_slots else 16, 16)
 
         if mode_changed:
             if mode is not None:
@@ -603,17 +622,37 @@ class ControllerManager:
         # immediately, then create remaining slots sequentially with a short delay.
         first_phase = min(new_slot_count, 4)
         LOGGER.info(f"Creating first phase of gamepads: 0 to {first_phase - 1}")
+        failed = False
         for i in range(first_phase):
-            self._create_empty_slot(i)
+            slot = self._create_empty_slot(i)
+            if slot is None:
+                failed = True
+                break
 
-        # Create remaining slots one-by-one with a short pause to avoid driver stress
-        LOGGER.info(f"Creating second phase of gamepads: {first_phase} to {new_slot_count - 1}")
-        for i in range(first_phase, new_slot_count):
-            try:
-                time.sleep(0.35)
-            except Exception:
-                LOGGER.exception("Sleep interrupted while creating gamepads")
-            self._create_empty_slot(i)
+        if not failed:
+            # Create remaining slots one-by-one with a short pause to avoid driver stress
+            LOGGER.info(f"Creating second phase of gamepads: {first_phase} to {new_slot_count - 1}")
+            for i in range(first_phase, new_slot_count):
+                try:
+                    time.sleep(0.35)
+                except Exception:
+                    LOGGER.exception("Sleep interrupted while creating gamepads")
+                slot = self._create_empty_slot(i)
+                if slot is None:
+                    failed = True
+                    break
+
+        if failed:
+            created_count = len(self.slots)
+            self.config.initial_slots = created_count
+            self.config.max_slots = created_count
+            mode_display = "x•input" if self.config.controller_type == "x360" else ("d•input" if self.config.controller_type == "ds4" else "misto")
+            self.admin_panel.broadcast_event({
+                "type": "gamepad_creation_limit_reached",
+                "created": created_count,
+                "mode": self.config.controller_type,
+                "message": f"Não foi possível gerar mais controles. O limite foi ajustado para {created_count} controles no modo {mode_display}."
+            })
 
         # Reassign devices to previous slot indices
         LOGGER.info(f"Reassigning {len(assignments)} devices to new slots")
@@ -631,6 +670,7 @@ class ControllerManager:
             LOGGER.exception("Failed to broadcast active layout")
 
     def _resize_slots(self, new_size: int):
+        new_size = min(new_size, 16)
         current_size = len(self.slots)
         LOGGER.info("[LIFECYCLE] Resizing slots: current_size=%d, target_size=%d", current_size, new_size)
         if new_size == current_size:
@@ -639,9 +679,25 @@ class ControllerManager:
 
         if new_size > current_size:
             LOGGER.info("[LIFECYCLE] Expanding slots list by %d slots", new_size - current_size)
+            failed = False
             # Add new slots dynamically
             for i in range(current_size, new_size):
-                self._create_empty_slot(i)
+                slot = self._create_empty_slot(i)
+                if slot is None:
+                    failed = True
+                    break
+            
+            if failed:
+                created_count = len(self.slots)
+                self.config.initial_slots = created_count
+                self.config.max_slots = created_count
+                mode_display = "x•input" if self.config.controller_type == "x360" else ("d•input" if self.config.controller_type == "ds4" else "misto")
+                self.admin_panel.broadcast_event({
+                    "type": "gamepad_creation_limit_reached",
+                    "created": created_count,
+                    "mode": self.config.controller_type,
+                    "message": f"Não foi possível gerar mais controles. O limite foi ajustado para {created_count} controles no modo {mode_display}."
+                })
             
             # Broadcast the new limit to connected clients incrementally 
             # to avoid disruptive 'assigned' haptics/reconnections.
@@ -649,7 +705,7 @@ class ControllerManager:
                 if slot.assigned_device_id and slot.connected:
                     self.notify_device(slot.assigned_device_id, {
                         "type": "slots_updated",
-                        "total_slots": new_size
+                        "total_slots": len(self.slots)
                     })
         else:
             LOGGER.info("[LIFECYCLE] Shrinking slots list by %d slots", current_size - new_size)

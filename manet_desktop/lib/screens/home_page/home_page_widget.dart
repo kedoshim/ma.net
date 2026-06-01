@@ -524,7 +524,10 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final isCompact = screenWidth < screenHeight * 1.35;
 
-    int columns = _slots > 12 ? 8 : (_slots > 8 ? 6 : (_slots > 4 ? 6 : 4));
+    int columns = _slots > 12
+            ? 8
+            : (_slots > 8 ? 6 : (_slots > 6 ? 4 : (_slots > 4 ? 6 : 4)));
+        
     int rows = (_slots > 0 ? (_slots / columns).ceil() : 1);
 
     double dynamicHorizontalPadding = 50.0;
@@ -730,6 +733,68 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                   () => _slots = newCount,
                                                 );
                                             });
+                                      }
+                                    },
+                                    onGamepadLimitReached: (message) {
+                                      if (mounted) {
+                                        _addAlert(message, isError: false);
+                                        ScaffoldMessenger.of(context).clearSnackBars();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: Colors.transparent,
+                                            elevation: 0,
+                                            behavior: SnackBarBehavior.floating,
+                                            duration: const Duration(seconds: 8),
+                                            content: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 12,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.screenBackground,
+                                                borderRadius: BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: AppColors.textPrimary,
+                                                  width: 4,
+                                                ),
+                                                boxShadow: const [
+                                                  BoxShadow(
+                                                    color: AppColors.textPrimary,
+                                                    offset: Offset(4, 4),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    width: 40,
+                                                    height: 40,
+                                                    decoration: BoxDecoration(
+                                                      color: AppColors.highlightColor,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.warning_amber_rounded,
+                                                      color: AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      message,
+                                                      style: AppTheme.bodyMedium.copyWith(
+                                                        fontFamily: 'momo',
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 14,
+                                                        color: AppColors.textPrimary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
                                       }
                                     },
                                   )..initialize(),

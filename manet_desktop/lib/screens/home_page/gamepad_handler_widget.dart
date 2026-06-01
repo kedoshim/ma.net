@@ -377,7 +377,7 @@ class WideStageLayout extends StatelessWidget {
 
         final columns = state.slots.length > 12
             ? 8
-            : (state.slots.length > 8 ? 6 : (state.slots.length > 4 ? 6 : 4));
+            : (state.slots.length > 8 ? 6 : (state.slots.length > 6 ? 4 : (state.slots.length > 4 ? 6 : 4)));
         final rows = (math.max(columns, state.slots.length) / columns).ceil();
 
         final widthFactor = columns + (columns - 1) / 8.0;
@@ -408,7 +408,9 @@ class WideStageLayout extends StatelessWidget {
               width: leftWidth,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: (state.slots.length == 7 || state.slots.length == 8)
+                    ? CrossAxisAlignment.center
+                    : CrossAxisAlignment.start,
                 children: [
                   SizedBox(
                     width: contentWidth,
@@ -496,9 +498,9 @@ class CompactStageLayout extends StatelessWidget {
         final totalWidth = constraints.maxWidth;
         final totalHeight = constraints.maxHeight;
 
-        final columns = state.slots.length > 16
+        final columns = state.slots.length > 12
             ? 8
-            : (state.slots.length > 8 ? 6 : 4);
+            : (state.slots.length > 8 ? 6 : (state.slots.length > 6 ? 4 : (state.slots.length > 4 ? 6 : 4)));
         final rows = (math.max(columns, state.slots.length) / columns).ceil();
 
         final widthFactor = columns + (columns - 1) / 8.0;

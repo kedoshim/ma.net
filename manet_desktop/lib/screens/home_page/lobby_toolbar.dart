@@ -85,8 +85,8 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                   // Lock Icon
                   Tooltip(
                     message: _draftLocked
-                        ? 'Limite fixo de jogadores'
-                        : 'Criar novos controles automaticamente',
+                        ? 'Novos jogadores entram no banco de reservas'
+                        : 'Novos jogadores recebem uma manete automaticamente',
                     child: JuicyIconButton(
                       size: 36,
                       borderRadius: 10,
@@ -134,7 +134,7 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                     hoverBackgroundColor: AppColors.highlightColor,
                     hoverIconColor: AppColors.textPrimary,
                     onTap: () => setState(
-                      () => _draftSlots = (_draftSlots - 1).clamp(1, 64),
+                      () => _draftSlots = (_draftSlots - 1).clamp(1, 16),
                     ),
                   ),
 
@@ -163,7 +163,7 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                     hoverBackgroundColor: AppColors.highlightColor,
                     hoverIconColor: AppColors.textPrimary,
                     onTap: () => setState(
-                      () => _draftSlots = (_draftSlots + 1).clamp(1, 64),
+                      () => _draftSlots = (_draftSlots + 1).clamp(1, 16),
                     ),
                   ),
 
