@@ -17,7 +17,7 @@ class ServerConfig:
     max_slots: int = 8
     controller_type: ControllerType = "mixed"
     auto_expand_slots: bool = False
-    slot_reservation_timeout: int = 120
+    slot_reservation_timeout: int = 300
 
     DEFAULT_COLORS = [
         "#EF4444",  # vermelho

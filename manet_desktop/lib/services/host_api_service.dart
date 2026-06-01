@@ -435,11 +435,12 @@ class HostApiService {
   /// Reset controllers mode without restarting the server.
   /// Server should implement `/api/server/reset-controllers` to recreate controllers
   /// and reassign existing players to the same slot indices.
-  Future<void> resetControllers({String? mode, int? slots, bool? fixed}) async {
+  Future<void> resetControllers({String? mode, int? slots, bool? fixed, int? reservationTimeout}) async {
     final body = <String, dynamic>{};
     if (mode != null) body['mode'] = mode;
     if (slots != null) body['slots'] = slots;
     if (fixed != null) body['fixed'] = fixed;
+    if (reservationTimeout != null) body['reservationTimeout'] = reservationTimeout;
 
     final response = await http.post(
       Uri.parse('$baseUrl/api/server/reset-controllers'),

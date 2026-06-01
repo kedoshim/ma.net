@@ -1,30 +1,22 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:manet_desktop/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('Verify visual layout and flow of start page, lobby toolbar, widgets', (WidgetTester tester) async {
+    // Set screen size for desktop layout
+    final dpi = tester.view.devicePixelRatio;
+    tester.view.physicalSize = Size(1280 * dpi, 800 * dpi);
+    addTearDown(() => tester.view.resetPhysicalSize());
+
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    // Pump frames to allow initialization, but do not wait for infinite animations to settle
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify start page title and start button render
+    expect(find.text('ma•net'), findsOneWidget);
+    expect(find.text('iniciar a festa'), findsOneWidget);
   });
 }

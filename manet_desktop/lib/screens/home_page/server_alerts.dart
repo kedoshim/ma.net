@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/juicy_widgets.dart';
 
 class ServerAlert {
   final String id;
@@ -27,23 +28,32 @@ class AlertIcon extends StatelessWidget {
     bool hasUnseenWarning = alerts.any((a) => !a.isSeen && !a.isError);
 
     Color iconColor;
+    Color? backgroundColor;
     if (hasUnseenError) {
       iconColor = Colors.red;
+      backgroundColor = Colors.red.withValues(alpha: 0.1);
     } else if (hasUnseenWarning) {
       iconColor = Colors.amber;
+      backgroundColor = Colors.amber.withValues(alpha: 0.1);
     } else {
       iconColor = AppColors.textPrimary.withValues(alpha: 0.4);
+      backgroundColor = Colors.transparent;
     }
 
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(
-        hasUnseenError
-            ? Icons.error_outline_rounded
-            : Icons.warning_amber_rounded,
-        color: iconColor,
+    return Tooltip(
+      message: 'Avisos e Erros',
+      child: JuicyIconButton(
+        size: 48,
+        borderRadius: 14,
+        icon: Icon(
+          hasUnseenError
+              ? Icons.error_outline_rounded
+              : Icons.warning_amber_rounded,
+          color: iconColor,
+        ),
+        backgroundColor: backgroundColor,
+        onTap: onTap,
       ),
-      tooltip: 'Avisos e Erros',
     );
   }
 }

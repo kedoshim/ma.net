@@ -17,6 +17,7 @@ import '../../widgets/player_face_indicator.dart';
 import '../../models/player_face.dart';
 import '../../widgets/app_error_widget.dart';
 import 'mode_selection_dialog.dart';
+import '../../widgets/juicy_widgets.dart';
 
 class StartPageWidget extends StatefulWidget {
   const StartPageWidget({super.key});
@@ -103,16 +104,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         logs: logs,
         additionalActions: [
           if (result.status == ServerStartupStatus.missingDriver)
-            ElevatedButton.icon(
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text(
-                'Instalar Driver',
-                style: TextStyle(fontFamily: 'momo'),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.textPrimary,
-                foregroundColor: AppColors.screenBackground,
-              ),
+            JuicyButton(
               onPressed: () async {
                 final success = await ServerProcessService.instance
                     .installDriver();
@@ -130,6 +122,23 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                   );
                 }
               },
+              backgroundColor: AppColors.textPrimary,
+              borderRadius: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.download_rounded, size: 18, color: AppColors.screenBackground),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Instalar Driver',
+                    style: TextStyle(
+                      fontFamily: 'momo',
+                      color: AppColors.screenBackground,
+                    ),
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -156,12 +165,16 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         return;
       }
 
-      // Pre-heat the server process in the background, defaulting to DInput (ds4)
+      final prefs = await SharedPreferences.getInstance();
+      final timeoutMinutes = prefs.getInt('reservation_timeout_minutes') ?? 5;
+      final reservationTimeoutSeconds = timeoutMinutes * 60;
+
+      // Pre-heat the server process in the background with 0 slots to avoid allocating virtual gamepads on startup
       Future<ServerStartupResult>? preheatFuture;
       if (!isDebug) {
         preheatFuture = _serverService.startServer(
           port: port,
-          slots: 4,
+          slots: 0,
           fixed: true,
           controllerMode: 'ds4',
         );
@@ -191,6 +204,18 @@ class _StartPageWidgetState extends State<StartPageWidget> {
           );
           return;
         }
+        // Initialize controllers on-demand for debug mode
+        final api = HostApiService(host: '127.0.0.1', port: port);
+        try {
+          await api.resetControllers(
+            mode: mode,
+            slots: 4,
+            fixed: true,
+            reservationTimeout: reservationTimeoutSeconds,
+          );
+        } catch (e) {
+          debugPrint('[STARTUP] Failed to initialize controllers for debug: $e');
+        }
         _navigateToHome(port, mode);
         return;
       }
@@ -201,14 +226,17 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       if (!mounted) return;
 
       if (result.isSuccess) {
-        // If the user selected XInput (x360) instead of DInput, trigger layout reset/switch on the fly!
-        if (mode == 'x360') {
-          final api = HostApiService(host: '127.0.0.1', port: port);
-          try {
-            await api.resetControllers(mode: 'x360', slots: 4, fixed: true);
-          } catch (e) {
-            // Server has bound successfully, so we navigate anyway, but log the reset failure
-          }
+        // Initialize controllers on-demand for normal startup flow now that mode has been confirmed
+        final api = HostApiService(host: '127.0.0.1', port: port);
+        try {
+          await api.resetControllers(
+            mode: mode,
+            slots: 4,
+            fixed: true,
+            reservationTimeout: reservationTimeoutSeconds,
+          );
+        } catch (e) {
+          debugPrint('[STARTUP] Failed to initialize controllers: $e');
         }
         _navigateToHome(port, mode);
       } else {
@@ -394,26 +422,62 @@ class _StartPageWidgetState extends State<StartPageWidget> {
             ),
           ),
           const Spacer(),
-          PlayfulButton(
-            text: 'iniciar a festa',
-            isLoading: _isLoading,
-            onPressed: () => _handleStartup(isDebug: false),
+          JuicyButton(
+            onPressed: _isLoading ? null : () => _handleStartup(isDebug: false),
+            borderRadius: 24,
+            borderThickness: 5.0,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+            child: _isLoading
+                ? SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      color: AppColors.textPrimary,
+                      strokeWidth: 4,
+                    ),
+                  )
+                : Text(
+                    'iniciar a festa',
+                    style: AppTheme.titleMedium.copyWith(
+                      fontFamily: 'momo',
+                      fontSize: 32,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      height: 1.0,
+                    ),
+                  ),
           ),
           if (kDebugMode) ...[
             const SizedBox(height: 16),
-            PlayfulButton(
-              text: 'iniciar debug',
-              isLoading: false,
-              isSmall: true,
+            JuicyButton(
               onPressed: () => _handleStartup(isDebug: true),
+              borderRadius: 16,
+              borderThickness: 3.0,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Text(
+                'iniciar debug',
+                style: AppTheme.titleMedium.copyWith(
+                  fontFamily: 'momo',
+                  fontSize: 20,
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                ),
+              ),
             ),
           ],
           const SizedBox(height: 32),
           Row(
             children: [
-              PlayfulIconButton(icon: FontAwesomeIcons.discord, onTap: () {}),
+              JuicyIconButton(
+                icon: const Icon(FontAwesomeIcons.discord),
+                onTap: () {},
+              ),
               const SizedBox(width: 16),
-              PlayfulIconButton(icon: FontAwesomeIcons.github, onTap: () {}),
+              JuicyIconButton(
+                icon: const Icon(FontAwesomeIcons.github),
+                onTap: () {},
+              ),
             ],
           ),
           const Spacer(),
@@ -429,183 +493,80 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         final themeData = AppColors.getTheme(theme);
         final isSelected = AppColors.screenBackground == themeData.background;
 
-        return Padding(
-          padding: const EdgeInsets.only(right: 16.0),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () async {
-                setState(() {
-                  AppColors.setTheme(theme);
-                });
+        return _ThemeCircleSelector(
+          theme: theme,
+          isSelected: isSelected,
+          onTap: () async {
+            setState(() {
+              AppColors.setTheme(theme);
+            });
 
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('selected_theme', theme.name);
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('selected_theme', theme.name);
 
-                try {
-                  SoundEffectService.instance.playThemeSelect();
-                } catch (_) {}
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                width: isSelected ? 36 : 28,
-                height: isSelected ? 36 : 28,
-                decoration: BoxDecoration(
-                  color: themeData.background,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.textPrimary,
-                    width: isSelected ? 4 : 2,
-                  ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: AppColors.textPrimary.withValues(alpha: 0.2),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ]
-                      : [],
-                ),
-              ),
-            ),
-          ),
+            try {
+              SoundEffectService.instance.playThemeSelect();
+            } catch (_) {}
+          },
         );
       }).toList(),
     );
   }
 }
 
-class PlayfulButton extends StatefulWidget {
-  final String text;
-  final bool isLoading;
-  final VoidCallback onPressed;
-  final bool isSmall;
+class _ThemeCircleSelector extends StatefulWidget {
+  final ColorTheme theme;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  const PlayfulButton({
-    super.key,
-    required this.text,
-    required this.isLoading,
-    required this.onPressed,
-    this.isSmall = false,
+  const _ThemeCircleSelector({
+    required this.theme,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
-  State<PlayfulButton> createState() => _PlayfulButtonState();
+  State<_ThemeCircleSelector> createState() => _ThemeCircleSelectorState();
 }
 
-class _PlayfulButtonState extends State<PlayfulButton>
-    with SingleTickerProviderStateMixin {
+class _ThemeCircleSelectorState extends State<_ThemeCircleSelector> {
   bool _isHovered = false;
   bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
-    final scale = _isPressed ? 0.92 : (_isHovered ? 1.04 : 1.0);
+    final themeData = AppColors.getTheme(widget.theme);
+    final size = widget.isSelected ? 36.0 : 28.0;
+    final scale = _isPressed ? 0.85 : (_isHovered ? 1.15 : 1.0);
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) {
-          setState(() => _isPressed = false);
-          widget.onPressed();
-        },
-        onTapCancel: () => setState(() => _isPressed = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
-          transform: Matrix4.identity()..scale(scale),
-          transformAlignment: Alignment.center,
-          child: Container(
+    return Padding(
+      padding: const EdgeInsets.only(right: 16.0),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTapDown: (_) => setState(() => _isPressed = true),
+          onTapUp: (_) {
+            setState(() => _isPressed = false);
+            widget.onTap();
+          },
+          onTapCancel: () => setState(() => _isPressed = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.elasticOut,
+            transformAlignment: Alignment.center,
+            transform: Matrix4.identity()..scale(scale),
+            width: size,
+            height: size,
             decoration: BoxDecoration(
-              color: AppColors.highlightColor,
-              borderRadius: BorderRadius.circular(widget.isSmall ? 16 : 24),
+              color: themeData.background,
+              shape: BoxShape.circle,
               border: Border.all(
                 color: AppColors.textPrimary,
-                width: widget.isSmall ? 3 : 5,
+                width: widget.isSelected ? 4 : 2,
               ),
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.isSmall ? 24 : 40,
-              vertical: widget.isSmall ? 16 : 24,
-            ),
-            child: widget.isLoading
-                ? SizedBox(
-                    width: widget.isSmall ? 16 : 28,
-                    height: widget.isSmall ? 16 : 28,
-                    child: CircularProgressIndicator(
-                      color: AppColors.textPrimary,
-                      strokeWidth: 4,
-                    ),
-                  )
-                : Text(
-                    widget.text,
-                    style: AppTheme.titleMedium.copyWith(
-                      fontFamily: 'momo',
-                      fontSize: widget.isSmall ? 20 : 32,
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w900,
-                      height: 1.0,
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class PlayfulIconButton extends StatefulWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const PlayfulIconButton({super.key, required this.icon, required this.onTap});
-
-  @override
-  State<PlayfulIconButton> createState() => _PlayfulIconButtonState();
-}
-
-class _PlayfulIconButtonState extends State<PlayfulIconButton> {
-  bool _isHovered = false;
-  bool _isPressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final scale = _isPressed ? 0.9 : (_isHovered ? 1.1 : 1.0);
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) {
-          setState(() => _isPressed = false);
-          widget.onTap();
-        },
-        onTapCancel: () => setState(() => _isPressed = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
-          transform: Matrix4.identity()..scale(scale),
-          transformAlignment: Alignment.center,
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: _isHovered ? AppColors.textPrimary : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.textPrimary, width: 3),
-          ),
-          child: Icon(
-            widget.icon,
-            color: _isHovered
-                ? AppColors.screenBackground
-                : AppColors.textPrimary,
-            size: 28,
           ),
         ),
       ),

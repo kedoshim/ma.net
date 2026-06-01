@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/quick_actions_definition.dart';
 import '../theme/app_colors.dart';
+import 'juicy_widgets.dart';
 
 typedef QuickActionCallback = void Function(String actionId);
 
@@ -27,31 +28,17 @@ class QuickActionsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final buttonBackground = enabled
-        ? AppColors.backgroundColor
-        : AppColors.backgroundColor.withValues(alpha: 0.35);
-    final buttonBorderColor = enabled
-        ? AppColors.textPrimary
-        : AppColors.textPrimary.withValues(alpha: 0.25);
-
-    return GestureDetector(
-      onTap: () => _showPopup(context),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        width: 84,
-        height: 58,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: buttonBackground,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: buttonBorderColor,
-            width: AppColors.borderThickness,
-          ),
-        ),
+    return SizedBox(
+      width: 84,
+      height: 58,
+      child: JuicyButton(
+        onTap: enabled ? () => _showPopup(context) : null,
+        backgroundColor: AppColors.backgroundColor,
+        borderRadius: BorderRadius.circular(24),
+        padding: EdgeInsets.zero,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               Icons.more_horiz,
@@ -95,80 +82,15 @@ class _QuickActionsDialogState extends State<_QuickActionsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.screenBackground,
-              AppColors.highlightColor.withValues(alpha: 0.18),
-              AppColors.screenBackground,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(
-            color: AppColors.textPrimary,
-            width: AppColors.borderThickness,
-          ),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: 24,
-                  top: 16,
-                  right: 16,
-                  bottom: 8,
-                ),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Quick Actions',
-                      style: TextStyle(
-                        fontFamily: 'momo',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(
-                        Icons.close,
-                        size: 24,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildSection(QuickActionGroup.volumeMedia),
-                        const SizedBox(height: 24),
-                        _buildSection(QuickActionGroup.windowsSystem),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+    return JuicyDialog(
+      title: 'Quick Actions',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildSection(QuickActionGroup.volumeMedia),
+          const SizedBox(height: 24),
+          _buildSection(QuickActionGroup.windowsSystem),
+        ],
       ),
     );
   }
@@ -231,7 +153,6 @@ class _QuickActionTile extends StatefulWidget {
 }
 
 class _QuickActionTileState extends State<_QuickActionTile> {
-  bool _pressed = false;
   Timer? _initialDelayTimer;
   Timer? _repeatTimer;
 
@@ -266,60 +187,44 @@ class _QuickActionTileState extends State<_QuickActionTile> {
     final bgColor = AppColors.highlightColor.withValues(alpha: 0.3);
     final fgColor = AppColors.textPrimary;
 
-    return GestureDetector(
-      onTapDown: (_) {
-        setState(() => _pressed = true);
-        _startRepeat();
-      },
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        if (!_isRepeatable) {
-          widget.onPressed(widget.action.id);
-        }
-        _stopRepeat();
-      },
-      onTapCancel: () {
-        setState(() => _pressed = false);
-        _stopRepeat();
-      },
-      child: AnimatedScale(
-        scale: _pressed ? 0.9 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 86,
-          height: 72,
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.textPrimary,
-              width: AppColors.borderThickness,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(widget.action.icon, size: 26, color: fgColor),
-              const SizedBox(height: 6),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                child: Text(
-                  widget.action.title,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: 'momo',
-                    fontSize: 9,
-                    color: fgColor,
-                    height: 1.1,
-                  ),
+    return SizedBox(
+      width: 86,
+      height: 72,
+      child: JuicyButton(
+        onStateChange: (state) {
+          if (state == 'down') {
+            _startRepeat();
+          } else if (state == 'up') {
+            if (!_isRepeatable) {
+              widget.onPressed(widget.action.id);
+            }
+            _stopRepeat();
+          }
+        },
+        backgroundColor: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        padding: EdgeInsets.zero,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(widget.action.icon, size: 26, color: fgColor),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Text(
+                widget.action.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 9,
+                  color: fgColor,
+                  height: 1.1,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

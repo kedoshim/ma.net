@@ -46,7 +46,7 @@ class AppLifecycle:
         app["init_slots"] = asyncio.create_task(init_slots_task())
 
         app["stick_watchdog"] = asyncio.create_task(
-            stick_watchdog(self.manager)
+            stick_watchdog(self.manager, self.admin_panel)
         )
         app["network_monitor"] = asyncio.create_task(
             network_monitor_task(self.connection_service, self.admin_panel)

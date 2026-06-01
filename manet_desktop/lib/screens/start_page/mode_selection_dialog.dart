@@ -4,6 +4,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../models/player_face.dart';
+import '../../widgets/juicy_widgets.dart';
 
 class ModeSelectionPage extends StatelessWidget {
   final String? initialMode;
@@ -102,7 +103,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
               ],
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 0 : 40),
+                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 0 : 20),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -156,26 +157,28 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
               if (widget.showConfirmButton) ...[
                 SizedBox(height: isCompact ? 20 : 50),
                 SizedBox(
-                  height: isCompact ? 60 : 80,
+                  height: isCompact ? 72 : 96,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       if (!widget.isMandatory)
                         Positioned(
                           left: 0,
-                          child: TextButton(
+                          child: JuicyButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: isCompact ? 16 : 24,
-                                vertical: isCompact ? 12 : 16,
-                              ),
+                            backgroundColor: Colors.transparent,
+                            borderThickness: 0.0,
+                            borderRadius: 12,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isCompact ? 16 : 24,
+                              vertical: isCompact ? 12 : 16,
                             ),
                             child: Text(
                               'Cancelar',
                               style: AppTheme.bodyMedium.copyWith(
                                 fontFamily: 'momo',
                                 color: AppColors.textPrimary.withValues(alpha: 0.7),
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
@@ -199,22 +202,14 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                             ? Padding(
                                 key: const ValueKey('confirm_btn_anim'),
                                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: ElevatedButton(
+                                child: JuicyButton(
                                   onPressed: _confirm,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.highlightColor,
-                                    foregroundColor: AppColors.textPrimary,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: isCompact ? 32 : 48,
-                                      vertical: isCompact ? 16 : 20,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                      side: BorderSide(
-                                        color: AppColors.textPrimary,
-                                        width: 5,
-                                      ),
-                                    ),
+                                  backgroundColor: AppColors.highlightColor,
+                                  borderRadius: 20,
+                                  borderThickness: 5.0,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isCompact ? 32 : 48,
+                                    vertical: isCompact ? 12 : 20,
                                   ),
                                   child: Text(
                                     'vamos jogar!',
@@ -222,6 +217,8 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                                       fontFamily: 'momo',
                                       fontSize: 20,
                                       fontWeight: FontWeight.w900,
+                                      height: 1.0,
+                                      color: AppColors.textPrimary,
                                     ),
                                   ),
                                 ),
@@ -274,8 +271,6 @@ class _ModeCard extends StatefulWidget {
 }
 
 class _ModeCardState extends State<_ModeCard> with TickerProviderStateMixin {
-  bool _isHovered = false;
-  bool _isPressed = false;
   late AnimationController _floatController;
 
   @override
@@ -297,129 +292,102 @@ class _ModeCardState extends State<_ModeCard> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isSelected = widget.isSelected;
-    final isHovered = _isHovered;
-    final isPressed = _isPressed;
-
-    final scale = isPressed
-        ? 0.98
-        : (isSelected ? 1.04 : (isHovered ? 1.02 : 1.0));
     final brandColor = widget.faceConfig.color;
-    final borderColor = isSelected ? brandColor : AppColors.textPrimary;
-    final borderWidth = isSelected ? 6.0 : 4.0;
 
-    final backgroundColor = isSelected
-        ? brandColor.withValues(alpha: 0.1)
-        : AppColors.lightColor;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) {
-          setState(() => _isPressed = false);
-          widget.onTap();
-        },
-        onTapCancel: () => setState(() => _isPressed = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          transformAlignment: Alignment.center,
-          transform: Matrix4.identity()..scale(scale),
-          margin: EdgeInsets.all(widget.isCompact ? 8 : 12),
-          padding: EdgeInsets.all(widget.isVeryCompact ? 12 : (widget.isCompact ? 20 : 32)),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(widget.isCompact ? 20 : 28),
-            border: Border.all(color: borderColor, width: borderWidth),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        widget.title,
-                        style: AppTheme.titleMedium.copyWith(
-                          fontFamily: 'momo',
-                          fontSize: widget.isVeryCompact ? 20 : (widget.isCompact ? 26 : 32),
-                          fontWeight: FontWeight.w900,
-                          color: isSelected
-                              ? brandColor
-                              : AppColors.textPrimary,
-                        ),
+    return JuicyCard(
+      onTap: widget.onTap,
+      isSelected: isSelected,
+      selectedColor: brandColor,
+      backgroundColor: AppColors.lightColor,
+      borderRadius: widget.isCompact ? 20 : 28,
+      borderThickness: widget.isCompact ? 3.0 : 4.0,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Padding(
+                padding: EdgeInsets.all(widget.isVeryCompact ? 12 : (widget.isCompact ? 20 : 32)),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: AppTheme.titleMedium.copyWith(
+                        fontFamily: 'momo',
+                        fontSize: widget.isVeryCompact ? 20 : (widget.isCompact ? 26 : 32),
+                        fontWeight: FontWeight.w900,
+                        color: isSelected
+                            ? brandColor
+                            : AppColors.textPrimary,
                       ),
-                      SizedBox(height: widget.isVeryCompact ? 12 : (widget.isCompact ? 16 : 24)),
-                      Padding(
-                        padding: EdgeInsets.symmetric(vertical: widget.isVeryCompact ? 8 : (widget.isCompact ? 12 : 16)),
-                        child: Center(
-                          child: AnimatedBuilder(
-                            animation: _floatController,
-                            builder: (context, child) {
-                              final floatY =
-                                  math.sin(_floatController.value * math.pi) *
-                                  8.0;
-                              final floatX =
-                                  math.cos(_floatController.value * math.pi) *
-                                  3.0;
-                              return Transform.translate(
-                                offset: Offset(floatX, floatY),
-                                child: child,
-                              );
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
-                              height: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
-                              decoration: const BoxDecoration(),
-                              child: PlayerFaceIndicator(
-                                face: PlayerFaceData(
-                                  color: widget.faceConfig.color,
-                                  faceText: widget.faceConfig.faceText,
-                                  rotation: PlayerFaceRotation.normal,
-                                ),
-                                size: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
-                                roundedSquare: true,
-                                borderColor: AppColors.textPrimary,
+                    ),
+                    SizedBox(height: widget.isVeryCompact ? 12 : (widget.isCompact ? 16 : 24)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(vertical: widget.isVeryCompact ? 8 : (widget.isCompact ? 12 : 16)),
+                      child: Center(
+                        child: AnimatedBuilder(
+                          animation: _floatController,
+                          builder: (context, child) {
+                            final floatY =
+                                math.sin(_floatController.value * math.pi) *
+                                8.0;
+                            final floatX =
+                                math.cos(_floatController.value * math.pi) *
+                                3.0;
+                            return Transform.translate(
+                              offset: Offset(floatX, floatY),
+                              child: child,
+                            );
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
+                            height: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
+                            decoration: const BoxDecoration(),
+                            child: PlayerFaceIndicator(
+                              face: PlayerFaceData(
+                                color: widget.faceConfig.color,
+                                faceText: widget.faceConfig.faceText,
+                                rotation: PlayerFaceRotation.normal,
                               ),
+                              size: widget.isVeryCompact ? 60 : (widget.isCompact ? 80 : 100),
+                              roundedSquare: true,
+                              borderColor: AppColors.textPrimary,
                             ),
                           ),
                         ),
                       ),
-                      SizedBox(height: widget.isVeryCompact ? 12 : (widget.isCompact ? 16 : 24)),
+                    ),
+                    SizedBox(height: widget.isVeryCompact ? 12 : (widget.isCompact ? 16 : 24)),
+                    Text(
+                      widget.headline,
+                      textAlign: TextAlign.center,
+                      style: AppTheme.bodyMedium.copyWith(
+                        fontSize: widget.isVeryCompact ? 13 : (widget.isCompact ? 16 : 18),
+                        fontWeight: FontWeight.w900,
+                        color: isSelected
+                            ? brandColor
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    if (!widget.isVeryCompact) ...[
+                      SizedBox(height: widget.isCompact ? 4 : 8),
                       Text(
-                        widget.headline,
+                        widget.details,
                         textAlign: TextAlign.center,
-                        style: AppTheme.bodyMedium.copyWith(
-                          fontSize: widget.isVeryCompact ? 13 : (widget.isCompact ? 16 : 18),
-                          fontWeight: FontWeight.w900,
-                          color: isSelected
-                              ? brandColor
-                              : AppColors.textPrimary,
+                        style: AppTheme.bodySmall.copyWith(
+                          fontSize: widget.isCompact ? 12 : 14,
+                          color: AppColors.textPrimary.withValues(alpha: 0.6),
                         ),
                       ),
-                      if (!widget.isVeryCompact) ...[
-                        SizedBox(height: widget.isCompact ? 4 : 8),
-                        Text(
-                          widget.details,
-                          textAlign: TextAlign.center,
-                          style: AppTheme.bodySmall.copyWith(
-                            fontSize: widget.isCompact ? 12 : 14,
-                            color: AppColors.textPrimary.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
-              );
-            },
-          ),
-        ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

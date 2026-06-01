@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:manet_desktop/theme/app_colors.dart';
 
 import 'gamepad_handler_widget.dart';
+import '../../widgets/juicy_widgets.dart';
 
 class QRCodePanel extends StatefulWidget {
   final ConnectionSnapshot? connectionSnapshot;
@@ -424,7 +425,6 @@ class _QRCodePanelState extends State<QRCodePanel> {
             height: 1.0,
           ),
         ),
-        SizedBox(height: widget.scale.eighth * 0.25),
         Row(
           mainAxisAlignment: alignment,
           mainAxisSize: MainAxisSize.min,
@@ -468,32 +468,35 @@ class _QRCodePanelState extends State<QRCodePanel> {
   }
 
   Widget _buildHelpButton({bool isHorizontal = false}) {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.highlightColor,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        padding: EdgeInsets.symmetric(
-          horizontal: isHorizontal ? widget.scale.eighth * 1.25 : 16.0,
-          vertical: widget.scale.eighth * (isHorizontal ? 0.6 : 0.6),
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(widget.scale.eighth * 0.8),
-          side: BorderSide(
-            color: AppColors.textPrimary,
-            width: widget.scale.eighth / 5,
-          ),
-        ),
+    return JuicyButton(
+      backgroundColor: AppColors.highlightColor,
+      borderColor: AppColors.textPrimary,
+      borderThickness: widget.scale.eighth / 5,
+      borderRadius: BorderRadius.circular(999.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: isHorizontal ? widget.scale.eighth * 1.25 : 16.0,
+        vertical: widget.scale.eighth * (isHorizontal ? 0.4 : 0.4),
       ),
       onPressed: () => _showFaqSheet(context),
-      icon: Icon(Icons.help_outline_rounded, size: widget.scale.eighth * 0.9),
-      label: Text(
-        'Ajuda',
-        style: AppTheme.bodyMedium.copyWith(
-          fontFamily: 'momo',
-          fontSize: widget.scale.eighth * 0.8,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.help_outline_rounded,
+            size: widget.scale.eighth * 0.9,
+            color: AppColors.textPrimary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Ajuda',
+            style: AppTheme.bodyMedium.copyWith(
+              fontFamily: 'momo',
+              fontSize: widget.scale.eighth * 0.8,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1801,14 +1804,7 @@ class _FaqSheet extends StatelessWidget {
         step: '3',
         icon: Icons.link,
         title: 'Acesse pelo link',
-        description: 'Se o QR Code falhar, digite o link azul exibido na tela no navegador do celular.',
-      ),
-      _StepCard(
-        scale: scale,
-        step: '4',
-        icon: Icons.security,
-        title: 'Verifique o Firewall',
-        description: 'Se ainda não der certo, libere o MaNet no Firewall do Windows.',
+        description: 'Se o QR Code falhar, digite o link exibido na tela no navegador do celular.',
       ),
     ];
 
@@ -1843,8 +1839,6 @@ class _FaqSheet extends StatelessWidget {
             stepCards[1],
             SizedBox(height: scale.eighth),
             stepCards[2],
-            SizedBox(height: scale.eighth),
-            stepCards[3],
           ],
         );
       }

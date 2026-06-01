@@ -270,6 +270,7 @@ class HTTPRoutes:
         mode = data.get('mode')
         slots = data.get('slots')
         fixed = data.get('fixed')
+        reservation_timeout = data.get('reservationTimeout')
 
         if mode is not None and mode not in ('x360', 'ds4', 'mixed'):
             return web.json_response({'success': False, 'code': 'invalid_mode'}, status=400)
@@ -279,7 +280,12 @@ class HTTPRoutes:
         # perform staged creation to reduce driver stress.
 
         try:
-            self.manager.update_server_settings(mode=mode, slots=slots, fixed=fixed)
+            self.manager.update_server_settings(
+                mode=mode,
+                slots=slots,
+                fixed=fixed,
+                reservation_timeout=reservation_timeout,
+            )
             # Notify admin UI about changes
             self.admin_panel.broadcast_update()
             return web.json_response({'success': True})

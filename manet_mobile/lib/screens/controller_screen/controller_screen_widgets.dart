@@ -5,6 +5,7 @@ import '../../models/player_face.dart';
 import '../../services/network_discovery_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/player_face_indicator.dart';
+import '../../widgets/juicy_widgets.dart';
 import 'controller_screen_types.dart';
 
 class ControllerPlayerIndicator extends StatelessWidget {
@@ -14,25 +15,48 @@ class ControllerPlayerIndicator extends StatelessWidget {
     required this.selectedPlayerIndex,
     required this.status,
     required this.playerFace,
+    this.hasVacantSlot = false,
+    this.onJoinGame,
   });
 
   final int totalSlots;
   final int? selectedPlayerIndex;
   final String status;
   final PlayerFaceData playerFace;
+  final bool hasVacantSlot;
+  final VoidCallback? onJoinGame;
 
   @override
   Widget build(BuildContext context) {
+    if (selectedPlayerIndex == null && hasVacantSlot) {
+      return JuicyButton(
+        onTap: onJoinGame,
+        backgroundColor: AppColors.highlightColor,
+        borderRadius: 16.0,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: const Text(
+          'Entrar na Partida',
+          style: TextStyle(
+            fontFamily: 'momo',
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
     final selectedIndex = selectedPlayerIndex != null
         ? selectedPlayerIndex! - 1
         : null;
 
     if (totalSlots > 12) {
-      final pLabel = selectedPlayerIndex != null
-          ? 'p$selectedPlayerIndex'
-          : 'p?';
+      final isWaiting = selectedPlayerIndex == null;
+      final pLabel = isWaiting ? 'Banco' : 'p$selectedPlayerIndex';
+      final isConnected = status.startsWith('Conectado');
+
       return AnimatedOpacity(
-        opacity: status == 'Conectado' ? 1.0 : 0.4,
+        opacity: isConnected ? 1.0 : 0.4,
         duration: const Duration(milliseconds: 180),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -47,7 +71,7 @@ class ControllerPlayerIndicator extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (status == 'Conectado') ...[
+              if (isConnected) ...[
                 PlayerFaceIndicator(
                   face: playerFace,
                   size: 16,
@@ -86,7 +110,9 @@ class ControllerPlayerIndicator extends StatelessWidget {
         final double expectedWidth =
             columns * squareSize + (columns - 1) * spacing;
 
-        return SizedBox(
+        final isWaiting = selectedPlayerIndex == null;
+
+        final grid = SizedBox(
           width: expectedWidth,
           child: Wrap(
             alignment: WrapAlignment.start,
@@ -96,9 +122,9 @@ class ControllerPlayerIndicator extends StatelessWidget {
               final isActive = selectedIndex == index;
 
               return AnimatedOpacity(
-                opacity: isActive && status == 'Conectado' ? 1 : 0.4,
+                opacity: isActive && status.startsWith('Conectado') ? 1 : 0.4,
                 duration: const Duration(milliseconds: 180),
-                child: isActive && status == 'Conectado'
+                child: isActive && status.startsWith('Conectado')
                     ? PlayerFaceIndicator(
                         face: playerFace,
                         size: squareSize,
@@ -121,6 +147,50 @@ class ControllerPlayerIndicator extends StatelessWidget {
             }),
           ),
         );
+
+        if (isWaiting) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              grid,
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.textPrimary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.textPrimary.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PlayerFaceIndicator(
+                      face: playerFace,
+                      size: 16,
+                      roundedSquare: true,
+                      borderColor: AppColors.textPrimary.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Banco',
+                      style: TextStyle(
+                        fontFamily: 'momo',
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
+        return grid;
       },
     );
   }

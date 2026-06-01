@@ -187,12 +187,18 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
     if main_loop is None:
         raise RuntimeError("Main loop not initialized")
 
+    LOGGER_CM = logging.getLogger("gamepad_factory")
+    LOGGER_CM.info("[GAMEPAD_FACTORY] Request to create gamepad: slot_index=%d, config_type=%s, existing_x360_count=%d", 
+                  slot_index, config_type, existing_x360_count)
+
     def rumble_callback(client, target, large_motor, small_motor, led_number, user_data):
         if slot_index >= len(manager.slots):
+            LOG.debug("[GAMEPAD_FACTORY] Rumble callback ignored: slot_index %d is out of bounds (total slots: %d)", slot_index, len(manager.slots))
             return
         slot = manager.slots[slot_index]
 
         if main_loop.is_closed():
+            LOG.debug("[GAMEPAD_FACTORY] Rumble callback ignored: main loop closed")
             return
 
         try:
@@ -202,45 +208,55 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
                 main_loop
             )
         except Exception as e:
-            LOG.exception("Rumble callback failed for slot=%s", getattr(slot, 'slot_id', None))
+            LOG.exception("[GAMEPAD_FACTORY] Rumble callback failed for slot=%s", getattr(slot, 'slot_id', None))
 
     gamepad_type = config_type
 
     if gamepad_type not in ("ds4", "x360"):
         total_xinput = count_xinput_connected()
+        LOGGER_CM.info("[GAMEPAD_FACTORY] Mixed mode active. Checked connected XInput devices: %d", total_xinput)
 
         if total_xinput >= 8:
-            LOG.debug("XInput limit reached. Falling back to DS4.")
+            LOG.debug("[GAMEPAD_FACTORY] XInput limit reached. Falling back to DS4.")
             gamepad_type = "ds4"
         else:
             gamepad_type = "x360"
 
+    LOGGER_CM.info("[GAMEPAD_FACTORY] Resolving gamepad type: %s", gamepad_type)
+
     if gamepad_type == "ds4":
         # Probe creation in a child process first to avoid native crashes
+        LOGGER_CM.info("[GAMEPAD_FACTORY] Probing DS4 gamepad safety...")
         ok = probe_gamepad_type("ds4")
         if not ok:
-            LOG.error("Probe failed: DS4 gamepad creation is unsafe on this system")
+            LOG.error("[GAMEPAD_FACTORY] Probe failed: DS4 gamepad creation is unsafe on this system. Falling back to NullGamepad.")
             # Return a NullGamepad to keep the server alive; callers should
             # handle the fact that rumble/notifications won't work for this slot.
             return NullGamepad(), "ds4"
 
         try:
+            LOGGER_CM.info("[GAMEPAD_FACTORY] Instantiating VDS4Gamepad...")
             gamepad = vg.VDS4Gamepad()
         except Exception:
-            LOG.exception("Failed to create DS4 gamepad after probe")
+            LOG.exception("[GAMEPAD_FACTORY] Failed to create DS4 gamepad after probe. Falling back to NullGamepad.")
             # Fallback to NullGamepad on unexpected exception
             return NullGamepad(), "ds4"
     else:
         try:
+            LOGGER_CM.info("[GAMEPAD_FACTORY] Instantiating VX360Gamepad...")
             gamepad = vg.VX360Gamepad()
         except Exception:
-            LOG.exception("Failed to create X360 gamepad")
+            LOG.exception("[GAMEPAD_FACTORY] Failed to create X360 gamepad. Falling back to NullGamepad.")
             # X360 creation is generally safer; if it fails, return NullGamepad
             return NullGamepad(), "x360"
 
-    gamepad.register_notification(
-        callback_function=rumble_callback
-    )
+    try:
+        LOGGER_CM.info("[GAMEPAD_FACTORY] Registering native rumble callback for slot %d", slot_index)
+        gamepad.register_notification(
+            callback_function=rumble_callback
+        )
+    except Exception:
+        LOG.exception("[GAMEPAD_FACTORY] Failed to register notification callback for slot %d", slot_index)
 
-    LOG.info("Successfully created %s gamepad for slot %s", gamepad_type, slot_index)
+    LOG.info("[GAMEPAD_FACTORY] Successfully created %s gamepad for slot %s", gamepad_type, slot_index)
     return gamepad, gamepad_type

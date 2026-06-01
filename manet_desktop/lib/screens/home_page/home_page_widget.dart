@@ -22,6 +22,7 @@ import 'lobby_toolbar.dart';
 import 'server_alerts.dart';
 import 'onboarding_overlay.dart';
 import 'qr_code_container.dart';
+import '../../widgets/juicy_widgets.dart';
 
 class HomePageScreen extends StatelessWidget {
   final String host;
@@ -76,6 +77,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   String _controllerMode = 'x360';
   late final ValueNotifier<ControllerBrandingMode> _brandingModeNotifier;
   bool _isShowingNoNetworkDialog = false;
+  int _reservationTimeoutMinutes = 5;
 
   static const String _xinput4PlusAlertMsg =
       'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.';
@@ -147,6 +149,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _startupPipeline.state.addListener(_handlePipelineUpdate);
     _startupPipeline.initialize();
     _loadTheme();
+    _loadReservationTimeout();
     _loadPresets();
     _controllerMode = widget.initialControllerMode ?? _controllerMode;
     _brandingModeNotifier = ValueNotifier(
@@ -213,6 +216,21 @@ class _HomePageWidgetState extends State<HomePageWidget> {
             _currentTheme = theme;
           });
         }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadReservationTimeout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timeout = prefs.getInt('reservation_timeout_minutes');
+      if (timeout != null && mounted) {
+        setState(() {
+          _reservationTimeoutMinutes = timeout;
+        });
+        await _api.resetControllers(
+          reservationTimeout: timeout * 60,
+        );
       }
     } catch (_) {}
   }
@@ -423,6 +441,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
           child: Dialog(
+            elevation: 0,
             backgroundColor: AppColors.screenBackground,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(28),
@@ -455,7 +474,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       });
 
       try {
-        await _api.resetControllers(mode: chosen);
+        await _api.resetControllers(mode: chosen, reservationTimeout: _reservationTimeoutMinutes * 60);
 
         if (!mounted) return;
         setState(() {
@@ -576,18 +595,35 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                           ),
                         ),
                         const Spacer(),
-                        IconButton(
-                          iconSize: 30.0,
+                        if (_alerts.isNotEmpty) ...[
+                          AlertIcon(
+                            alerts: _alerts,
+                            onTap: () {
+                              _markAlertsSeen();
+                              showDialog(
+                                context: context,
+                                builder: (c) => ServerAlertsDialog(
+                                  alerts: _alerts,
+                                  onDismiss: _dismissAlert,
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        JuicyIconButton(
+                          size: 48,
+                          borderRadius: 14,
                           icon: const Icon(
                             Icons.settings,
-                            color: AppColors.textPrimary,
                           ),
-                          onPressed: () {
+                          onTap: () {
                             SoundEffectService.instance.playOptionsButton();
                             showDialog(
                               context: context,
                               builder: (context) => ServerOptionsPopup(
                                 currentTheme: _currentTheme,
+                                currentTimeoutMinutes: _reservationTimeoutMinutes,
                                 onThemeChanged: (theme) async {
                                   setState(() => _currentTheme = theme);
                                   try {
@@ -599,17 +635,30 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                     );
                                   } catch (_) {}
                                 },
+                                onTimeoutChanged: (timeoutMinutes) async {
+                                  setState(() => _reservationTimeoutMinutes = timeoutMinutes);
+                                  try {
+                                    final prefs = await SharedPreferences.getInstance();
+                                    await prefs.setInt('reservation_timeout_minutes', timeoutMinutes);
+                                    await _api.resetControllers(
+                                      reservationTimeout: timeoutMinutes * 60,
+                                    );
+                                  } catch (e) {
+                                    debugPrint('Failed to save or apply reservation timeout: $e');
+                                  }
+                                },
                               ),
                             );
                           },
                         ),
-                        IconButton(
-                          iconSize: 30.0,
+                        const SizedBox(width: 8),
+                        JuicyIconButton(
+                          size: 48,
+                          borderRadius: 14,
                           icon: const Icon(
                             Icons.power_settings_new_rounded,
-                            color: AppColors.textPrimary,
                           ),
-                          onPressed: () async {
+                          onTap: () async {
                             print('Turning off ...');
 
                             await ServerProcessService.instance.stopServer();
@@ -693,18 +742,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                       layoutApi: _api,
                                       brandingModeListenable:
                                           _brandingModeNotifier,
-                                      alerts: _alerts,
                                       modeChangeState: _modeChangeState,
-                                      onOpenAlerts: () {
-                                        _markAlertsSeen();
-                                        showDialog(
-                                          context: context,
-                                          builder: (c) => ServerAlertsDialog(
-                                            alerts: _alerts,
-                                            onDismiss: _dismissAlert,
-                                          ),
-                                        );
-                                      },
                                       onLayoutCatalogChanged: (catalog) {
                                         setState(() {
                                           _presetCatalog = catalog;
@@ -866,6 +904,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                             fixed: lockedChanged
                                                 ? _locked
                                                 : null,
+                                            reservationTimeout: _reservationTimeoutMinutes * 60,
                                           );
                                         } catch (e, st) {
                                           if (mounted) {
@@ -887,6 +926,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                       fixed: lockedChanged
                                                           ? _locked
                                                           : null,
+                                                      reservationTimeout: _reservationTimeoutMinutes * 60,
                                                     );
                                                   } catch (_) {}
                                                 },

@@ -401,110 +401,125 @@ class ControllerSlotWidget extends StatelessWidget {
       builder: (context, candidateData, rejectedData) {
         final isHovered = candidateData.isNotEmpty;
 
-        return Container(
-          width: scale.slot,
-          height: scale.slot,
-          decoration: BoxDecoration(
-            color: AppColors.lightColor,
-            borderRadius: BorderRadius.circular(scale.eighth),
-            border: Border.all(
-              color: isHovered
-                  ? AppColors.highlightColor
-                  : AppTheme.primaryText,
-              width: isHovered ? scale.eighth / 3 : scale.eighth / 4,
+        return AnimatedScale(
+          scale: isHovered ? 1.06 : 1.0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.elasticOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: scale.slot,
+            height: scale.slot,
+            decoration: BoxDecoration(
+              color: AppColors.lightColor,
+              borderRadius: BorderRadius.circular(scale.eighth),
+              border: Border.all(
+                color: isHovered
+                    ? AppColors.highlightColor
+                    : AppTheme.primaryText,
+                width: isHovered ? scale.eighth / 3 : scale.eighth / 4,
+              ),
+              boxShadow: isHovered
+                  ? [
+                      BoxShadow(
+                        color: AppColors.textPrimary.withValues(alpha: 0.25),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : [],
             ),
-          ),
-          child: Stack(
-            children: [
-              if (slotModel.device != null)
-                Positioned.fill(
-                  child: slotModel.device!.connected
-                      ? Draggable<DragData>(
-                          dragAnchorStrategy: (draggable, context, position) =>
-                              Offset(scale.quarter / 2, scale.quarter / 2),
-                          data: DragData(
-                            device: slotModel.device,
-                            source: DragSource.slot,
-                            slotIndex: index,
-                          ),
-                          feedback: MouseRegion(
-                            cursor: SystemMouseCursors.grab,
-                            child: _buildDragFeedback(
-                              slotModel.device!,
-                              scale.quarter,
-                              false,
+            child: Stack(
+              children: [
+                if (slotModel.device != null)
+                  Positioned.fill(
+                    child: slotModel.device!.connected
+                        ? Draggable<DragData>(
+                            dragAnchorStrategy: (draggable, context, position) =>
+                                const Offset(28.0, 28.0),
+                            data: DragData(
+                              device: slotModel.device,
+                              source: DragSource.slot,
+                              slotIndex: index,
                             ),
-                          ),
-                          childWhenDragging: const SizedBox.expand(),
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: Center(
-                              child: DeviceJoinPopEffect(
-                                device: slotModel.device!,
-                                child: DropBounceEffect(
-                                  key: ValueKey('drop_${slotModel.device!.id}'),
-                                  child: DeviceInputIndicator(
-                                    device: slotModel.device!,
-                                    input:
-                                        state.getInputState(
-                                          slotModel.device!.id,
-                                        ) ??
-                                        DeviceInputState.idle(),
-                                    size: scale.half,
-                                    isOnPool: false,
+                            feedback: MouseRegion(
+                              cursor: SystemMouseCursors.grab,
+                              child: _buildDragFeedback(
+                                slotModel.device!,
+                                56.0,
+                                false,
+                              ),
+                            ),
+                            childWhenDragging: const SizedBox.expand(),
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: Center(
+                                child: DeviceJoinPopEffect(
+                                  device: slotModel.device!,
+                                  child: DropBounceEffect(
+                                    key: ValueKey('drop_${slotModel.device!.id}'),
+                                    child: DeviceInputIndicator(
+                                      device: slotModel.device!,
+                                      input:
+                                          state.getInputState(
+                                            slotModel.device!.id,
+                                          ) ??
+                                          DeviceInputState.idle(),
+                                      size: scale.half,
+                                      isOnPool: false,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        )
-                      : Center(
-                          child: DeviceJoinPopEffect(
-                            device: slotModel.device!,
-                            child: DropBounceEffect(
-                              key: ValueKey('drop_${slotModel.device!.id}'),
-                              child: DeviceInputIndicator(
-                                device: slotModel.device!,
-                                input:
-                                    state.getInputState(slotModel.device!.id) ??
-                                    DeviceInputState.idle(),
-                                size: scale.half,
-                                isOnPool: false,
+                          )
+                        : Center(
+                            child: DeviceJoinPopEffect(
+                              device: slotModel.device!,
+                              child: DropBounceEffect(
+                                key: ValueKey('drop_${slotModel.device!.id}'),
+                                child: DeviceInputIndicator(
+                                  device: slotModel.device!,
+                                  input:
+                                      state.getInputState(slotModel.device!.id) ??
+                                      DeviceInputState.idle(),
+                                  size: scale.half,
+                                  isOnPool: false,
+                                ),
                               ),
                             ),
                           ),
+                  ),
+                Positioned(
+                  top: scale.eighth / 2,
+                  left: scale.eighth / 2,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'p${index + 1}',
+                        style: AppTheme.bodyMedium.copyWith(
+                          fontFamily: 'momo',
+                          fontSize: scale.eighth,
                         ),
-                ),
-              Positioned(
-                top: scale.eighth / 2,
-                left: scale.eighth / 2,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'p${index + 1}',
-                      style: AppTheme.bodyMedium.copyWith(
-                        fontFamily: 'momo',
-                        fontSize: scale.eighth,
                       ),
-                    ),
-                    if (slotModel.device != null &&
-                        !slotModel.device!.connected)
-                      Padding(
-                        padding: EdgeInsets.only(left: scale.eighth / 3),
-                        child: Text(
-                          'offline',
-                          style: AppTheme.bodyMedium.copyWith(
-                            fontFamily: 'momo',
-                            fontSize: scale.eighth * 0.7,
-                            color: AppTheme.primaryText.withValues(alpha: 0.5),
+                      if (slotModel.device != null &&
+                          !slotModel.device!.connected)
+                        Padding(
+                          padding: EdgeInsets.only(left: scale.eighth / 3),
+                          child: Text(
+                            'offline',
+                            style: AppTheme.bodyMedium.copyWith(
+                              fontFamily: 'momo',
+                              fontSize: scale.eighth * 0.7,
+                              color: AppTheme.primaryText.withValues(alpha: 0.5),
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -553,21 +568,27 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
       builder: (context, candidateData, rejectedData) {
         final isHovered = candidateData.isNotEmpty;
 
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.scale.eighth),
-            border: Border.all(
-              color: isHovered ? AppColors.highlightColor : Colors.transparent,
-              width: widget.scale.eighth / 4,
+        return AnimatedScale(
+          scale: isHovered ? 1.02 : 1.0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.elasticOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: isHovered ? AppColors.highlightColor.withValues(alpha: 0.05) : Colors.transparent,
+              borderRadius: BorderRadius.circular(widget.scale.eighth),
+              border: Border.all(
+                color: isHovered ? AppColors.highlightColor : Colors.transparent,
+                width: widget.scale.eighth / 4,
+              ),
             ),
-          ),
-          child: Column(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                height: 80.0,
+                height: 160.0,
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: widget.scale.eighth, vertical: 10.0),
                 decoration: BoxDecoration(
@@ -580,7 +601,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                           'banco de reservas',
                           style: TextStyle(
                             fontFamily: 'momo',
-                            fontSize: 14.0,
+                            fontSize: 20.0,
                             color: AppTheme.primaryText.withValues(alpha: 0.3),
                           ),
                         ),
@@ -663,9 +684,10 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
               ),
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
   }
 }
 
@@ -784,14 +806,18 @@ class DropBounceEffect extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0.5, end: 1.0),
-      duration: const Duration(milliseconds: 600),
+      tween: Tween<double>(begin: 0.4, end: 1.0),
+      duration: const Duration(milliseconds: 800),
       curve: Curves.elasticOut,
       builder: (context, scale, child) {
+        final rotation = (1.0 - scale) * 0.4;
         return Transform.scale(
           scale: scale,
           alignment: Alignment.center,
-          child: child,
+          child: Transform.rotate(
+            angle: rotation,
+            child: child,
+          ),
         );
       },
       child: child,

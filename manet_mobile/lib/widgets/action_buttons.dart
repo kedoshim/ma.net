@@ -161,6 +161,7 @@ class _ActionButtonsState extends State<ActionButtons> {
       onStateChange: (state) =>
           widget.onButtonStateChanged(btnConfig.xinput, state),
       onPressedChanged: widget.onAnyButtonPressed,
+      tapHapticsEnabled: widget.tapHapticsEnabled,
     );
   }
 
@@ -264,28 +265,57 @@ class _GameButton extends StatefulWidget {
   final Widget? labelWidget;
   final void Function(String state) onStateChange;
   final ValueChanged<bool>? onPressedChanged;
+  final bool tapHapticsEnabled;
 
   const _GameButton({
     required this.label,
     this.labelWidget,
     required this.onStateChange,
     this.onPressedChanged,
+    this.tapHapticsEnabled = false,
   });
 
   @override
   State<_GameButton> createState() => _GameButtonState();
 }
 
-class _GameButtonState extends State<_GameButton> {
+class _GameButtonState extends State<_GameButton> with SingleTickerProviderStateMixin {
   bool _hovered = false;
   bool _pressed = false;
   int? _pointerId;
+  late AnimationController _animController;
 
   static const double _retentionMargin = 32.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
 
   void _setPressed(bool value) {
     if (_pressed == value) return;
     setState(() => _pressed = value);
+    if (value) {
+      _animController.animateTo(0.6,
+          duration: const Duration(milliseconds: 50), curve: Curves.easeOutQuad);
+      if (widget.tapHapticsEnabled) {
+        try {
+          HapticsManager.instance.softTap();
+        } catch (_) {}
+      }
+    } else {
+      _animController.forward(from: 0.6);
+    }
     widget.onStateChange(value ? 'down' : 'up');
     widget.onPressedChanged?.call(value);
   }
@@ -340,30 +370,60 @@ class _GameButtonState extends State<_GameButton> {
             _setPressed(false);
           }
         },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          width: double.infinity,
-          height: double.infinity,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.textPrimary,
-              width: AppColors.borderThickness,
-            ),
-          ),
-          child:
-              widget.labelWidget ??
-              Text(
-                widget.label,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                  fontFamily: 'momo',
-                ),
+        child: AnimatedBuilder(
+          animation: _animController,
+          builder: (context, child) {
+            double value = _animController.value;
+            double scaleX = 1.0;
+            double scaleY = 1.0;
+            double translateY = 0.0;
+
+            if (_pressed) {
+              scaleX = 1.0 + (value * 0.08);
+              scaleY = 1.0 - (value * 0.08);
+              translateY = value * 4.0;
+            } else if (_animController.isAnimating) {
+              double t = (value - 0.6) / 0.4;
+              if (t > 0) {
+                double spring = math.sin(t * math.pi * 2.5) * (1.0 - t) * 0.12;
+                scaleX = 1.0 - spring;
+                scaleY = 1.0 + spring;
+                translateY = spring * -4.0;
+              }
+            }
+
+            return Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..translate(0.0, translateY)
+                ..scale(scaleX, scaleY),
+              child: child,
+            );
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 80),
+            width: double.infinity,
+            height: double.infinity,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppColors.borderThickness,
               ),
+            ),
+            child: widget.labelWidget ??
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                    fontFamily: 'momo',
+                  ),
+                ),
+          ),
         ),
       ),
     );

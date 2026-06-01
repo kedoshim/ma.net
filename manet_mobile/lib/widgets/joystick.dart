@@ -126,30 +126,44 @@ class _JoystickState extends State<Joystick> {
               height: widget.size,
               child: Stack(
                 alignment: Alignment.center,
+                clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    width: widget.size,
-                    height: widget.size,
-                    decoration: BoxDecoration(
-                      color: AppColors.backgroundColor,
-                      borderRadius: BorderRadius.circular(36),
-                      border: Border.all(
-                        color: AppColors.textPrimary,
-                        width: AppColors.borderThickness,
+                  AnimatedScale(
+                    scale: _active ? 0.92 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOutBack,
+                    child: Container(
+                      width: widget.size,
+                      height: widget.size,
+                      decoration: BoxDecoration(
+                        color: AppColors.backgroundColor,
+                        borderRadius: BorderRadius.circular(36),
+                        border: Border.all(
+                          color: AppColors.textPrimary,
+                          width: AppColors.borderThickness,
+                        ),
                       ),
                     ),
                   ),
-                  Transform.translate(
-                    offset: _stickOffset,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.textPrimary,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppColors.lightColor,
-                          width: AppColors.borderThickness,
+                  AnimatedPositioned(
+                    duration: _active ? Duration.zero : const Duration(milliseconds: 300),
+                    curve: _active ? Curves.linear : Curves.elasticOut,
+                    left: widget.size / 2 - 20 + _stickOffset.dx,
+                    top: widget.size / 2 - 20 + _stickOffset.dy,
+                    child: AnimatedScale(
+                      scale: _active ? 1.25 : 1.0,
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOutBack,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.textPrimary,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.lightColor,
+                            width: AppColors.borderThickness,
+                          ),
                         ),
                       ),
                     ),
@@ -353,7 +367,7 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
                   child: AnimatedBuilder(
                     animation: _appearController,
                     builder: (context, child) {
-                      final scale = 0.8 + (_appearController.value * 0.2);
+                      final scale = (0.8 + (_appearController.value * 0.2)) * (_active ? 0.92 : 1.0);
                       final opacity = _active
                           ? 0.8
                           : 0.2 + (_appearController.value * 0.2);
@@ -390,15 +404,20 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
                             left:
                                 baseSize / 2 - stickSize / 2 + _stickOffset.dx,
                             top: baseSize / 2 - stickSize / 2 + _stickOffset.dy,
-                            child: Container(
-                              width: stickSize,
-                              height: stickSize,
-                              decoration: BoxDecoration(
-                                color: AppColors.textPrimary,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.lightColor,
-                                  width: AppColors.borderThickness,
+                            child: AnimatedScale(
+                              scale: _active ? 1.25 : 1.0,
+                              duration: const Duration(milliseconds: 150),
+                              curve: Curves.easeOutBack,
+                              child: Container(
+                                width: stickSize,
+                                height: stickSize,
+                                decoration: BoxDecoration(
+                                  color: AppColors.textPrimary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.lightColor,
+                                    width: AppColors.borderThickness,
+                                  ),
                                 ),
                               ),
                             ),

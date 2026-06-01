@@ -26,6 +26,10 @@ def _update_gamepad_safe(gp):
 
 
 def apply_stick(slot, x, y):
+    if not hasattr(slot, "gamepad") or slot.gamepad is None:
+        LOG.warning("Attempted to apply stick to slot %s, but gamepad is missing or deleted", getattr(slot, 'slot_id', 'unknown'))
+        return
+
     if slot.controller_type == "ds4":
         y = -y
 
@@ -37,6 +41,9 @@ def apply_stick(slot, x, y):
 
 
 def apply_button(slot, btn, state):
+    if not hasattr(slot, "gamepad") or slot.gamepad is None:
+        LOG.warning("Attempted to apply button %s to slot %s, but gamepad is missing or deleted", btn, getattr(slot, 'slot_id', 'unknown'))
+        return
     gp = slot.gamepad
 
     if slot.controller_type == "ds4":

@@ -6,6 +6,7 @@ import '../../services/host_api_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/layout_selector_widget.dart';
+import '../../widgets/juicy_widgets.dart';
 import 'server_alerts.dart';
 
 enum ModeChangeState { idle, loading, success }
@@ -17,9 +18,7 @@ class LobbyToolbar extends StatefulWidget {
   final PresetCatalog? layoutCatalog;
   final HostApiService layoutApi;
   final ValueListenable<ControllerBrandingMode> brandingModeListenable;
-  final List<ServerAlert> alerts;
   final ModeChangeState modeChangeState;
-  final VoidCallback onOpenAlerts;
   final ValueChanged<PresetCatalog> onLayoutCatalogChanged;
   final Future<void> Function(int slots, bool locked) onApply;
   final VoidCallback onOpenSettings;
@@ -32,9 +31,7 @@ class LobbyToolbar extends StatefulWidget {
     required this.layoutCatalog,
     required this.layoutApi,
     required this.brandingModeListenable,
-    required this.alerts,
     required this.modeChangeState,
-    required this.onOpenAlerts,
     required this.onLayoutCatalogChanged,
     required this.onApply,
     required this.onOpenSettings,
@@ -86,59 +83,58 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Lock Icon
-                  InkWell(
-                    onTap: () async {
-                      if (_isApplying) return;
-
-                      final newLockedState = !_draftLocked;
-
-                      // Ativa o estado de carregamento imediatamente
-                      setState(() {
-                        _draftLocked = newLockedState;
-                        _isApplying = true;
-                      });
-
-                      // Try/finally garante que o estado de loading seja removido
-                      // mesmo se widget.onApply lançar uma exceção silenciosa
-                      try {
-                        await widget.onApply(_draftSlots, newLockedState);
-                      } finally {
-                        if (mounted) {
-                          setState(() {
-                            _isApplying = false;
-                          });
-                        }
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Tooltip(
-                        message: _draftLocked
-                            ? 'Limite fixo de jogadores'
-                            : 'Criar novos controles automaticamente',
-                        child: Icon(
-                          _draftLocked
-                              ? Icons.lock_rounded
-                              : Icons.lock_open_rounded,
-                          color: AppColors.textPrimary.withValues(alpha: 0.8),
-                          size: 20,
-                        ),
+                  Tooltip(
+                    message: _draftLocked
+                        ? 'Limite fixo de jogadores'
+                        : 'Criar novos controles automaticamente',
+                    child: JuicyIconButton(
+                      size: 36,
+                      borderRadius: 10,
+                      borderColor: Colors.transparent,
+                      icon: Icon(
+                        _draftLocked
+                            ? Icons.lock_rounded
+                            : Icons.lock_open_rounded,
+                        size: 20,
                       ),
+                      onTap: () async {
+                        if (_isApplying) return;
+
+                        final newLockedState = !_draftLocked;
+
+                        // Ativa o estado de carregamento imediatamente
+                        setState(() {
+                          _draftLocked = newLockedState;
+                          _isApplying = true;
+                        });
+
+                        // Try/finally garante que o estado de loading seja removido
+                        // mesmo se widget.onApply lançar uma exceção silenciosa
+                        try {
+                          await widget.onApply(_draftSlots, newLockedState);
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _isApplying = false;
+                            });
+                          }
+                        }
+                      },
                     ),
                   ),
                   const SizedBox(width: 16),
 
                   // Minus
-                  InkWell(
+                  JuicyIconButton(
+                    size: 32,
+                    borderRadius: 8,
+                    borderColor: Colors.transparent,
+                    icon: const Icon(Icons.remove_circle_rounded),
+                    iconColor: AppColors.highlightColor,
+                    hoverBackgroundColor: AppColors.highlightColor,
+                    hoverIconColor: AppColors.textPrimary,
                     onTap: () => setState(
                       () => _draftSlots = (_draftSlots - 1).clamp(1, 64),
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Icon(
-                      Icons.remove_circle_rounded,
-                      color: AppColors.highlightColor,
-                      size: 28,
                     ),
                   ),
 
@@ -158,27 +154,33 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                   ),
 
                   // Plus
-                  InkWell(
+                  JuicyIconButton(
+                    size: 32,
+                    borderRadius: 8,
+                    borderColor: Colors.transparent,
+                    icon: const Icon(Icons.add_circle_rounded),
+                    iconColor: AppColors.highlightColor,
+                    hoverBackgroundColor: AppColors.highlightColor,
+                    hoverIconColor: AppColors.textPrimary,
                     onTap: () => setState(
                       () => _draftSlots = (_draftSlots + 1).clamp(1, 64),
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Icon(
-                      Icons.add_circle_rounded,
-                      color: AppColors.highlightColor,
-                      size: 28,
                     ),
                   ),
 
                   // O espaço para o botão/loading sempre reservado
                   const SizedBox(width: 16),
                   SizedBox(
-                    width: 24,
-                    height: 24,
+                    width: 32,
+                    height: 32,
                     child: _isApplying
-                        ? const CircularProgressIndicator(strokeWidth: 2)
+                        ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
                         : _hasChanges
-                        ? InkWell(
+                        ? JuicyIconButton(
+                            size: 32,
+                            borderRadius: 8,
+                            backgroundColor: Colors.green,
+                            iconColor: Colors.white,
+                            icon: const Icon(Icons.check_rounded),
                             onTap: () async {
                               setState(() => _isApplying = true);
                               try {
@@ -188,18 +190,6 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                                   setState(() => _isApplying = false);
                               }
                             },
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
                           )
                         : const SizedBox.shrink(),
                   ),
@@ -210,13 +200,7 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (widget.alerts.isNotEmpty) ...[
-                    AlertIcon(
-                      alerts: widget.alerts,
-                      onTap: widget.onOpenAlerts,
-                    ),
-                    const SizedBox(width: 12),
-                  ],
+                  // Alerts icon moved to global header bar
 
                   // 6. Novo AnimatedSwitcher para a animação de alteração de modo
                   AnimatedSwitcher(
@@ -255,46 +239,36 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                         : const SizedBox.shrink(key: ValueKey('idle')),
                   ),
 
-                  InkWell(
-                    // SYNTAX FIX & SCOPE FIX HERE:
-                    onTap: () {
-                      widget.onOpenSettings();
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppColors.highlightColor.withValues(
-                            alpha: 0.6,
-                          ),
-                          width: 2,
+                  JuicyButton(
+                    onPressed: widget.onOpenSettings,
+                    borderRadius: 16,
+                    borderThickness: 2.0,
+                    backgroundColor: Colors.transparent,
+                    borderColor: AppColors.highlightColor.withValues(alpha: 0.6),
+                    customShadows: const [],
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.settings_rounded,
+                          color: AppColors.textPrimary,
+                          size: 20,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.settings_rounded,
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.controllerMode.toLowerCase() == 'x360'
+                              ? 'x•input'
+                              : 'd•input',
+                          style: AppTheme.bodyMedium.copyWith(
                             color: AppColors.textPrimary,
-                            size: 20,
+                            fontWeight: FontWeight.bold,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            widget.controllerMode.toLowerCase() == 'x360'
-                                ? 'x•input'
-                                : 'd•input',
-                            style: AppTheme.bodyMedium.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

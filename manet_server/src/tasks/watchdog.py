@@ -1,12 +1,33 @@
 import asyncio
 import time
+import logging
 
 from src.input.input_handler import apply_stick
 
+LOGGER = logging.getLogger("watchdog")
 
-async def stick_watchdog(manager):
+
+async def stick_watchdog(manager, admin_panel=None):
+    last_res_check = 0.0
     while True:
         now = time.time()
+
+        # Check expired reservations once per second
+        if now - last_res_check >= 1.0:
+            last_res_check = now
+            res_expired = False
+            for slot in manager.slots:
+                if slot.assigned_device_id is not None and not slot.connected:
+                    if slot.reserved_until > 0 and now >= slot.reserved_until:
+                        LOGGER.info(
+                            "Reservation expired for slot %d (device %s)",
+                            slot.slot_id,
+                            slot.assigned_device_id,
+                        )
+                        manager.unassign_slot(slot.slot_id)
+                        res_expired = True
+            if res_expired and admin_panel:
+                admin_panel.broadcast_update()
 
         for slot in manager.slots:
             if not slot.connected:

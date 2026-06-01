@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
@@ -97,128 +98,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
     }
   }
 
-  Widget _buildWaitingView() {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        constraints: const BoxConstraints(maxHeight: 280, maxWidth: 400),
-        decoration: BoxDecoration(
-          color: AppColors.lightColor,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: AppColors.textPrimary,
-            width: AppColors.borderThickness,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.more_horiz, size: 28),
-                  onPressed: widget.onOpenOptions,
-                  tooltip: 'Opções',
-                ),
-                const SizedBox(width: 16),
-                InkWell(
-                  onTap: widget.onOpenFaceEditor,
-                  borderRadius: BorderRadius.circular(24),
-                  child: PlayerFaceIndicator(
-                    face: widget.playerFace,
-                    size: 80,
-                    roundedSquare: true,
-                    borderColor: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 24),
-                  onPressed: widget.onOpenFaceEditor,
-                  tooltip: 'Editar rosto',
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.hasVacantSlot ? 'Há uma vaga disponível!' : 'Você está no banco de reservas',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'momo',
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.hasVacantSlot
-                  ? 'Toque abaixo para entrar na partida.'
-                  : 'Aguarde um jogador sair ou o host liberar mais vagas.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textPrimary.withValues(alpha: 0.6),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (widget.hasVacantSlot)
-              SizedBox(
-                width: 200,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.highlightColor,
-                    foregroundColor: AppColors.textPrimary,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(
-                        color: AppColors.textPrimary,
-                        width: AppColors.borderThickness,
-                      ),
-                    ),
-                  ),
-                  onPressed: () {
-                    HapticsManager.instance.softTap();
-                    widget.onJoinGame?.call();
-                  },
-                  child: const Text(
-                    'Entrar na partida',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'momo',
-                    ),
-                  ),
-                ),
-              )
-            else
-              const SizedBox(
-                height: 50,
-                child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation(AppColors.textPrimary),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (widget.playerIndex == null && widget.connectionState == ControllerConnectionState.connected) {
-      return _buildWaitingView();
-    }
-
     return Padding(
       padding: const EdgeInsets.all(4),
       child: Row(
@@ -388,6 +269,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                           selectedPlayerIndex: widget.playerIndex,
                           status: widget.status,
                           playerFace: widget.playerFace,
+                          hasVacantSlot: widget.hasVacantSlot,
+                          onJoinGame: widget.onJoinGame,
                         ),
                     ],
                   ),
@@ -529,40 +412,109 @@ class _ControllerDpadState extends State<_ControllerDpad> {
   }
 }
 
-class _DPadButton extends StatelessWidget {
+class _DPadButton extends StatefulWidget {
   final String label;
   final bool isActive;
 
   const _DPadButton({required this.label, required this.isActive});
 
   @override
+  State<_DPadButton> createState() => _DPadButtonState();
+}
+
+class _DPadButtonState extends State<_DPadButton> with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    if (widget.isActive) {
+      _animController.value = 0.6;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DPadButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive != widget.isActive) {
+      if (widget.isActive) {
+        _animController.animateTo(0.6,
+            duration: const Duration(milliseconds: 50),
+            curve: Curves.easeOutQuad);
+      } else {
+        _animController.forward(from: 0.6);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final background = isActive
+    final background = widget.isActive
         ? AppColors.highlightColor
         : AppColors.backgroundColor;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 80),
-      width: 76,
-      height: 76,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.textPrimary,
-          width: AppColors.borderThickness,
-        ),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-          fontFamily: 'momo',
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: _animController,
+      builder: (context, child) {
+        double value = _animController.value;
+        double scaleX = 1.0;
+        double scaleY = 1.0;
+        double translateY = 0.0;
+
+        if (widget.isActive) {
+          scaleX = 1.0 + (value * 0.08);
+          scaleY = 1.0 - (value * 0.08);
+          translateY = value * 4.0;
+        } else if (_animController.isAnimating) {
+          double t = (value - 0.6) / 0.4;
+          if (t > 0) {
+            double spring = math.sin(t * math.pi * 2.5) * (1.0 - t) * 0.12;
+            scaleX = 1.0 - spring;
+            scaleY = 1.0 + spring;
+            translateY = spring * -4.0;
+          }
+        }
+
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..translate(0.0, translateY)
+            ..scale(scaleX, scaleY),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 80),
+            width: 76,
+            height: 76,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: AppColors.borderThickness,
+              ),
+            ),
+            child: Text(
+              widget.label,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+                fontFamily: 'momo',
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

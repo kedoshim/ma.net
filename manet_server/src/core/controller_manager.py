@@ -85,25 +85,30 @@ class ControllerManager:
         self.broadcast_to_devices(self.build_active_layout_payload())
 
     def cleanup_gamepads(self):
-        LOGGER.info("Cleaning up all gamepads...")
+        LOGGER.info("[LIFECYCLE] Cleaning up all gamepads... Total slots: %d", len(self.slots))
         for slot in self.slots:
+            slot_id = getattr(slot, 'slot_id', 'unknown')
+            controller_type = getattr(slot, 'controller_type', 'unknown')
+            LOGGER.info("[LIFECYCLE] Cleaning up slot index=%s, controller_type=%s", slot_id, controller_type)
             try:
+                if hasattr(slot.gamepad, 'unregister_notification'):
+                    LOGGER.info("[LIFECYCLE] Unregistering native notification callback for slot index=%s before deletion", slot_id)
+                    slot.gamepad.unregister_notification()
+                
+                LOGGER.info("[LIFECYCLE] Resetting and updating gamepad for slot index=%s", slot_id)
                 slot.gamepad.reset()
                 slot.gamepad.update()
-                
-                # CRITICAL FIX: Unregister the native callback before destruction
-                if hasattr(slot.gamepad, 'unregister_notification'):
-                    slot.gamepad.unregister_notification()
-                    
             except Exception:
-                LOGGER.exception("Error resetting/updating gamepad for slot %s", getattr(slot, 'slot_id', None))
+                LOGGER.exception("[LIFECYCLE] Error resetting/updating/unregistering gamepad for slot index=%s", slot_id)
 
             try:
+                LOGGER.info("[LIFECYCLE] Deleting gamepad attribute for slot index=%s", slot_id)
                 del slot.gamepad
             except Exception:
-                LOGGER.exception("Error deleting gamepad attribute for slot %s", getattr(slot, 'slot_id', None))
+                LOGGER.exception("[LIFECYCLE] Error deleting gamepad attribute for slot index=%s", slot_id)
 
         self.slots.clear()
+        LOGGER.info("[LIFECYCLE] Gamepad slots cleared completely.")
 
     def _existing_x360_count(self):
         return sum(
@@ -130,6 +135,7 @@ class ControllerManager:
         LOGGER.info("Unregistered device %s", device_id)
 
     def _create_empty_slot(self, index):
+        LOGGER.info("[LIFECYCLE] Creating empty slot at index=%d, controller_type_config=%s", index, self.config.controller_type)
         gamepad, gp_type = create_gamepad(
             self,
             self.config.controller_type,
@@ -145,6 +151,7 @@ class ControllerManager:
         )
 
         self.slots.append(slot)
+        LOGGER.info("[LIFECYCLE] Created slot index=%d successfully: gp_type=%s, total_slots=%d", index, gp_type, len(self.slots))
         return slot
 
     def assign_slot(self, device_id, player_name=None):
@@ -154,7 +161,8 @@ class ControllerManager:
             slot.connected = True
             slot.player_name = player_name or slot.player_name
             self._apply_identity_to_slot(slot, device_id)
-            LOGGER.info("Re-assigned device %s to existing slot %s", device_id, slot.slot_id)
+            slot.reserved_until = 0
+            LOGGER.info("Re-assigned device %s to existing slot %s (reservation reclaimed)", device_id, slot.slot_id)
             return slot
 
         for slot in self.slots:
@@ -162,6 +170,7 @@ class ControllerManager:
                 slot.assigned_device_id = device_id
                 slot.player_name = player_name
                 slot.connected = True
+                slot.reserved_until = 0
                 self._apply_identity_to_slot(slot, device_id)
                 self.device_map[device_id] = slot.slot_id
                 LOGGER.info("Assigned device %s to available slot %s", device_id, slot.slot_id)
@@ -195,7 +204,7 @@ class ControllerManager:
         slot.connected = False
         if slot.assigned_device_id:
             self.unregister_device_ws(slot.assigned_device_id)
-            LOGGER.info("Disconnected device from slot %s", slot_id)
+            LOGGER.info("Disconnected device %s from slot %s, reservation started until %f", slot.assigned_device_id, slot_id, time.time() + self.config.slot_reservation_timeout)
         slot.reserved_until = (
             time.time() +
             self.config.slot_reservation_timeout
@@ -254,11 +263,14 @@ class ControllerManager:
         if slot_index >= len(self.slots):
             return None
         slot = self.slots[slot_index]
-        if slot.connected:
-            return None  # already assigned
         
         if slot.assigned_device_id is not None:
             old_id = slot.assigned_device_id
+            if old_id == device_id:
+                slot.connected = True
+                slot.reserved_until = 0
+                LOGGER.info("Device %s reclaimed its own slot %s manually", device_id, slot_index)
+                return slot
             if old_id in self.device_map:
                 del self.device_map[old_id]
             self.notify_device(old_id, {
@@ -269,9 +281,10 @@ class ControllerManager:
         slot.assigned_device_id = device_id
         slot.player_name = player_name or device_id
         slot.connected = True
+        slot.reserved_until = 0
         self._apply_identity_to_slot(slot, device_id)
         self.device_map[device_id] = slot_index
-        LOGGER.info("Manually assigned device %s to slot %s", device_id, slot_index)
+        LOGGER.info("Manually assigned device %s to slot %s (reservation cleared)", device_id, slot_index)
         self.notify_device(device_id, {
             "type": "assigned",
             "slot": slot_index,
@@ -294,6 +307,7 @@ class ControllerManager:
             slot.face_text = ":)"
             slot.face_rotation = "normal"
             slot.preset_id = None
+            slot.reserved_until = 0
             if device_id in self.device_map:
                 del self.device_map[device_id]
             self.notify_device(device_id, {
@@ -497,8 +511,12 @@ class ControllerManager:
         slot.face_rotation = identity["faceRotation"]
         slot.preset_id = identity.get("presetId")
 
-    def update_server_settings(self, mode: str | None = None, slots: int | None = None, fixed: bool | None = None):
+    def update_server_settings(self, mode: str | None = None, slots: int | None = None, fixed: bool | None = None, reservation_timeout: int | None = None):
         mode_changed = mode is not None and getattr(self.config, 'controller_type', None) != mode
+
+        if reservation_timeout is not None:
+            LOGGER.info("Setting slot_reservation_timeout to %s seconds", reservation_timeout)
+            self.config.slot_reservation_timeout = reservation_timeout
 
         if fixed is not None:
             if self.config.auto_expand_slots != (not fixed):
@@ -575,10 +593,13 @@ class ControllerManager:
 
     def _resize_slots(self, new_size: int):
         current_size = len(self.slots)
+        LOGGER.info("[LIFECYCLE] Resizing slots: current_size=%d, target_size=%d", current_size, new_size)
         if new_size == current_size:
+            LOGGER.info("[LIFECYCLE] Resize target matches current size; no action needed.")
             return
 
         if new_size > current_size:
+            LOGGER.info("[LIFECYCLE] Expanding slots list by %d slots", new_size - current_size)
             # Add new slots dynamically
             for i in range(current_size, new_size):
                 self._create_empty_slot(i)
@@ -592,18 +613,27 @@ class ControllerManager:
                         "total_slots": new_size
                     })
         else:
+            LOGGER.info("[LIFECYCLE] Shrinking slots list by %d slots", current_size - new_size)
             # Remove excess slots cleanly and return players to pool
             for i in range(new_size, current_size):
                 slot = self.slots[i]
+                LOGGER.info("[LIFECYCLE] Removing slot index=%d, assigned_device_id=%s, controller_type=%s", 
+                            i, slot.assigned_device_id, slot.controller_type)
                 if slot.assigned_device_id:
                     self.unassign_slot(i)
                 try:
+                    if hasattr(slot.gamepad, 'unregister_notification'):
+                        LOGGER.info("[LIFECYCLE] Unregistering native notification callback for slot index=%d", i)
+                        slot.gamepad.unregister_notification()
+                    LOGGER.info("[LIFECYCLE] Resetting and deleting gamepad object for slot index=%d", i)
                     slot.gamepad.reset()
                     slot.gamepad.update()
                     del slot.gamepad
                 except Exception:
-                    LOGGER.exception("Failed to reset/delete gamepad for slot %s", getattr(slot, 'slot_id', None))
+                    LOGGER.exception("[LIFECYCLE] Failed to cleanly reset/unregister/delete gamepad for slot index=%d", i)
+            
             self.slots = self.slots[:new_size]
+            LOGGER.info("[LIFECYCLE] Slot list sliced to new size: %d", len(self.slots))
 
             for slot in self.slots:
                 if slot.assigned_device_id and slot.connected:

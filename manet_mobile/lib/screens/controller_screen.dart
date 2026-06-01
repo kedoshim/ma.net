@@ -574,7 +574,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   void _clearPlayerSlot() {
     setState(() {
       playerIndex = null;
-      status = 'Em espera';
+      status = 'Conectado (Aguardando Vaga)';
     });
   }
 
