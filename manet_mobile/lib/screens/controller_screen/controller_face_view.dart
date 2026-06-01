@@ -144,6 +144,7 @@ class ControllerFaceView extends StatelessWidget {
                             child: TextField(
                               focusNode: faceFocusNode,
                               controller: faceController,
+                              autofocus: true,
                               textAlign: TextAlign.center,
                               inputFormatters: [
                                 FilteringTextInputFormatter.deny(

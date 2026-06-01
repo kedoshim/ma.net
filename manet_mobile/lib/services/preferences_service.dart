@@ -101,12 +101,21 @@ class PreferencesService {
     await p.setString('player_face', jsonEncode(face.toJson()));
   }
 
+  Future<String?> getPlayerName() async {
+    final p = await _getInstance;
+    return p.getString('player_name');
+  }
+
+  Future<void> savePlayerName(String name) async {
+    final p = await _getInstance;
+    await p.setString('player_name', name);
+  }
+
   // --- Appearance ---
   Future<void> setSelectedTheme(int themeIndex) async =>
       (await _getInstance).setInt('selectedTheme', themeIndex);
   Future<int> getSelectedTheme() async =>
       (await _getInstance).getInt('selectedTheme') ?? 0;
-
   // --- Controls & Layout ---
   Future<void> setMovementMode(int modeIndex) async =>
       (await _getInstance).setInt('movementMode', modeIndex);

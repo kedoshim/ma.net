@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'preferences_service.dart';
 import 'websocket_service.dart';
 
@@ -24,6 +25,8 @@ class ControllerConnectionManager {
 
     final deviceId = await prefs.getDeviceId();
     final playerFace = await prefs.getOrCreatePlayerFace();
+    final playerName = await prefs.getPlayerName() ?? '';
+    final systemLang = ui.PlatformDispatcher.instance.locale.languageCode;
     final isHttps =
         await prefs.getServerHttps() ?? (Uri.base.scheme == 'https');
 
@@ -34,6 +37,8 @@ class ControllerConnectionManager {
       path: '/ws',
       queryParameters: {
         'deviceId': deviceId,
+        'name': playerName,
+        'lang': systemLang,
         ...playerFace.toJson().map(
           (key, value) => MapEntry(key, value?.toString() ?? ''),
         ),

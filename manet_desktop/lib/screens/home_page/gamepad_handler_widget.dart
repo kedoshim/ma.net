@@ -8,6 +8,7 @@ import 'package:manet_desktop/widgets/player_face_indicator.dart';
 import 'package:manet_desktop/services/sound_effect_service.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
+import 'dart:async';
 import 'qr_code_container.dart';
 
 class UIScale {
@@ -29,7 +30,244 @@ class DragData {
   DragData({required this.device, required this.source, this.slotIndex});
 }
 
+
 void _playHoverSound() => SoundEffectService.instance.playHover();
+
+class DisconnectTimerWidget extends StatefulWidget {
+  final double reservedUntil;
+  final UIScale scale;
+
+  const DisconnectTimerWidget({
+    super.key,
+    required this.reservedUntil,
+    required this.scale,
+  });
+
+  @override
+  State<DisconnectTimerWidget> createState() => _DisconnectTimerWidgetState();
+}
+
+class _DisconnectTimerWidgetState extends State<DisconnectTimerWidget> {
+  Timer? _timer;
+  late int _timeLeft;
+
+  @override
+  void initState() {
+    super.initState();
+    _calculateTimeLeft();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _calculateTimeLeft();
+        });
+      }
+    });
+  }
+
+  void _calculateTimeLeft() {
+    final nowSeconds = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    final diff = widget.reservedUntil - nowSeconds;
+    _timeLeft = math.max(0, diff.round());
+    if (_timeLeft <= 0) {
+      _timer?.cancel();
+    }
+  }
+
+  @override
+  void didUpdateWidget(DisconnectTimerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reservedUntil != widget.reservedUntil) {
+      _calculateTimeLeft();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_timeLeft <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final minutes = _timeLeft ~/ 60;
+    final seconds = _timeLeft % 60;
+    final String timeStr;
+    if (minutes == 0) {
+      timeStr = '$seconds';
+    } else {
+      timeStr = '$minutes:${seconds.toString().padLeft(2, '0')}';
+    }
+
+    return Text(
+      timeStr,
+      style: AppTheme.bodyMedium.copyWith(
+        fontFamily: 'momo',
+        fontSize: widget.scale.eighth * 0.75,
+        color: AppColors.textPrimary.withValues(alpha: 0.6),
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+class DisappearingDeviceWidget extends StatefulWidget {
+  final DeviceModel device;
+  final UIScale scale;
+  final VoidCallback onComplete;
+
+  const DisappearingDeviceWidget({
+    super.key,
+    required this.device,
+    required this.scale,
+    required this.onComplete,
+  });
+
+  @override
+  State<DisappearingDeviceWidget> createState() => _DisappearingDeviceWidgetState();
+}
+
+class _DisappearingDeviceWidgetState extends State<DisappearingDeviceWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  bool _spawnedParticles = false;
+  final List<_Particle> _particles = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        widget.onComplete();
+      }
+    });
+
+    _controller.addListener(() {
+      if (_controller.value >= 0.3 && !_spawnedParticles) {
+        _spawnedParticles = true;
+        _generateParticles();
+      }
+      setState(() {});
+    });
+
+    _controller.forward();
+    SoundEffectService.instance.playPlayerJoinPop();
+  }
+
+  void _generateParticles() {
+    final random = math.Random();
+    final count = 10;
+    for (int i = 0; i < count; i++) {
+      final angle = (i * (2 * math.pi / count)) + (random.nextDouble() * 0.3 - 0.15);
+      final speed = 60.0 + random.nextDouble() * 60.0;
+      _particles.add(_Particle(
+        angle: angle,
+        speed: speed,
+        size: 6.0 + random.nextDouble() * 6.0,
+      ));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _controller.value;
+
+    double scaleX = 1.0;
+    double scaleY = 1.0;
+    double opacity = 1.0;
+
+    if (progress < 0.3) {
+      final t = progress / 0.3;
+      scaleX = 1.0 + (0.15 * t);
+      scaleY = 1.0 - (0.25 * t);
+    } else if (progress < 0.6) {
+      final t = (progress - 0.3) / 0.3;
+      scaleX = 1.15 - (0.45 * t);
+      scaleY = 0.75 + (0.45 * t);
+    } else {
+      final t = (progress - 0.6) / 0.4;
+      scaleX = 0.7 * (1.0 - t);
+      scaleY = 1.2 * (1.0 - t);
+      opacity = 1.0 - t;
+    }
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        if (_spawnedParticles)
+          ..._particles.map((p) {
+            final pProgress = ((progress - 0.3) / 0.7).clamp(0.0, 1.0);
+            final distance = p.speed * pProgress;
+            final dx = math.cos(p.angle) * distance;
+            final dy = math.sin(p.angle) * distance;
+            final pOpacity = (1.0 - pProgress).clamp(0.0, 1.0);
+            final pSize = p.size * (1.0 - pProgress * 0.5);
+
+            return Positioned(
+              left: (widget.scale.slot / 2) + dx - (pSize / 2),
+              top: (widget.scale.slot / 2) + dy - (pSize / 2),
+              child: Opacity(
+                opacity: pOpacity,
+                child: Container(
+                  width: pSize,
+                  height: pSize,
+                  decoration: BoxDecoration(
+                    color: widget.device.color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          }),
+
+        if (opacity > 0.0)
+          Center(
+            child: Opacity(
+              opacity: opacity,
+              child: Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..scale(scaleX, scaleY),
+                child: PlayerFaceIndicator(
+                  face: widget.device.face,
+                  size: widget.scale.half,
+                  roundedSquare: false,
+                  opacity: 1.0,
+                  scale: 0.9,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Particle {
+  final double angle;
+  final double speed;
+  final double size;
+
+  const _Particle({
+    required this.angle,
+    required this.speed,
+    required this.size,
+  });
+}
 
 class AdaptiveStageLayout extends StatelessWidget {
   final ConnectionSnapshot? connectionSnapshot;
@@ -358,7 +596,7 @@ class ControllerSlotsGrid extends StatelessWidget {
   }
 }
 
-class ControllerSlotWidget extends StatelessWidget {
+class ControllerSlotWidget extends StatefulWidget {
   final int index;
   final SlotModel slotModel;
   final UIScale scale;
@@ -369,6 +607,27 @@ class ControllerSlotWidget extends StatelessWidget {
     required this.slotModel,
     required this.scale,
   });
+
+  @override
+  State<ControllerSlotWidget> createState() => _ControllerSlotWidgetState();
+}
+
+class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
+  DeviceModel? _disappearingDevice;
+
+  @override
+  void didUpdateWidget(covariant ControllerSlotWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldDev = oldWidget.slotModel.device;
+    final newDev = widget.slotModel.device;
+    if (oldDev != null && newDev == null) {
+      setState(() {
+        _disappearingDevice = oldDev;
+      });
+    } else if (newDev != null) {
+      _disappearingDevice = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -382,17 +641,17 @@ class ControllerSlotWidget extends StatelessWidget {
       onAcceptWithDetails: (details) {
         final data = details.data;
         if (data.source == DragSource.pool) {
-          if (slotModel.device == null) {
-            state.assignDevice(data.device!, index);
+          if (widget.slotModel.device == null) {
+            state.assignDevice(data.device!, widget.index);
           } else {
-            state.replaceSlotDevice(data.device!, index);
+            state.replaceSlotDevice(data.device!, widget.index);
           }
         } else if (data.source == DragSource.slot) {
-          if (data.slotIndex == index) return;
-          if (slotModel.device == null) {
-            state.moveDevice(data.slotIndex!, index);
+          if (data.slotIndex == widget.index) return;
+          if (widget.slotModel.device == null) {
+            state.moveDevice(data.slotIndex!, widget.index);
           } else {
-            state.swapDevices(data.slotIndex!, index);
+            state.swapDevices(data.slotIndex!, widget.index);
           }
         }
 
@@ -407,16 +666,16 @@ class ControllerSlotWidget extends StatelessWidget {
           curve: Curves.elasticOut,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            width: scale.slot,
-            height: scale.slot,
+            width: widget.scale.slot,
+            height: widget.scale.slot,
             decoration: BoxDecoration(
               color: AppColors.lightColor,
-              borderRadius: BorderRadius.circular(scale.eighth),
+              borderRadius: BorderRadius.circular(widget.scale.eighth),
               border: Border.all(
                 color: isHovered
                     ? AppColors.highlightColor
                     : AppTheme.primaryText,
-                width: isHovered ? scale.eighth / 3 : scale.eighth / 4,
+                width: isHovered ? widget.scale.eighth / 3 : widget.scale.eighth / 4,
               ),
               boxShadow: isHovered
                   ? [
@@ -430,21 +689,33 @@ class ControllerSlotWidget extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                if (slotModel.device != null)
+                if (_disappearingDevice != null)
                   Positioned.fill(
-                    child: slotModel.device!.connected
+                    child: DisappearingDeviceWidget(
+                      device: _disappearingDevice!,
+                      scale: widget.scale,
+                      onComplete: () {
+                        setState(() {
+                          _disappearingDevice = null;
+                        });
+                      },
+                    ),
+                  )
+                else if (widget.slotModel.device != null)
+                  Positioned.fill(
+                    child: widget.slotModel.device!.connected
                         ? Draggable<DragData>(
                             dragAnchorStrategy: (draggable, context, position) =>
                                 const Offset(28.0, 28.0),
                             data: DragData(
-                              device: slotModel.device,
+                              device: widget.slotModel.device,
                               source: DragSource.slot,
-                              slotIndex: index,
+                              slotIndex: widget.index,
                             ),
                             feedback: MouseRegion(
                               cursor: SystemMouseCursors.grab,
                               child: _buildDragFeedback(
-                                slotModel.device!,
+                                widget.slotModel.device!,
                                 56.0,
                                 false,
                               ),
@@ -454,17 +725,17 @@ class ControllerSlotWidget extends StatelessWidget {
                               cursor: SystemMouseCursors.click,
                               child: Center(
                                 child: DeviceJoinPopEffect(
-                                  device: slotModel.device!,
+                                  device: widget.slotModel.device!,
                                   child: DropBounceEffect(
-                                    key: ValueKey('drop_${slotModel.device!.id}'),
+                                    key: ValueKey('drop_${widget.slotModel.device!.id}'),
                                     child: DeviceInputIndicator(
-                                      device: slotModel.device!,
+                                      device: widget.slotModel.device!,
                                       input:
                                           state.getInputState(
-                                            slotModel.device!.id,
+                                            widget.slotModel.device!.id,
                                           ) ??
                                           DeviceInputState.idle(),
-                                      size: scale.half,
+                                      size: widget.scale.half,
                                       isOnPool: false,
                                     ),
                                   ),
@@ -474,15 +745,15 @@ class ControllerSlotWidget extends StatelessWidget {
                           )
                         : Center(
                             child: DeviceJoinPopEffect(
-                              device: slotModel.device!,
+                              device: widget.slotModel.device!,
                               child: DropBounceEffect(
-                                key: ValueKey('drop_${slotModel.device!.id}'),
+                                key: ValueKey('drop_${widget.slotModel.device!.id}'),
                                 child: DeviceInputIndicator(
-                                  device: slotModel.device!,
+                                  device: widget.slotModel.device!,
                                   input:
-                                      state.getInputState(slotModel.device!.id) ??
+                                      state.getInputState(widget.slotModel.device!.id) ??
                                       DeviceInputState.idle(),
-                                  size: scale.half,
+                                  size: widget.scale.half,
                                   isOnPool: false,
                                 ),
                               ),
@@ -490,31 +761,31 @@ class ControllerSlotWidget extends StatelessWidget {
                           ),
                   ),
                 Positioned(
-                  top: scale.eighth / 2,
-                  left: scale.eighth / 2,
+                  top: widget.scale.eighth / 2,
+                  left: widget.scale.eighth / 2,
+                  right: widget.scale.eighth / 2,
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
                     children: [
                       Text(
-                        'p${index + 1}',
+                        'p${widget.index + 1}',
                         style: AppTheme.bodyMedium.copyWith(
                           fontFamily: 'momo',
-                          fontSize: scale.eighth,
+                          fontSize: widget.scale.eighth,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                      if (slotModel.device != null &&
-                          !slotModel.device!.connected)
-                        Padding(
-                          padding: EdgeInsets.only(left: scale.eighth / 3),
-                          child: Text(
-                            'offline',
-                            style: AppTheme.bodyMedium.copyWith(
-                              fontFamily: 'momo',
-                              fontSize: scale.eighth * 0.7,
-                              color: AppTheme.primaryText.withValues(alpha: 0.5),
-                            ),
-                          ),
-                        ),
+                      if (widget.slotModel.device != null &&
+                          !widget.slotModel.device!.connected &&
+                          widget.slotModel.device!.reservedUntil != null)
+                        DisconnectTimerWidget(
+                          reservedUntil: widget.slotModel.device!.reservedUntil!,
+                          scale: widget.scale,
+                        )
+                      else
+                        const SizedBox.shrink(),
                     ],
                   ),
                 ),
@@ -638,7 +909,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
 
                                 return Draggable<DragData>(
                                   dragAnchorStrategy:
-                                      (draggable, context, position) => const Offset(28.0, 28.0),
+                                      (draggable, context, position) => const Offset(45.0, 45.0),
                                   data: DragData(
                                     device: device,
                                     source: DragSource.pool,
@@ -647,7 +918,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                     cursor: SystemMouseCursors.move,
                                     child: _buildDragFeedback(
                                       device,
-                                      56.0,
+                                      90.0,
                                       true,
                                     ),
                                   ),
@@ -656,7 +927,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                     child: DeviceInputIndicator(
                                       device: device,
                                       input: inputState,
-                                      size: 56.0,
+                                      size: 90.0,
                                       isOnPool: true,
                                     ),
                                   ),
@@ -669,7 +940,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                         child: DeviceInputIndicator(
                                           device: device,
                                           input: inputState,
-                                          size: 56.0,
+                                          size: 90.0,
                                           isOnPool: true,
                                         ),
                                       ),
@@ -771,22 +1042,50 @@ class _DynamicDragFeedbackState extends State<DynamicDragFeedback>
             child: child,
           );
         },
-        child: Container(
-          decoration: BoxDecoration(
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: widget.size * 0.2,
-                spreadRadius: widget.size * 0.05,
+        child: SizedBox(
+          width: widget.size * 1.8,
+          height: widget.size * 1.8,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: widget.size * 0.2,
+                        spreadRadius: widget.size * 0.05,
+                      ),
+                    ],
+                  ),
+                  child: PlayerFaceIndicator(
+                    face: widget.device.face,
+                    size: widget.size,
+                    roundedSquare: true,
+                    faceTranslateX: _faceOffset.dx,
+                    faceTranslateY: _faceOffset.dy,
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 4.0,
+                left: 0,
+                right: 0,
+                child: Text(
+                  widget.device.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontFamily: 'momo_sans',
+                    fontSize: widget.size * 0.15,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.primaryText.withValues(alpha: 0.8),
+                  ),
+                ),
               ),
             ],
-          ),
-          child: PlayerFaceIndicator(
-            face: widget.device.face,
-            size: widget.size,
-            roundedSquare: true,
-            faceTranslateX: _faceOffset.dx,
-            faceTranslateY: _faceOffset.dy,
           ),
         ),
       ),
@@ -948,65 +1247,109 @@ class DeviceInputIndicator extends StatelessWidget {
     final isCentered = stickX == 0 && stickY == 0;
     final isPressed = input.buttonPressed;
 
-    double baseScale = isOnPool ? 0.6 : 0.9;
+    double baseScale = 0.9;
     final indicatorOpacity = device.connected ? 1.0 : 0.55;
     final borderColor = device.connected
         ? null
         : AppTheme.primaryText.withValues(alpha: 0.25);
 
-    return Center(
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: TweenAnimationBuilder<Offset>(
-          tween: Tween(
-            begin: Offset(targetTx, targetTy),
-            end: Offset(targetTx, targetTy),
-          ),
-          duration: isCentered
-              ? const Duration(milliseconds: 350)
-              : const Duration(milliseconds: 100),
-          curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
-          builder: (context, fastStick, child) {
-            return TweenAnimationBuilder<Offset>(
-              tween: Tween(
-                begin: Offset(targetTx, targetTy),
-                end: Offset(targetTx, targetTy),
-              ),
-              duration: isCentered
-                  ? const Duration(milliseconds: 450)
-                  : const Duration(milliseconds: 250),
-              curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
-              builder: (context, slowStick, child) {
-                double faceTx = (slowStick.dx - fastStick.dx) * 0.9;
-                double faceTy = (slowStick.dy - fastStick.dy) * 0.9;
+    final faceWidget = SizedBox(
+      width: size,
+      height: size,
+      child: TweenAnimationBuilder<Offset>(
+        tween: Tween(
+          begin: Offset(targetTx, targetTy),
+          end: Offset(targetTx, targetTy),
+        ),
+        duration: isCentered
+            ? const Duration(milliseconds: 350)
+            : const Duration(milliseconds: 100),
+        curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
+        builder: (context, fastStick, child) {
+          return TweenAnimationBuilder<Offset>(
+            tween: Tween(
+              begin: Offset(targetTx, targetTy),
+              end: Offset(targetTx, targetTy),
+            ),
+            duration: isCentered
+                ? const Duration(milliseconds: 450)
+                : const Duration(milliseconds: 250),
+            curve: isCentered ? Curves.elasticOut : Curves.easeOutCubic,
+            builder: (context, slowStick, child) {
+              double faceTx = (slowStick.dx - fastStick.dx) * 0.9;
+              double faceTy = (slowStick.dy - fastStick.dy) * 0.9;
 
-                return Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.identity()
-                    ..translate(fastStick.dx, fastStick.dy)
-                    ..rotateZ(angle)
-                    ..scaleByDouble(stretch, squash, 1, 1)
-                    ..rotateZ(-angle),
-                  child: PlayerFaceIndicator(
-                    face: device.face,
-                    size: size,
-                    roundedSquare: isOnPool,
-                    scale: baseScale,
-                    opacity: indicatorOpacity,
-                    translateX: 0,
-                    translateY: 0,
-                    faceTranslateX: faceTx,
-                    faceTranslateY: faceTy,
-                    pressed: isPressed,
-                    borderColor: borderColor,
-                  ),
-                );
-              },
-            );
-          },
+              return Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..translate(fastStick.dx, fastStick.dy)
+                  ..rotateZ(angle)
+                  ..scaleByDouble(stretch, squash, 1, 1)
+                  ..rotateZ(-angle),
+                child: PlayerFaceIndicator(
+                  face: device.face,
+                  size: size,
+                  roundedSquare: isOnPool,
+                  scale: baseScale,
+                  opacity: indicatorOpacity,
+                  translateX: 0,
+                  translateY: 0,
+                  faceTranslateX: faceTx,
+                  faceTranslateY: faceTy,
+                  pressed: isPressed,
+                  borderColor: borderColor,
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+
+    final nameWidget = SizedBox(
+      width: isOnPool ? 90.0 : size * 1.6,
+      child: Text(
+        device.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: AppTheme.bodyMedium.copyWith(
+          fontFamily: 'momo_sans',
+          fontSize: isOnPool ? 13 : size * 0.15,
+          fontWeight: FontWeight.w500,
+          color: AppTheme.primaryText.withValues(alpha: 0.8),
         ),
       ),
     );
+
+    if (isOnPool) {
+      return SizedBox(
+        width: 90.0,
+        height: 130.0,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [faceWidget, nameWidget],
+        ),
+      );
+    } else {
+      return SizedBox(
+        width: size * 1.8,
+        height: size * 1.8,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Center(
+              child: faceWidget,
+            ),
+            Positioned(
+              bottom: 4.0,
+              left: 0,
+              right: 0,
+              child: nameWidget,
+            ),
+          ],
+        ),
+      );
+    }
   }
 }

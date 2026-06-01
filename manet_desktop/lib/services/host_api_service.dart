@@ -18,6 +18,7 @@ class DeviceModel {
   final String? type;
   final bool connected;
   final PlayerFaceData face;
+  final double? reservedUntil;
 
   DeviceModel({
     required this.id,
@@ -26,6 +27,7 @@ class DeviceModel {
     this.type,
     required this.connected,
     required this.face,
+    this.reservedUntil,
   });
 
   factory DeviceModel.fromJson(Map<String, dynamic> json) {
@@ -39,6 +41,7 @@ class DeviceModel {
       type: json['type'],
       connected: json['connected'] != false,
       face: PlayerFaceData.fromJson(json, fallbackColor: color),
+      reservedUntil: (json['reservedUntil'] as num?)?.toDouble(),
     );
   }
 }

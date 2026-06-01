@@ -28,9 +28,11 @@ async def notify_device_unassigned(manager, device_id):
         await ws.send_json({
             "type": "unassigned"
         })
+        name = manager.connected_devices.get(device_id, {}).get("name", "unknown")
         LOG.info(
-            "Unassigned device %s",
-            device_id
+            "Unassigned device %s (%s)",
+            device_id,
+            name
         )
     except Exception as e:
         LOG.error("Failed to notify device unassigned: %s", e)

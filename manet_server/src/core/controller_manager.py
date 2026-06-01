@@ -116,23 +116,59 @@ class ControllerManager:
             if slot.controller_type == "x360"
         )
     
-    def register_device(self, device_id, player_name=None, customization=None):
+    def register_device(self, device_id, player_name=None, customization=None, lang="pt"):
+        if not player_name or player_name.strip() == "":
+            if device_id in self.connected_devices:
+                player_name = self.connected_devices[device_id].get("name")
+            else:
+                from src.core.name_generator import NameGenerator
+                player_name = NameGenerator.generate(lang)
+
         identity = self.update_device_identity(device_id, customization)
         self.connected_devices[device_id] = {
             "deviceId": device_id,
-            "name": player_name or device_id,
+            "name": player_name,
             "color": identity["color"],
             "faceText": identity["faceText"],
             "faceRotation": identity["faceRotation"],
             "presetId": identity.get("presetId"),
             "connected": True,
         }
-        LOGGER.info("Registered device %s name=%s", device_id, player_name)
+        LOGGER.info("Registered device %s (%s)", device_id, player_name)
 
     def unregister_device(self, device_id):
+        device = self.connected_devices.get(device_id)
+        name = device.get("name") if device else "unknown"
         self.connected_devices.pop(device_id, None)
         self.release_mouse_mode(device_id)
-        LOGGER.info("Unregistered device %s", device_id)
+        LOGGER.info("Unregistered device %s (%s)", device_id, name)
+
+    def update_player_name(self, device_id: str, new_name: str):
+        if device_id in self.connected_devices:
+            self.connected_devices[device_id]["name"] = new_name
+        
+        slot = self.get_slot_by_device(device_id)
+        if slot is not None:
+            slot.player_name = new_name
+            
+        LOGGER.info("Player %s changed display name to %s", device_id, new_name)
+
+    def get_resolved_player_name(self, device_id: str) -> str:
+        if not device_id:
+            return ""
+        if device_id in self.connected_devices:
+            name = self.connected_devices[device_id].get("name")
+            if name:
+                return name
+        
+        from src.core.name_generator import NameGenerator
+        generated_name = NameGenerator.generate("pt")
+        self.connected_devices[device_id] = {
+            "deviceId": device_id,
+            "name": generated_name,
+            "connected": False,
+        }
+        return generated_name
 
     def _create_empty_slot(self, index):
         LOGGER.info("[LIFECYCLE] Creating empty slot at index=%d, controller_type_config=%s", index, self.config.controller_type)
@@ -159,21 +195,21 @@ class ControllerManager:
             slot_index = self.device_map[device_id]
             slot = self.slots[slot_index]
             slot.connected = True
-            slot.player_name = player_name or slot.player_name
+            slot.player_name = player_name or slot.player_name or self.get_resolved_player_name(device_id)
             self._apply_identity_to_slot(slot, device_id)
             slot.reserved_until = 0
-            LOGGER.info("Re-assigned device %s to existing slot %s (reservation reclaimed)", device_id, slot.slot_id)
+            LOGGER.info("Re-assigned device %s (%s) to existing slot %s (reservation reclaimed)", device_id, slot.player_name, slot.slot_id)
             return slot
 
         for slot in self.slots:
             if slot.is_available():
                 slot.assigned_device_id = device_id
-                slot.player_name = player_name
+                slot.player_name = player_name or self.get_resolved_player_name(device_id)
                 slot.connected = True
                 slot.reserved_until = 0
                 self._apply_identity_to_slot(slot, device_id)
                 self.device_map[device_id] = slot.slot_id
-                LOGGER.info("Assigned device %s to available slot %s", device_id, slot.slot_id)
+                LOGGER.info("Assigned device %s (%s) to available slot %s", device_id, slot.player_name, slot.slot_id)
                 return slot
 
         if self.config.auto_expand_slots:
@@ -191,7 +227,7 @@ class ControllerManager:
         slot = self._create_empty_slot(len(self.slots))
 
         slot.assigned_device_id = device_id
-        slot.player_name = player_name
+        slot.player_name = player_name or self.get_resolved_player_name(device_id)
         slot.connected = True
         self._apply_identity_to_slot(slot, device_id)
 
@@ -204,7 +240,7 @@ class ControllerManager:
         slot.connected = False
         if slot.assigned_device_id:
             self.unregister_device_ws(slot.assigned_device_id)
-            LOGGER.info("Disconnected device %s from slot %s, reservation started until %f", slot.assigned_device_id, slot_id, time.time() + self.config.slot_reservation_timeout)
+            LOGGER.info("Disconnected device %s (%s) from slot %s, reservation started until %f", slot.assigned_device_id, slot.player_name, slot_id, time.time() + self.config.slot_reservation_timeout)
         slot.reserved_until = (
             time.time() +
             self.config.slot_reservation_timeout
@@ -222,7 +258,7 @@ class ControllerManager:
             self.move_slot(slot_a, slot_b)
             return
 
-        LOGGER.info("Swapping assignments between slot %s and slot %s", slot_a, slot_b)
+        LOGGER.info("Swapping assignments between slot %s (%s) and slot %s (%s)", slot_a, a.player_name, slot_b, b.player_name)
 
         a.assigned_device_id, b.assigned_device_id = (
             b.assigned_device_id,
@@ -269,7 +305,7 @@ class ControllerManager:
             if old_id == device_id:
                 slot.connected = True
                 slot.reserved_until = 0
-                LOGGER.info("Device %s reclaimed its own slot %s manually", device_id, slot_index)
+                LOGGER.info("Device %s (%s) reclaimed its own slot %s manually", device_id, slot.player_name, slot_index)
                 return slot
             if old_id in self.device_map:
                 del self.device_map[old_id]
@@ -279,12 +315,12 @@ class ControllerManager:
             })
             
         slot.assigned_device_id = device_id
-        slot.player_name = player_name or device_id
+        slot.player_name = player_name or self.get_resolved_player_name(device_id)
         slot.connected = True
         slot.reserved_until = 0
         self._apply_identity_to_slot(slot, device_id)
         self.device_map[device_id] = slot_index
-        LOGGER.info("Manually assigned device %s to slot %s (reservation cleared)", device_id, slot_index)
+        LOGGER.info("Manually assigned device %s (%s) to slot %s (reservation cleared)", device_id, slot.player_name, slot_index)
         self.notify_device(device_id, {
             "type": "assigned",
             "slot": slot_index,
@@ -299,7 +335,7 @@ class ControllerManager:
         slot = self.slots[slot_index]
         if slot.assigned_device_id is not None:
             device_id = slot.assigned_device_id
-            LOGGER.info("Unassigned device %s from slot %s", device_id, slot_index)
+            LOGGER.info("Unassigned device %s (%s) from slot %s", device_id, slot.player_name, slot_index)
             slot.connected = False
             slot.assigned_device_id = None
             slot.player_name = None
@@ -324,7 +360,8 @@ class ControllerManager:
     def request_mouse_mode(self, device_id):
         if self.mouse_mode_owner_device_id in (None, device_id):
             self.mouse_mode_owner_device_id = device_id
-            LOGGER.info("Device %s acquired mouse mode", device_id)
+            name = self.connected_devices.get(device_id, {}).get("name", "unknown")
+            LOGGER.info("Device %s (%s) acquired mouse mode", device_id, name)
             return True
         return False
 
@@ -333,7 +370,8 @@ class ControllerManager:
             return False
 
         self.mouse_mode_owner_device_id = None
-        LOGGER.info("Device %s released mouse mode", device_id)
+        name = self.connected_devices.get(device_id, {}).get("name", "unknown")
+        LOGGER.info("Device %s (%s) released mouse mode", device_id, name)
         return True
 
     def is_mouse_mode_owner(self, device_id):
@@ -372,7 +410,7 @@ class ControllerManager:
         if from_slot.assigned_device_id is None:
             return
 
-        LOGGER.info("Moving device %s from slot %s to %s", from_slot.assigned_device_id, from_index, to_index)
+        LOGGER.info("Moving device %s (%s) from slot %s to %s", from_slot.assigned_device_id, from_slot.player_name, from_index, to_index)
 
         if to_slot.assigned_device_id is not None:
             if to_slot.connected:
@@ -414,7 +452,7 @@ class ControllerManager:
         return [
             {
                 'deviceId': slot.assigned_device_id,
-                'name': slot.player_name or slot.assigned_device_id,
+                'name': slot.player_name or self.get_resolved_player_name(slot.assigned_device_id),
                 'connected': slot.connected,
                 **self.get_slot_identity(slot),
             }
@@ -441,8 +479,9 @@ class ControllerManager:
                 'slot': i,
                 'device': {
                     'deviceId': slot.assigned_device_id,
-                    'name': slot.player_name or slot.assigned_device_id,
+                    'name': slot.player_name or self.get_resolved_player_name(slot.assigned_device_id),
                     'connected': slot.connected,
+                    'reservedUntil': slot.reserved_until,
                     **self.get_slot_identity(slot),
                 } if slot.assigned_device_id else None,
                 'type': slot.controller_type

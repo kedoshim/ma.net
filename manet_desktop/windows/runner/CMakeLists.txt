@@ -27,6 +27,15 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MINOR=${FLUTT
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_PATCH=${FLUTTER_VERSION_PATCH}")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTTER_VERSION_BUILD}")
 
+# Explicitly pass version definitions to the Windows Resource Compiler
+set_property(SOURCE "Runner.rc" PROPERTY COMPILE_DEFINITIONS
+  "FLUTTER_VERSION=\"${FLUTTER_VERSION}\""
+  "FLUTTER_VERSION_MAJOR=${FLUTTER_VERSION_MAJOR}"
+  "FLUTTER_VERSION_MINOR=${FLUTTER_VERSION_MINOR}"
+  "FLUTTER_VERSION_PATCH=${FLUTTER_VERSION_PATCH}"
+  "FLUTTER_VERSION_BUILD=${FLUTTER_VERSION_BUILD}"
+)
+
 # Disable Windows macros that collide with C++ standard library functions.
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 

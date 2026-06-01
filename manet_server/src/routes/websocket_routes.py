@@ -34,6 +34,7 @@ class WebSocketRoutes:
 
         device_id = request.query.get("deviceId")
         player_name = request.query.get("name")
+        lang = request.query.get("lang", "pt")
         customization = {
             "color": request.query.get("color"),
             "faceText": request.query.get("faceText"),
@@ -50,31 +51,35 @@ class WebSocketRoutes:
             return ws
 
         self.connection_service.mark_success_for_ip(local_ip)
-        self.manager.register_device(device_id, player_name, customization)
+        self.manager.register_device(device_id, player_name, customization, lang=lang)
+        resolved_name = self.manager.connected_devices[device_id]["name"]
         self.manager.register_device_ws(device_id, ws)
-        slot = self.manager.assign_slot(device_id, player_name)
+        slot = self.manager.assign_slot(device_id, resolved_name)
 
         if slot is None:
             await ws.send_json({
                 "type": "unassigned",
                 "total_slots": len(self.manager.slots),
+                "name": resolved_name,
                 **self.manager.get_device_identity(device_id),
             })
-            LOG.info("Device %s connected but unassigned (pool)", device_id)
+            LOG.info("Device %s (%s) connected but unassigned (pool)", device_id, resolved_name)
         else:
             slot.connected = True
 
             LOG.info("Player connected")
-            LOG.info("Player %d connected (%s)", slot.slot_id + 1, player_name or device_id)
+            LOG.info("Player %d connected (%s)", slot.slot_id + 1, resolved_name)
             LOG.info(
-                "Assigned slot %s to %s",
+                "Assigned slot %s (%s) to %s",
                 slot.slot_id,
+                resolved_name,
                 peer
             )
 
             await ws.send_json({
                 "type": "assigned",
                 "slot": slot.slot_id,
+                "name": resolved_name,
                 **self.manager.get_slot_identity(slot),
                 "total_slots": len(self.manager.slots)
             })
@@ -171,6 +176,12 @@ class WebSocketRoutes:
                     elif msg_type == "face_update":
                         self.manager.update_device_identity(device_id, data)
                         self.admin_panel.broadcast_update()
+                    elif msg_type == "name_update":
+                        new_name = data.get("name")
+                        if new_name:
+                            new_name = new_name[:10]
+                            self.manager.update_player_name(device_id, new_name)
+                            self.admin_panel.broadcast_update()
                     elif msg_type == "set_mouse_mode":
                         wants_active = data.get("active") == True
 
@@ -235,13 +246,15 @@ class WebSocketRoutes:
                         asyncio.create_task(_send_pulse())
 
                     elif msg_type == "request_slot":
-                        LOG.info("Device %s requested slot", device_id)
-                        slot = self.manager.assign_slot(device_id, player_name)
+                        dev_name = self.manager.connected_devices.get(device_id, {}).get("name", player_name)
+                        LOG.info("Device %s (%s) requested slot", device_id, dev_name)
+                        slot = self.manager.assign_slot(device_id, dev_name)
                         if slot is not None:
                             slot.connected = True
                             await ws.send_json({
                                 "type": "assigned",
                                 "slot": slot.slot_id,
+                                "name": slot.player_name,
                                 **self.manager.get_slot_identity(slot),
                                 "total_slots": len(self.manager.slots)
                             })
@@ -249,6 +262,7 @@ class WebSocketRoutes:
                             await ws.send_json({
                                 "type": "unassigned",
                                 "total_slots": len(self.manager.slots),
+                                "name": dev_name,
                                 **self.manager.get_device_identity(device_id),
                             })
                         self.admin_panel.broadcast_update()
@@ -260,15 +274,16 @@ class WebSocketRoutes:
 
         finally:
             current_slot = self.manager.get_slot_by_device(device_id)
+            dev_name = self.manager.connected_devices.get(device_id, {}).get("name")
             if current_slot:
-                LOG.info("Player %d disconnected", current_slot.slot_id + 1)
+                LOG.info("Player %d (%s) disconnected", current_slot.slot_id + 1, current_slot.player_name)
                 current_slot.last_stick_x = 0
                 current_slot.last_stick_y = 0
                 current_slot.last_input_at = time.time()
                 reset_slot_gamepad(current_slot)
                 self.manager.disconnect_slot(current_slot.slot_id)
             else:
-                LOG.info("Unassigned device disconnected")
+                LOG.info("Unassigned device %s (%s) disconnected", device_id, dev_name or "unknown")
 
             self.manager.unregister_device(device_id)
             self.manager.unregister_device_ws(device_id)

@@ -20,9 +20,10 @@ async def stick_watchdog(manager, admin_panel=None):
                 if slot.assigned_device_id is not None and not slot.connected:
                     if slot.reserved_until > 0 and now >= slot.reserved_until:
                         LOGGER.info(
-                            "Reservation expired for slot %d (device %s)",
+                            "Reservation expired for slot %d (device %s - %s)",
                             slot.slot_id,
                             slot.assigned_device_id,
+                            slot.player_name,
                         )
                         manager.unassign_slot(slot.slot_id)
                         res_expired = True

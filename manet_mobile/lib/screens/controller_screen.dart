@@ -110,6 +110,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   PlayerFaceData _playerFace = PlayerFaceData.random();
   ControllerBrandingMode _brandingMode = ControllerBrandingMode.xinput;
   bool _hasVacantSlot = false;
+  String? playerName;
 
   bool get _isTemporaryModeActive =>
       _activeMode != ControllerScreenMode.gameplay;
@@ -461,11 +462,13 @@ class _ControllerScreenState extends State<ControllerScreen>
         case 'assigned':
           _updatePlayerSlot(data['slot'], colorHex: data['color']);
           _ingestFaceData(data);
+          _ingestNameData(data['name']);
           HapticsManager.instance.connectionPulse();
           break;
         case 'slot_changed':
           _updatePlayerSlot(data['slot'], colorHex: data['color']);
           _ingestFaceData(data);
+          _ingestNameData(data['name']);
           break;
         case 'slot_status':
           setState(() {
@@ -487,6 +490,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           break;
         case 'unassigned':
           _clearPlayerSlot();
+          _ingestNameData(data['name']);
           break;
         case 'rumble':
           _handleRumble(data);
@@ -609,6 +613,24 @@ class _ControllerScreenState extends State<ControllerScreen>
     _send({'type': 'face_update', ...nextFace.toJson()});
   }
 
+  void _ingestNameData(String? name) {
+    if (name == null || name.isEmpty) return;
+    if (playerName == null || playerName!.isEmpty) {
+      setState(() {
+        playerName = name;
+      });
+      PreferencesService.instance.savePlayerName(name);
+    }
+  }
+
+  Future<void> _updatePlayerName(String name) async {
+    setState(() {
+      playerName = name;
+    });
+    await PreferencesService.instance.savePlayerName(name);
+    _send({'type': 'name_update', 'name': name});
+  }
+
   void _handleFaceTextChanged(String value) {
     final sanitized = sanitizeFaceText(value);
     if (sanitized != value) {
@@ -667,6 +689,9 @@ class _ControllerScreenState extends State<ControllerScreen>
       _mouseModeOwnerName = null;
     });
     _send({'type': 'set_mouse_mode', 'active': false});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _faceFocusNode.requestFocus();
+    });
   }
 
   void _exitTemporaryMode() {
@@ -817,6 +842,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       _playerFace = await prefs.getOrCreatePlayerFace();
       _faceController.text = _playerFace.faceText;
       playerColor = _playerFace.color;
+      playerName = await prefs.getPlayerName();
       final modeIndex = await prefs.getMovementMode();
       _movementMode = MovementMode.values[modeIndex];
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
@@ -919,6 +945,8 @@ class _ControllerScreenState extends State<ControllerScreen>
         return ControllerDefaultView(
           brandingMode: _brandingMode,
           movementMode: _movementMode,
+          playerName: playerName,
+          onNameChanged: _updatePlayerName,
           onStickChanged: _onStickChanged,
           onStickRelease: _onStickRelease,
           onButtonStateChanged: _sendButton,

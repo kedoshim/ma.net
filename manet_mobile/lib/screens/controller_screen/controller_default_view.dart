@@ -40,7 +40,12 @@ class ControllerDefaultView extends StatefulWidget {
     required this.buttonOrder,
     required this.hasVacantSlot,
     required this.onJoinGame,
+    required this.playerName,
+    required this.onNameChanged,
   });
+
+  final String? playerName;
+  final ValueChanged<String> onNameChanged;
 
   final ControllerBrandingMode brandingMode;
   final MovementMode movementMode;
@@ -179,7 +184,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                               fontFamily: 'momo',
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 10),
                           InkWell(
                             onTap: widget.onOpenFaceEditor,
                             borderRadius: BorderRadius.circular(24),
@@ -189,6 +194,11 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                               roundedSquare: true,
                               borderColor: AppColors.textPrimary,
                             ),
+                          ),
+                          const SizedBox(height: 6),
+                          _PlayerNameWidget(
+                            name: widget.playerName,
+                            onNameChanged: widget.onNameChanged,
                           ),
                         ],
                       ),
@@ -549,6 +559,182 @@ class _CenterAction extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+void _showEditNameDialog(BuildContext context, String currentName, ValueChanged<String> onNameChanged) {
+  final controller = TextEditingController(text: currentName == 'Sem Nome' ? '' : currentName);
+
+  showDialog(
+    context: context,
+    useRootNavigator: false,
+    barrierDismissible: true,
+    barrierColor: Colors.black54,
+    builder: (context) {
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          width: 320,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.screenBackground,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.textPrimary,
+              width: AppColors.borderThickness,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Editar Apelido',
+                style: TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.textPrimary.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.textPrimary.withValues(alpha: 0.2),
+                    width: 2,
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: TextField(
+                  controller: controller,
+                  maxLength: 20,
+                  textAlign: TextAlign.center,
+                  autofocus: true,
+                  style: const TextStyle(
+                    fontFamily: 'momo_sans',
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    border: InputBorder.none,
+                    hintText: 'Digite o apelido...',
+                    isDense: true,
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (value) {
+                    final trimmed = value.trim();
+                    if (trimmed.isNotEmpty) {
+                      onNameChanged(trimmed);
+                    }
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Cancelar',
+                      style: TextStyle(
+                        fontFamily: 'momo',
+                        color: AppColors.textPrimary.withValues(alpha: 0.6),
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.highlightColor,
+                      foregroundColor: AppColors.textPrimary,
+                      elevation: 0,
+                      side: BorderSide(
+                        color: AppColors.textPrimary,
+                        width: AppColors.borderThickness / 2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    ),
+                    onPressed: () {
+                      final trimmed = controller.text.trim();
+                      if (trimmed.isNotEmpty) {
+                        onNameChanged(trimmed);
+                      }
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text(
+                      'Salvar',
+                      style: TextStyle(
+                        fontFamily: 'momo',
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _PlayerNameWidget extends StatelessWidget {
+  final String? name;
+  final ValueChanged<String> onNameChanged;
+
+  const _PlayerNameWidget({
+    super.key,
+    required this.name,
+    required this.onNameChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = name ?? 'Sem Nome';
+
+    return GestureDetector(
+      onTap: () => _showEditNameDialog(context, displayName, onNameChanged),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.textPrimary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          displayName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontFamily: 'momo_sans',
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+            decoration: TextDecoration.underline,
+            decorationStyle: TextDecorationStyle.dashed,
+          ),
+        ),
       ),
     );
   }
