@@ -179,9 +179,16 @@ class WebSocketRoutes:
                     elif msg_type == "name_update":
                         new_name = data.get("name")
                         if new_name:
-                            new_name = new_name[:10]
+                            new_name = new_name[:15]
                             self.manager.update_player_name(device_id, new_name)
                             self.admin_panel.broadcast_update()
+                    elif msg_type == "request_random_name":
+                        from src.core.name_generator import NameGenerator
+                        random_name = NameGenerator.generate("pt")
+                        await ws.send_json({
+                            "type": "random_name_response",
+                            "name": random_name
+                        })
                     elif msg_type == "set_mouse_mode":
                         wants_active = data.get("active") == True
 

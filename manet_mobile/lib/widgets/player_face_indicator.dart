@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/player_face.dart';
 
-class PlayerFaceIndicator extends StatelessWidget {
+class PlayerFaceIndicator extends StatefulWidget {
   final PlayerFaceData face;
   final double size;
   final bool roundedSquare;
@@ -33,55 +33,114 @@ class PlayerFaceIndicator extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final borderRadius = roundedSquare
-        ? BorderRadius.circular(size * 0.24)
-        : BorderRadius.circular(size);
+  State<PlayerFaceIndicator> createState() => _PlayerFaceIndicatorState();
+}
 
-    return Opacity(
-      opacity: opacity,
-      child: AnimatedScale(
-        scale: pressed ? scale * 0.82 : scale,
-        duration: Duration(milliseconds: pressed ? 60 : 240),
-        curve: pressed ? Curves.easeOut : Curves.elasticOut,
-        child: Transform.translate(
-          offset: Offset(translateX, translateY),
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: face.color,
-              borderRadius: borderRadius,
-              border: borderColor != null
-                  ? Border.all(
-                      color: borderColor!,
-                      width: math.max(1.5, size * 0.04),
-                    )
-                  : null,
-            ),
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: size * 0.12,
-                  vertical: size * 0.14,
+class _PlayerFaceIndicatorState extends State<PlayerFaceIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _wobbleController;
+  late Animation<double> _wobbleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _wobbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _wobbleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: -0.12)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 20.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -0.12, end: 0.10)
+            .chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 30.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.10, end: -0.05)
+            .chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 25.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -0.05, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
+        weight: 25.0,
+      ),
+    ]).animate(_wobbleController);
+    _wobbleController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _wobbleController.dispose();
+    super.dispose();
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!_wobbleController.isAnimating) {
+      _wobbleController.forward(from: 0.0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderRadius = widget.roundedSquare
+        ? BorderRadius.circular(widget.size * 0.24)
+        : BorderRadius.circular(widget.size);
+
+    return Listener(
+      onPointerDown: _handlePointerDown,
+      child: Opacity(
+        opacity: widget.opacity,
+        child: AnimatedScale(
+          scale: widget.pressed ? widget.scale * 0.82 : widget.scale,
+          duration: Duration(milliseconds: widget.pressed ? 60 : 240),
+          curve: widget.pressed ? Curves.easeOut : Curves.elasticOut,
+          child: Transform.rotate(
+            angle: _wobbleAnimation.value,
+            child: Transform.translate(
+              offset: Offset(widget.translateX, widget.translateY),
+              child: Container(
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  color: widget.face.color,
+                  borderRadius: borderRadius,
+                  border: widget.borderColor != null
+                      ? Border.all(
+                          color: widget.borderColor!,
+                          width: math.max(1.5, widget.size * 0.04),
+                        )
+                      : null,
                 ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Transform.translate(
-                    offset: Offset(faceTranslateX, faceTranslateY),
-                    child: Transform.rotate(
-                      angle: _rotationAngle(face.rotation),
-                      child: Text(
-                        face.faceText,
-                        maxLines: 1,
-                        softWrap: false,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'monomaniac',
-                          fontFamilyFallback: const ['noto_symbols'],
-                          fontSize: size * 0.7,
-                          height: 0.9,
-                          color: Colors.black.withValues(alpha: 0.8),
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.size * 0.12,
+                      vertical: widget.size * 0.14,
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Transform.translate(
+                        offset: Offset(widget.faceTranslateX, widget.faceTranslateY),
+                        child: Transform.rotate(
+                          angle: _rotationAngle(widget.face.rotation),
+                          child: Text(
+                            widget.face.faceText,
+                            maxLines: 1,
+                            softWrap: false,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'monomaniac',
+                              fontFamilyFallback: const ['noto_symbols'],
+                              fontSize: widget.size * 0.7,
+                              height: 0.9,
+                              color: Colors.black.withValues(alpha: 0.8),
+                            ),
+                          ),
                         ),
                       ),
                     ),

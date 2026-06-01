@@ -1,0 +1,35 @@
+{
+  "pattern": "{adjective} {noun}",
+  "nouns": [
+    "Capybara",
+    "Armadillo",
+    "Crocodile",
+    "Popcorn",
+    "Cake",
+    "Macaw",
+    "Tapioca",
+    "Toucan",
+    "Jaguar",
+    "Dolphin",
+    "Sloth",
+    "Wolf",
+    "Cheeseball",
+    "Parrot"
+  ],
+  "adjectives": [
+    "Dancing",
+    "Tropical",
+    "Supreme",
+    "Fast",
+    "Radical",
+    "Shiny",
+    "Crazy",
+    "Elastic",
+    "Speedy",
+    "Festive",
+    "Magical",
+    "Golden",
+    "Explosive",
+    "Stellar"
+  ]
+}

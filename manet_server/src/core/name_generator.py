@@ -44,41 +44,62 @@ class NameGenerator:
 
     @classmethod
     def generate(cls, lang: str) -> str:
-        config = cls.load_config(lang)
-        
-        # Determine pattern
-        patterns = config.get("patterns")
-        if isinstance(patterns, list) and patterns:
-            pattern = random.choice(patterns)
-        else:
-            pattern = config.get("pattern", "{noun} {adjective}")
+        # Try up to 20 times to generate a name under 15 characters
+        for _ in range(20):
+            config = cls.load_config(lang)
+            
+            # Determine pattern
+            patterns = config.get("patterns")
+            if isinstance(patterns, list) and patterns:
+                pattern = random.choice(patterns)
+            else:
+                pattern = config.get("pattern", "{noun} {adjective}")
 
-        # Build format dictionary from all lists in config
-        format_dict = {}
-        for key, value in config.items():
-            if isinstance(value, list) and value:
-                # Plural key (e.g. "nouns") to singular placeholder (e.g. "noun")
-                if key.endswith("s"):
-                    singular = key[:-1]
+            # Build format dictionary from all lists in config
+            format_dict = {}
+            for key, value in config.items():
+                if isinstance(value, list) and value:
+                    # Plural key (e.g. "nouns", "nouns_m", "nouns_f") to singular placeholder
+                    # Let's handle keys like "nouns_m" -> "noun_m"
+                    singular = key
+                    if key.endswith("_m") or key.endswith("_f"):
+                        gender_suffix = key[-2:]  # "_m" or "_f"
+                        base = key[:-2]
+                        if base.endswith("s"):
+                            singular = base[:-1] + gender_suffix
+                    elif key.endswith("s"):
+                        singular = key[:-1]
+                    
                     format_dict[singular] = random.choice(value)
-                else:
-                    # In case they use singular key
-                    format_dict[key] = random.choice(value)
 
-        # Fallback defaults for standard placeholders in case lists are missing
-        if "noun" not in format_dict:
-            format_dict["noun"] = "Capivara"
-        if "adjective" not in format_dict:
-            format_dict["adjective"] = "Radical"
-        if "animal" not in format_dict:
-            format_dict["animal"] = "Capivara"
-        if "food" not in format_dict:
-            format_dict["food"] = "Pipoca"
-        if "name" not in format_dict:
-            format_dict["name"] = "Zezinho"
+            # Fallback defaults for standard and gendered placeholders in case lists are missing
+            for suffix in ["", "_m", "_f"]:
+                if f"noun{suffix}" not in format_dict:
+                    format_dict[f"noun{suffix}"] = "Capivara" if suffix == "_f" else "Pastel"
+                if f"adjective{suffix}" not in format_dict:
+                    format_dict[f"adjective{suffix}"] = "Nervosa" if suffix == "_f" else "Radical"
+                if f"animal{suffix}" not in format_dict:
+                    format_dict[f"animal{suffix}"] = "Capivara" if suffix == "_f" else "Tatu"
+                if f"food{suffix}" not in format_dict:
+                    format_dict[f"food{suffix}"] = "Pipoca" if suffix == "_f" else "Pastel"
+                if f"name{suffix}" not in format_dict:
+                    format_dict[f"name{suffix}"] = "Cida" if suffix == "_f" else "Zezinho"
 
+            try:
+                name = pattern.format(**format_dict)
+                if len(name) <= 15:
+                    return name
+            except Exception as e:
+                LOGGER.error(f"Failed to format pattern '{pattern}': {e}")
+                fallback = f"{format_dict['noun']} {format_dict['adjective']}"
+                if len(fallback) <= 15:
+                    return fallback
+
+        # Last resort fallback: generate one last time and truncate to 15 characters
         try:
-            return pattern.format(**format_dict)
-        except Exception as e:
-            LOGGER.error(f"Failed to format pattern '{pattern}': {e}")
-            return f"{format_dict['noun']} {format_dict['adjective']}"
+            config = cls.load_config(lang)
+            # Pick a short fallback
+            return f"{format_dict['noun']} {format_dict['adjective']}"[:15].strip()
+        except:
+            return "Capivara"
+
