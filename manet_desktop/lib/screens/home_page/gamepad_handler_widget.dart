@@ -1323,12 +1323,41 @@ class DeviceInputIndicator extends StatelessWidget {
     );
 
     if (isOnPool) {
-      return SizedBox(
-        width: 90.0,
-        height: 130.0,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [faceWidget, nameWidget],
+      return Tooltip(
+        message: device.name,
+        preferBelow: false,
+        verticalOffset: 60.0,
+        textStyle: const TextStyle(
+          fontFamily: 'momo_sans',
+          color: AppColors.textPrimary,
+          fontSize: 13.0,
+          fontWeight: FontWeight.bold,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.lightColor,
+          borderRadius: BorderRadius.circular(8.0),
+          border: Border.all(
+            color: AppColors.textPrimary,
+            width: AppColors.borderThickness / 2,
+          ),
+        ),
+        child: SizedBox(
+          width: 90.0,
+          height: 130.0,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Center(
+                child: faceWidget,
+              ),
+              Positioned(
+                bottom: 4.0,
+                left: 0,
+                right: 0,
+                child: nameWidget,
+              ),
+            ],
+          ),
         ),
       );
     } else {

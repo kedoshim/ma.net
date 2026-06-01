@@ -41,7 +41,8 @@ class _PlayerFaceIndicatorState extends State<PlayerFaceIndicator>
     with TickerProviderStateMixin {
   late AnimationController _squishController;
   late AnimationController _popController;
-
+  late AnimationController _wobbleController;
+  late Animation<double> _wobbleAnimation;
   double _capturedSquishAmount = 0.0;
 
   @override
@@ -58,6 +59,34 @@ class _PlayerFaceIndicatorState extends State<PlayerFaceIndicator>
       duration: const Duration(milliseconds: 1000),
     );
     _popController.addListener(() => setState(() {}));
+
+    _wobbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+    _wobbleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: -0.12)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 20.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -0.12, end: 0.10)
+            .chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 30.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.10, end: -0.05)
+            .chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 25.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -0.05, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
+        weight: 25.0,
+      ),
+    ]).animate(_wobbleController);
+    _wobbleController.addListener(() => setState(() {}));
 
     if (widget.pressed) {
       _squishController.forward();
@@ -84,7 +113,14 @@ class _PlayerFaceIndicatorState extends State<PlayerFaceIndicator>
   void dispose() {
     _squishController.dispose();
     _popController.dispose();
+    _wobbleController.dispose();
     super.dispose();
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!_wobbleController.isAnimating) {
+      _wobbleController.forward(from: 0.0);
+    }
   }
 
   @override
@@ -122,15 +158,19 @@ class _PlayerFaceIndicatorState extends State<PlayerFaceIndicator>
 
     final finalScale = widget.scale * scaleModifier;
 
-    return Opacity(
-      opacity: widget.opacity,
-      child: Transform.scale(
-        scale: finalScale,
-        child: Transform.translate(
-          offset: Offset(widget.translateX, widget.translateY),
-          child: Container(
-            width: widget.size,
-            height: widget.size,
+    return Listener(
+      onPointerDown: _handlePointerDown,
+      child: Opacity(
+        opacity: widget.opacity,
+        child: Transform.scale(
+          scale: finalScale,
+          child: Transform.rotate(
+            angle: _wobbleAnimation.value,
+            child: Transform.translate(
+              offset: Offset(widget.translateX, widget.translateY),
+              child: Container(
+                width: widget.size,
+                height: widget.size,
             decoration: BoxDecoration(
               color: widget.face.color,
               borderRadius: borderRadius,
@@ -172,9 +212,11 @@ class _PlayerFaceIndicatorState extends State<PlayerFaceIndicator>
                 ),
               ),
             ),
+            ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

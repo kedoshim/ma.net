@@ -42,10 +42,12 @@ class ControllerDefaultView extends StatefulWidget {
     required this.onJoinGame,
     required this.playerName,
     required this.onNameChanged,
+    required this.onRequestRandomName,
   });
 
   final String? playerName;
   final ValueChanged<String> onNameChanged;
+  final Future<String> Function() onRequestRandomName;
 
   final ControllerBrandingMode brandingMode;
   final MovementMode movementMode;
@@ -199,6 +201,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                           _PlayerNameWidget(
                             name: widget.playerName,
                             onNameChanged: widget.onNameChanged,
+                            onRequestRandomName: widget.onRequestRandomName,
                           ),
                         ],
                       ),
@@ -564,8 +567,14 @@ class _CenterAction extends StatelessWidget {
   }
 }
 
-void _showEditNameDialog(BuildContext context, String currentName, ValueChanged<String> onNameChanged) {
+void _showEditNameDialog(
+  BuildContext context,
+  String currentName,
+  ValueChanged<String> onNameChanged,
+  Future<String> Function() onRequestRandomName,
+) {
   final controller = TextEditingController(text: currentName == 'Sem Nome' ? '' : currentName);
+  bool isLoading = false;
 
   showDialog(
     context: context,
@@ -573,128 +582,170 @@ void _showEditNameDialog(BuildContext context, String currentName, ValueChanged<
     barrierDismissible: true,
     barrierColor: Colors.black54,
     builder: (context) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        child: Container(
-          width: 320,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppColors.screenBackground,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.textPrimary,
-              width: AppColors.borderThickness,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Editar Apelido',
-                style: TextStyle(
-                  fontFamily: 'momo',
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            child: Container(
+              width: 320,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.screenBackground,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
                   color: AppColors.textPrimary,
+                  width: AppColors.borderThickness,
                 ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.textPrimary.withValues(alpha: 0.2),
-                    width: 2,
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: TextField(
-                  controller: controller,
-                  maxLength: 20,
-                  textAlign: TextAlign.center,
-                  autofocus: true,
-                  style: const TextStyle(
-                    fontFamily: 'momo_sans',
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    border: InputBorder.none,
-                    hintText: 'Digite o apelido...',
-                    isDense: true,
-                  ),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (value) {
-                    final trimmed = value.trim();
-                    if (trimmed.isNotEmpty) {
-                      onNameChanged(trimmed);
-                    }
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      'Cancelar',
-                      style: TextStyle(
-                        fontFamily: 'momo',
-                        color: AppColors.textPrimary.withValues(alpha: 0.6),
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.highlightColor,
-                      foregroundColor: AppColors.textPrimary,
-                      elevation: 0,
-                      side: BorderSide(
-                        color: AppColors.textPrimary,
-                        width: AppColors.borderThickness / 2,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    ),
-                    onPressed: () {
-                      final trimmed = controller.text.trim();
-                      if (trimmed.isNotEmpty) {
-                        onNameChanged(trimmed);
-                      }
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text(
-                      'Salvar',
-                      style: TextStyle(
-                        fontFamily: 'momo',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 12,
+                    offset: Offset(0, 6),
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Editar Apelido',
+                    style: TextStyle(
+                      fontFamily: 'momo',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.textPrimary.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.textPrimary.withValues(alpha: 0.2),
+                        width: 2,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            maxLength: 15,
+                            textAlign: TextAlign.center,
+                            autofocus: true,
+                            style: const TextStyle(
+                              fontFamily: 'momo_sans',
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                            decoration: const InputDecoration(
+                              counterText: '',
+                              border: InputBorder.none,
+                              hintText: 'Digite o apelido...',
+                              isDense: true,
+                            ),
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (value) {
+                              final trimmed = value.trim();
+                              if (trimmed.isNotEmpty) {
+                                onNameChanged(trimmed);
+                              }
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.textPrimary,
+                                ),
+                              )
+                            : GestureDetector(
+                                onTap: () async {
+                                  setDialogState(() {
+                                    isLoading = true;
+                                  });
+                                  final randomName = await onRequestRandomName();
+                                  if (randomName.isNotEmpty) {
+                                    controller.text = randomName;
+                                    controller.selection = TextSelection.collapsed(
+                                      offset: randomName.length,
+                                    );
+                                  }
+                                  setDialogState(() {
+                                    isLoading = false;
+                                  });
+                                },
+                                child: const Icon(
+                                  Icons.casino_outlined,
+                                  color: AppColors.textPrimary,
+                                  size: 28,
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          'Cancelar',
+                          style: TextStyle(
+                            fontFamily: 'momo',
+                            color: AppColors.textPrimary.withValues(alpha: 0.6),
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.highlightColor,
+                          foregroundColor: AppColors.textPrimary,
+                          elevation: 0,
+                          side: const BorderSide(
+                            color: AppColors.textPrimary,
+                            width: AppColors.borderThickness / 2,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        ),
+                        onPressed: () {
+                          final trimmed = controller.text.trim();
+                          if (trimmed.isNotEmpty) {
+                            onNameChanged(trimmed);
+                          }
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text(
+                          'Salvar',
+                          style: TextStyle(
+                            fontFamily: 'momo',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       );
     },
   );
@@ -703,11 +754,13 @@ void _showEditNameDialog(BuildContext context, String currentName, ValueChanged<
 class _PlayerNameWidget extends StatelessWidget {
   final String? name;
   final ValueChanged<String> onNameChanged;
+  final Future<String> Function() onRequestRandomName;
 
   const _PlayerNameWidget({
     super.key,
     required this.name,
     required this.onNameChanged,
+    required this.onRequestRandomName,
   });
 
   @override
@@ -715,7 +768,12 @@ class _PlayerNameWidget extends StatelessWidget {
     final displayName = name ?? 'Sem Nome';
 
     return GestureDetector(
-      onTap: () => _showEditNameDialog(context, displayName, onNameChanged),
+      onTap: () => _showEditNameDialog(
+        context,
+        displayName,
+        onNameChanged,
+        onRequestRandomName,
+      ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(

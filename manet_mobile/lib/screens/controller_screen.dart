@@ -86,6 +86,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   late final NetworkDiscoveryService _discoveryService;
   StreamSubscription? _discoverySubscription;
   late final TextEditingController _faceController;
+  Completer<String>? _randomNameCompleter;
 
   ControllerConnectionState _connectionState =
       ControllerConnectionState.searching;
@@ -491,6 +492,12 @@ class _ControllerScreenState extends State<ControllerScreen>
         case 'layout_preset':
           _handleLayoutPresetUpdate(data);
           break;
+        case 'random_name_response':
+          final newName = data['name'] as String?;
+          if (newName != null && _randomNameCompleter != null && !_randomNameCompleter!.isCompleted) {
+            _randomNameCompleter!.complete(newName);
+          }
+          break;
       }
     } catch (_) {}
   }
@@ -619,6 +626,15 @@ class _ControllerScreenState extends State<ControllerScreen>
     });
     await PreferencesService.instance.savePlayerName(name);
     _send({'type': 'name_update', 'name': name});
+  }
+
+  Future<String> _requestRandomName() {
+    _randomNameCompleter = Completer<String>();
+    _send({'type': 'request_random_name'});
+    return _randomNameCompleter!.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => '',
+    );
   }
 
   void _handleFaceTextChanged(String value) {
@@ -1134,6 +1150,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           movementMode: _movementMode,
           playerName: playerName,
           onNameChanged: _updatePlayerName,
+          onRequestRandomName: _requestRandomName,
           onStickChanged: _onStickChanged,
           onStickRelease: _onStickRelease,
           onButtonStateChanged: _sendButton,
