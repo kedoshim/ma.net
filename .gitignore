@@ -406,6 +406,6 @@ GEMINI.md
 *.swift
 *.exe
 *.spec
-manet_server/data/
+controller_presets.json
 manet_network_service.exe
 release-temp/
