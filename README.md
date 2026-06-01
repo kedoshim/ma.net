@@ -18,8 +18,6 @@ Built for:
     
 -   local co-op
     
--   improvised LAN parties
-    
 -   chaotic friend groups
     
 
@@ -67,13 +65,11 @@ Ma.net is designed for:
     
 -   Real-time low-latency input
     
--   Player slots and reconnect system
-    
 -   Animated player faces and reactions
     
 -   Controller themes and customization
     
--   Mouse mode support
+-   A mode to simulate a mouse
     
 -   Visual feedback and haptics
     
@@ -106,32 +102,20 @@ So the phone becomes the controller.
 
 # How it works
 
-1.  Open Ma.net on the PC
+1. Connect everyone in the same network
+
+2.  Open ma.net on the PC
     
-2.  A QR code appears on screen
+3.  A QR code appears on screen
     
-3.  Players scan the QR code
+4.  Players scan the QR code
     
-4.  Phones instantly connect as controllers
+5.  Phones instantly connect as controllers
     
-5.  Start playing
+6.  Start playing
     
 
 That’s it.
-
----
-
-# Philosophy
-
-Ma.net is not trying to replace traditional controllers.
-
-It is not cloud gaming.  
-It is not game streaming.  
-It is not a hardcore remapping tool.
-
-The goal is simple:
-
-Make social multiplayer easier and more fun.
 
 ---
 
@@ -144,9 +128,6 @@ Ma.net is currently focused on:
 -   Local network multiplayer
     
 -   Android + browser controllers
-    
-
-Remote multiplayer support is planned as an experimental future feature using peer-to-peer networking.
 
 ---
 
@@ -191,18 +172,8 @@ Download:
 Planned features include:
 
 -   Remote play (P2P input only)
-    
--   Better hotspot support
-    
--   Improved onboarding
-    
--   Social launcher mode
-    
--   Game presets/layouts
-    
--   Expanded haptics and reactions
-    
--   Better slot management
+
+-   Social game selection mode
     
 
 ---
