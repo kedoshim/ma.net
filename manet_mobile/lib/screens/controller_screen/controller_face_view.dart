@@ -10,9 +10,7 @@ class ControllerFaceView extends StatelessWidget {
   const ControllerFaceView({
     super.key,
     required this.playerFace,
-    required this.faceController,
-    required this.faceFocusNode,
-    required this.onFaceChanged,
+    required this.onEditFaceText,
     required this.onColorSelected,
     required this.onRotationSelected,
     required this.onPresetSelected,
@@ -25,9 +23,7 @@ class ControllerFaceView extends StatelessWidget {
   });
 
   final PlayerFaceData playerFace;
-  final TextEditingController faceController;
-  final FocusNode faceFocusNode;
-  final ValueChanged<String> onFaceChanged;
+  final VoidCallback onEditFaceText;
   final ValueChanged<Color> onColorSelected;
   final ValueChanged<PlayerFaceRotation> onRotationSelected;
   final ValueChanged<PlayerFacePreset> onPresetSelected;
@@ -40,8 +36,6 @@ class ControllerFaceView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTyping = faceFocusNode.hasFocus;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -51,7 +45,7 @@ class ControllerFaceView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               GestureDetector(
-                onTap: () => faceFocusNode.requestFocus(),
+                onTap: onEditFaceText,
                 child: PlayerFaceIndicator(
                   face: playerFace,
                   size: 160,
@@ -62,26 +56,24 @@ class ControllerFaceView extends StatelessWidget {
             ],
           ),
         ),
-        if (!isTyping) ...[
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: ControllerModeHub(
-              icon: Icons.close_rounded,
-              title: 'rostinho',
-              onTap: onExit,
-              totalSlots: totalSlots,
-              selectedPlayerIndex: playerIndex,
-              status: status,
-              playerFace: playerFace,
-              centerPulseExpanded: centerPulseExpanded,
-              onPulseCycleEnd: onPulseCycleEnd,
-            ),
-          ),
-        ],
         const SizedBox(width: 12),
         Expanded(
-          flex: isTyping ? 5 : 4,
+          flex: 2,
+          child: ControllerModeHub(
+            icon: Icons.close_rounded,
+            title: 'rostinho',
+            onTap: onExit,
+            totalSlots: totalSlots,
+            selectedPlayerIndex: playerIndex,
+            status: status,
+            playerFace: playerFace,
+            centerPulseExpanded: centerPulseExpanded,
+            onPulseCycleEnd: onPulseCycleEnd,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 4,
           child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -96,29 +88,27 @@ class ControllerFaceView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (!isTyping) ...[
-                    const Text(
-                      'cores',
-                      style: TextStyle(fontFamily: 'momo', fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: playerFacePalette
-                          .map(
-                            (color) => _ColorSwatch(
-                              color: color,
-                              isSelected:
-                                  color.toARGB32() ==
-                                  playerFace.color.toARGB32(),
-                              onTap: () => onColorSelected(color),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                  const Text(
+                    'cores',
+                    style: TextStyle(fontFamily: 'momo', fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: playerFacePalette
+                        .map(
+                          (color) => _ColorSwatch(
+                            color: color,
+                            isSelected:
+                                color.toARGB32() ==
+                                playerFace.color.toARGB32(),
+                            onTap: () => onColorSelected(color),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 16),
                   Wrap(
                     spacing: 24,
                     runSpacing: 16,
@@ -126,122 +116,107 @@ class ControllerFaceView extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (!isTyping) ...[
-                            const Text(
-                              'rosto',
-                              style: TextStyle(
-                                fontFamily: 'momo',
-                                fontSize: 16,
-                              ),
+                          const Text(
+                            'rosto',
+                            style: TextStyle(
+                              fontFamily: 'momo',
+                              fontSize: 16,
                             ),
-                            const SizedBox(height: 8),
-                          ],
-                          Container(
-                            constraints: BoxConstraints(
-                              minWidth: 120,
-                              maxWidth: isTyping ? 320 : 200,
-                            ),
-                            child: TextField(
-                              focusNode: faceFocusNode,
-                              controller: faceController,
-                              autofocus: true,
-                              textAlign: TextAlign.center,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.deny(
-                                  RegExp(r'[\r\n\t]'),
-                                ),
-                              ],
-                              style: TextStyle(
-                                fontFamily: 'monomaniac',
-                                fontSize: isTyping ? 48 : 22,
-                                color: AppColors.textPrimary,
+                          ),
+                          const SizedBox(height: 8),
+                          GestureDetector(
+                            onTap: onEditFaceText,
+                            child: Container(
+                              width: 140,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
                               ),
-                              textInputAction: TextInputAction.done,
-                              onSubmitted: (_) => faceFocusNode.unfocus(),
-                              onTapOutside: (_) => faceFocusNode.unfocus(),
-                              decoration: InputDecoration(
-                                counterText: '',
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: isTyping ? 20 : 12,
-                                  vertical: isTyping ? 24 : 12,
+                              decoration: BoxDecoration(
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.05,
                                 ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    isTyping ? 20 : 14,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: AppColors.textPrimary.withValues(
+                                    alpha: 0.2,
                                   ),
-                                  borderSide: BorderSide(
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    playerFace.faceText,
+                                    style: const TextStyle(
+                                      fontFamily: 'monomaniac',
+                                      fontSize: 22,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(
+                                    Icons.edit,
+                                    size: 18,
                                     color: AppColors.textPrimary,
-                                    width: isTyping ? 3 : 2,
                                   ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    isTyping ? 20 : 14,
-                                  ),
-                                  borderSide: BorderSide(
-                                    color: AppColors.highlightColor,
-                                    width: isTyping ? 4 : 2,
-                                  ),
-                                ),
+                                ],
                               ),
-                              onChanged: onFaceChanged,
                             ),
                           ),
                         ],
                       ),
-                      if (!isTyping)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'rotacao',
-                              style: TextStyle(
-                                fontFamily: 'momo',
-                                fontSize: 16,
-                              ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'rotacao',
+                            style: TextStyle(
+                              fontFamily: 'momo',
+                              fontSize: 16,
                             ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: PlayerFaceRotation.values
-                                  .map(
-                                    (rotation) => _RotationButton(
-                                      face: playerFace,
-                                      rotation: rotation,
-                                      isSelected:
-                                          playerFace.rotation == rotation,
-                                      onTap: () => onRotationSelected(rotation),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: PlayerFaceRotation.values
+                                .map(
+                                  (rotation) => _RotationButton(
+                                    face: playerFace,
+                                    rotation: rotation,
+                                    isSelected:
+                                        playerFace.rotation == rotation,
+                                    onTap: () => onRotationSelected(rotation),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                  if (!isTyping) ...[
-                    const SizedBox(height: 16),
-                    const Text(
-                      'presets',
-                      style: TextStyle(fontFamily: 'momo', fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: playerFacePresets
-                          .map(
-                            (preset) => _PresetChip(
-                              previewFace: playerFace.applyPreset(preset),
-                              preset: preset,
-                              isSelected: playerFace.presetId == preset.id,
-                              onTap: () => onPresetSelected(preset),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
+                  const SizedBox(height: 16),
+                  const Text(
+                    'presets',
+                    style: TextStyle(fontFamily: 'momo', fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: playerFacePresets
+                        .map(
+                          (preset) => _PresetChip(
+                            previewFace: playerFace.applyPreset(preset),
+                            preset: preset,
+                            isSelected: playerFace.presetId == preset.id,
+                            onTap: () => onPresetSelected(preset),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ],
               ),
             ),

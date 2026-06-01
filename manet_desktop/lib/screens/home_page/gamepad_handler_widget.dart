@@ -918,7 +918,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                     cursor: SystemMouseCursors.move,
                                     child: _buildDragFeedback(
                                       device,
-                                      90.0,
+                                      widget.scale.quarter,
                                       true,
                                     ),
                                   ),
@@ -927,7 +927,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                     child: DeviceInputIndicator(
                                       device: device,
                                       input: inputState,
-                                      size: 90.0,
+                                      size: widget.scale.quarter,
                                       isOnPool: true,
                                     ),
                                   ),
@@ -940,7 +940,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                         child: DeviceInputIndicator(
                                           device: device,
                                           input: inputState,
-                                          size: 90.0,
+                                          size: widget.scale.quarter,
                                           isOnPool: true,
                                         ),
                                       ),
@@ -1342,7 +1342,7 @@ class DeviceInputIndicator extends StatelessWidget {
               child: faceWidget,
             ),
             Positioned(
-              bottom: 4.0,
+              bottom: size / 16,
               left: 0,
               right: 0,
               child: nameWidget,

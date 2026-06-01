@@ -15,6 +15,7 @@ import '../services/preferences_service.dart';
 import '../services/websocket_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/options_popup.dart';
+import '../widgets/player_face_indicator.dart';
 import 'controller_screen/controller_default_view.dart';
 import 'controller_screen/controller_edit_view.dart';
 import 'controller_screen/controller_face_view.dart';
@@ -85,7 +86,6 @@ class _ControllerScreenState extends State<ControllerScreen>
   late final NetworkDiscoveryService _discoveryService;
   StreamSubscription? _discoverySubscription;
   late final TextEditingController _faceController;
-  late final FocusNode _faceFocusNode;
 
   ControllerConnectionState _connectionState =
       ControllerConnectionState.searching;
@@ -124,7 +124,6 @@ class _ControllerScreenState extends State<ControllerScreen>
   void initState() {
     super.initState();
     _faceController = TextEditingController(text: _playerFace.faceText);
-    _faceFocusNode = FocusNode()..addListener(_handleFaceFocusChanged);
     _discoveryService = NetworkDiscoveryService();
 
     WidgetsBinding.instance.addObserver(this);
@@ -139,9 +138,6 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _faceFocusNode
-      ..removeListener(_handleFaceFocusChanged)
-      ..dispose();
     _faceController.dispose();
     ControllerConnectionManager.instance.disconnect();
     _discoveryService.stopScanning();
@@ -154,12 +150,6 @@ class _ControllerScreenState extends State<ControllerScreen>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.detached) {
       ControllerConnectionManager.instance.disconnect();
-    }
-  }
-
-  void _handleFaceFocusChanged() {
-    if (mounted) {
-      setState(() {});
     }
   }
 
@@ -689,9 +679,208 @@ class _ControllerScreenState extends State<ControllerScreen>
       _mouseModeOwnerName = null;
     });
     _send({'type': 'set_mouse_mode', 'active': false});
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _faceFocusNode.requestFocus();
-    });
+  }
+
+  void _showFaceTextEditDialog() {
+    showDialog(
+      context: context,
+      useRootNavigator: false,
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (context) {
+        final mediaQuery = MediaQuery.of(context);
+        final isLandscape = mediaQuery.size.width > mediaQuery.size.height;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: isLandscape ? 16 : 40,
+                vertical: isLandscape ? 8 : 24,
+              ),
+              child: Container(
+                width: isLandscape ? 400 : 280,
+                padding: EdgeInsets.all(isLandscape ? 14 : 20),
+                decoration: BoxDecoration(
+                  color: AppColors.screenBackground,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppColors.textPrimary,
+                    width: AppColors.borderThickness,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 12,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: isLandscape
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          PlayerFaceIndicator(
+                            face: _playerFace,
+                            size: 72,
+                            roundedSquare: true,
+                            borderColor: AppColors.textPrimary,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.textPrimary.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.textPrimary.withValues(alpha: 0.2),
+                                  width: 2,
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                              child: TextField(
+                                controller: _faceController,
+                                maxLength: 3,
+                                textAlign: TextAlign.center,
+                                autofocus: true,
+                                style: const TextStyle(
+                                  fontFamily: 'monomaniac',
+                                  fontSize: 28,
+                                  color: AppColors.textPrimary,
+                                ),
+                                decoration: const InputDecoration(
+                                  counterText: '',
+                                  border: InputBorder.none,
+                                  hintText: ':-)',
+                                  isDense: true,
+                                ),
+                                textInputAction: TextInputAction.done,
+                                onChanged: (val) {
+                                  setState(() {});
+                                  _handleFaceTextChanged(val);
+                                },
+                                onSubmitted: (_) {
+                                  Navigator.of(context).pop();
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).pop(),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.highlightColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.textPrimary,
+                                  width: AppColors.borderThickness / 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.check,
+                                color: AppColors.textPrimary,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Editar Rostinho',
+                            style: TextStyle(
+                              fontFamily: 'momo',
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          PlayerFaceIndicator(
+                            face: _playerFace,
+                            size: 100,
+                            roundedSquare: true,
+                            borderColor: AppColors.textPrimary,
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.textPrimary.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.textPrimary.withValues(alpha: 0.2),
+                                width: 2,
+                              ),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            child: TextField(
+                              controller: _faceController,
+                              maxLength: 3,
+                              textAlign: TextAlign.center,
+                              autofocus: true,
+                              style: const TextStyle(
+                                fontFamily: 'monomaniac',
+                                fontSize: 32,
+                                color: AppColors.textPrimary,
+                              ),
+                              decoration: const InputDecoration(
+                                counterText: '',
+                                border: InputBorder.none,
+                                hintText: ':-)',
+                                isDense: true,
+                              ),
+                              textInputAction: TextInputAction.done,
+                              onChanged: (val) {
+                                setState(() {});
+                                _handleFaceTextChanged(val);
+                              },
+                              onSubmitted: (_) {
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.highlightColor,
+                                foregroundColor: AppColors.textPrimary,
+                                elevation: 0,
+                                side: const BorderSide(
+                                  color: AppColors.textPrimary,
+                                  width: AppColors.borderThickness / 2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text(
+                                'Salvar',
+                                style: TextStyle(
+                                  fontFamily: 'momo',
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _exitTemporaryMode() {
@@ -920,9 +1109,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       case ControllerScreenMode.face:
         return ControllerFaceView(
           playerFace: _playerFace,
-          faceController: _faceController,
-          faceFocusNode: _faceFocusNode,
-          onFaceChanged: _handleFaceTextChanged,
+          onEditFaceText: _showFaceTextEditDialog,
           onColorSelected: (color) {
             _updatePlayerFace(
               _playerFace.copyWith(color: color, clearPreset: true),
@@ -1054,24 +1241,31 @@ class _ControllerScreenState extends State<ControllerScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    return Scaffold(
-      body: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        decoration: BoxDecoration(
-          color: AppColors.screenBackground,
-          gradient: _isTemporaryModeActive
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.screenBackground,
-                    AppColors.highlightColor.withValues(alpha: 0.18),
-                    AppColors.screenBackground,
-                  ],
-                )
-              : null,
+    return PopScope(
+      canPop: _activeMode == ControllerScreenMode.gameplay,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _exitTemporaryMode();
+      },
+      child: Scaffold(
+        body: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          decoration: BoxDecoration(
+            color: AppColors.screenBackground,
+            gradient: _isTemporaryModeActive
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.screenBackground,
+                      AppColors.highlightColor.withValues(alpha: 0.18),
+                      AppColors.screenBackground,
+                    ],
+                  )
+                : null,
+          ),
+          child: Stack(children: [_buildResponsiveControllerFrame()]),
         ),
-        child: Stack(children: [_buildResponsiveControllerFrame()]),
       ),
     );
   }
