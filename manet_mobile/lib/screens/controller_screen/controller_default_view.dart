@@ -620,13 +620,6 @@ void _showEditNameDialog(
                   ? Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        PlayerFaceIndicator(
-                          face: playerFace,
-                          size: 72,
-                          roundedSquare: true,
-                          borderColor: AppColors.textPrimary,
-                        ),
-                        const SizedBox(width: 16),
                         Expanded(
                           child: Container(
                             decoration: BoxDecoration(
