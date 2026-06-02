@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 import 'onboarding_step.dart';
 import 'onboarding_illustrations.dart';
 
@@ -112,9 +113,9 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                               alpha: 0.6,
                             ),
                           ),
-                          child: const Text(
-                            'Pular',
-                            style: TextStyle(
+                          child: Text(
+                            context.l10n.home.onboardingSkip,
+                            style: const TextStyle(
                               fontFamily: 'momo',
                               fontWeight: FontWeight.bold,
                             ),
@@ -134,24 +135,21 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                   onPageChanged: (index) {
                     setState(() => _currentIndex = index);
                   },
-                  children: const [
+                  children: [
                     OnboardingStepWidget(
-                      title: 'Conecte na mesma rede',
-                      subtitle:
-                          'Seu celular e computador precisam estar na mesma rede para conversarem.',
-                      illustration: Step1Illustration(),
+                      title: context.l10n.home.onboardingStepConnectTitle,
+                      subtitle: context.l10n.home.onboardingStepConnectBody,
+                      illustration: const Step1Illustration(),
                     ),
                     OnboardingStepWidget(
-                      title: 'Aponte para o QR Code',
-                      subtitle:
-                          'Abra a câmera ou o app no celular e escaneie o código na tela do PC.',
-                      illustration: Step2Illustration(),
+                      title: context.l10n.home.onboardingStepArrangeTitle,
+                      subtitle: context.l10n.home.onboardingStepArrangeBody,
+                      illustration: const Step2Illustration(),
                     ),
                     OnboardingStepWidget(
-                      title: 'Jogue 🎉',
-                      subtitle:
-                          'Pronto! Agora é só chamar a galera, escolher seu controle e começar a jogar.',
-                      illustration: Step3Illustration(),
+                      title: context.l10n.home.onboardingStepPlayTitle,
+                      subtitle: context.l10n.home.onboardingStepPlayBody,
+                      illustration: const Step3Illustration(),
                     ),
                   ],
                 ),
@@ -173,9 +171,9 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                                   foregroundColor: AppColors.textPrimary
                                       .withValues(alpha: 0.6),
                                 ),
-                                child: const Text(
-                                  'Voltar',
-                                  style: TextStyle(
+                                child: Text(
+                                  context.l10n.home.onboardingBack,
+                                  style: const TextStyle(
                                     fontFamily: 'momo',
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -230,8 +228,8 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                           ),
                           child: Text(
                             _currentIndex == _totalPages - 1
-                                ? 'Começar'
-                                : 'Próximo',
+                                ? context.l10n.home.onboardingDone
+                                : context.l10n.home.onboardingNext,
                             style: const TextStyle(
                               fontFamily: 'momo',
                               fontWeight: FontWeight.w900,

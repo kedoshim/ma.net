@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/controller_screen.dart';
+import 'l10n/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,7 +12,14 @@ void main() async {
     DeviceOrientation.portraitUp,
   ]);
 
-  runApp(const ControllerApp());
+  final localeNotifier = LocaleNotifier();
+
+  runApp(
+    AppLocalizations(
+      notifier: localeNotifier,
+      child: const ControllerApp(),
+    ),
+  );
 }
 
 class ControllerApp extends StatelessWidget {
@@ -25,7 +33,8 @@ class ControllerApp extends StatelessWidget {
       theme: ThemeData(
         fontFamily: 'momo_sans',
       ),
+      locale: context.currentLocale,
       home: const ControllerScreen(),
     );
   }
-}
+}

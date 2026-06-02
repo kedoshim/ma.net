@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/preferences_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 
 class QRScannerScreen extends StatefulWidget {
   final VoidCallback onConnected;
@@ -53,9 +54,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text(
-          'Escanear Host',
-          style: TextStyle(fontFamily: 'momo'),
+        title: Text(
+          context.l10n.scanner.title,
+          style: const TextStyle(fontFamily: 'momo'),
         ),
         backgroundColor: Colors.black,
         foregroundColor: AppColors.textPrimary,

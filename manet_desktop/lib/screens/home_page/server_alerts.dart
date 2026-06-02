@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/juicy_widgets.dart';
+import '../../l10n/app_localizations.dart';
 
 class ServerAlert {
   final String id;
@@ -41,7 +42,7 @@ class AlertIcon extends StatelessWidget {
     }
 
     return Tooltip(
-      message: 'Avisos e Erros',
+      message: context.l10n.alerts.tooltip,
       child: JuicyIconButton(
         size: 48,
         borderRadius: 14,
@@ -82,7 +83,7 @@ class _ServerAlertsDialogState extends State<ServerAlertsDialog> {
         side: const BorderSide(color: AppColors.textPrimary, width: 4),
       ),
       title: Text(
-        'Avisos e Erros',
+        context.l10n.alerts.title,
         style: AppTheme.titleMedium.copyWith(
           color: AppColors.textPrimary,
           fontFamily: 'momo',
@@ -95,7 +96,7 @@ class _ServerAlertsDialogState extends State<ServerAlertsDialog> {
         child: widget.alerts.isEmpty
             ? Center(
                 child: Text(
-                  'Nenhum alerta.',
+                  context.l10n.alerts.noAlerts,
                   style: AppTheme.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontFamily: 'momo',
@@ -174,8 +175,8 @@ class _ServerAlertsDialogState extends State<ServerAlertsDialog> {
             ),
           ),
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text(
-            'Fechar',
+          child: Text(
+            context.l10n.common.close,
             style: TextStyle(
               fontFamily: 'momo',
               fontWeight: FontWeight.w900,

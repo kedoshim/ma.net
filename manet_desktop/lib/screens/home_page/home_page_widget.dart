@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:manet_desktop/screens/home_page/gamepad_state.dart';
 import 'package:manet_desktop/screens/home_page/gamepad_handler_widget.dart';
+import '../../l10n/app_localizations.dart';
 
 import '../../models/controller_branding.dart';
 import '../../theme/app_theme.dart';
@@ -79,8 +80,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   bool _isShowingNoNetworkDialog = false;
   int _reservationTimeoutMinutes = 5;
 
-  static const String _xinput4PlusAlertMsg =
-      'Alguns jogos podem não suportar mais de 4 controles x•input. Se tiver problemas, tente d•input.';
+  String get _xinput4PlusAlertMsg => context.l10n.alerts.xinputLimitWarning;
 
   void _syncAlerts({bool notify = true}) {
     final hasXinputAlert = _alerts.any(
@@ -175,8 +175,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       showDialog(
         context: context,
         builder: (c) => AppErrorWidget(
-          title: 'Erro ao carregar presets',
-          message: 'Falha ao carregar catálago de presets: $e',
+          title: context.l10n.error.loadPresetsErrorTitle,
+          message: context.l10n.error.loadPresetsErrorMessage(e.toString()),
           logs: st.toString(),
           onRetry: _loadPresets,
         ),
@@ -193,8 +193,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       showDialog(
         context: context,
         builder: (c) => AppErrorWidget(
-          title: 'Erro ao selecionar preset',
-          message: 'Não foi possível selecionar o preset: $e',
+          title: context.l10n.error.selectPresetErrorTitle,
+          message: context.l10n.error.selectPresetErrorMessage(e.toString()),
           logs: st.toString(),
           onRetry: () => _selectPreset(presetId),
         ),
@@ -265,7 +265,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Computador desconectado da rede',
+                  context.l10n.home.wifiOffTitle,
                   textAlign: TextAlign.center,
                   style: AppTheme.titleSmall.copyWith(
                     color: AppColors.textPrimary,
@@ -273,7 +273,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Conecte-se a uma rede para continuar usando os controles.',
+                  context.l10n.home.wifiOffBody,
                   textAlign: TextAlign.center,
                   style: AppTheme.bodyMedium.copyWith(
                     color: AppColors.textPrimary.withValues(alpha: 0.7),
@@ -305,16 +305,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
     String kindName = '';
     if (newConn.kind == 'wifi') {
-      kindName = 'Wi-Fi${networkName.isNotEmpty ? " ($networkName)" : ""}';
+      kindName = '${context.l10n.home.wifi}${networkName.isNotEmpty ? " ($networkName)" : ""}';
     } else if (newConn.kind == 'ethernet') {
-      kindName = 'Ethernet (Cabo)';
+      kindName = context.l10n.home.ethernet;
     } else if (newConn.kind == 'hotspot') {
-      kindName = 'Hotspot${networkName.isNotEmpty ? " ($networkName)" : ""}';
+      kindName = '${context.l10n.home.hotspot}${networkName.isNotEmpty ? " ($networkName)" : ""}';
     } else {
-      kindName = 'Nova Rede';
+      kindName = context.l10n.home.newNetwork;
     }
 
-    _addAlert('Rede alterada para $kindName (Endereço: ${newConn.url.replaceAll("http://", "")})');
+    _addAlert(context.l10n.alerts.networkChangedAlert(kindName, newConn.url.replaceAll("http://", "")));
 
     SoundEffectService.instance.playHover();
 
@@ -359,7 +359,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Rede alterada! :)',
+                      context.l10n.alerts.networkChangedTitle,
                       style: AppTheme.bodyMedium.copyWith(
                         fontFamily: 'momo',
                         fontWeight: FontWeight.bold,
@@ -368,7 +368,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Conexão atualizada para $kindName.',
+                      context.l10n.alerts.networkChangedBody(kindName),
                       style: AppTheme.bodyMedium.copyWith(
                         fontSize: 13,
                         color: AppColors.textPrimary.withValues(alpha: 0.8),
@@ -383,7 +383,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                   _showConnectionsSheet(context);
                 },
                 child: Text(
-                  'Ver',
+                  context.l10n.alerts.view,
                   style: AppTheme.bodyMedium.copyWith(
                     fontFamily: 'momo',
                     fontWeight: FontWeight.bold,
@@ -436,7 +436,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     final chosen = await showGeneralDialog<String?>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Selecao de modo',
+      barrierLabel: context.l10n.home.selectModeBarrierLabel,
       transitionDuration: const Duration(milliseconds: 450),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -499,8 +499,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
         showDialog(
           context: context,
           builder: (c) => AppErrorWidget(
-            title: 'Falha ao aplicar modo',
-            message: 'Falha ao aplicar modo: $e',
+            title: context.l10n.error.applyModeErrorTitle,
+            message: context.l10n.error.applyModeErrorBody(e.toString()),
             logs: st.toString(),
             onRetry: _openModeSettings,
           ),
@@ -848,7 +848,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                     ),
                                                   ),
                                                   title: Text(
-                                                    'Remover controles?',
+                                                    context.l10n.home.removeControllersTitle,
                                                     style: AppTheme.titleSmall
                                                         .copyWith(
                                                           color: AppColors
@@ -859,7 +859,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                         ),
                                                   ),
                                                   content: Text(
-                                                    'Remover controles pode desconectar jogadores atuais',
+                                                    context.l10n.home.removeControllersBody,
                                                     style: AppTheme.bodyMedium
                                                         .copyWith(
                                                           color: AppColors
@@ -874,17 +874,17 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                           ).pop(false),
                                                       style: TextButton.styleFrom(
                                                         foregroundColor:
-                                                            AppColors
-                                                                .textPrimary,
+                                                          AppColors
+                                                              .textPrimary,
                                                         padding:
                                                             const EdgeInsets.symmetric(
                                                               horizontal: 20,
                                                               vertical: 12,
                                                             ),
                                                       ),
-                                                      child: const Text(
-                                                        'Cancelar',
-                                                        style: TextStyle(
+                                                      child: Text(
+                                                        context.l10n.common.cancel,
+                                                        style: const TextStyle(
                                                           fontFamily: 'momo',
                                                           fontWeight:
                                                               FontWeight.bold,
@@ -898,11 +898,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                           ).pop(true),
                                                       style: ElevatedButton.styleFrom(
                                                         backgroundColor:
-                                                            AppColors
-                                                                .highlightColor,
+                                                          AppColors
+                                                              .highlightColor,
                                                         foregroundColor:
-                                                            AppColors
-                                                                .textPrimary,
+                                                          AppColors
+                                                              .textPrimary,
                                                         elevation: 0,
                                                         padding:
                                                             const EdgeInsets.symmetric(
@@ -921,9 +921,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                           ),
                                                         ),
                                                       ),
-                                                      child: const Text(
-                                                        'Confirmar',
-                                                        style: TextStyle(
+                                                      child: Text(
+                                                        context.l10n.common.confirm,
+                                                        style: const TextStyle(
                                                           fontFamily: 'momo',
                                                           fontWeight:
                                                               FontWeight.w900,
@@ -942,9 +942,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                             context: context,
                                             barrierDismissible: false,
                                             builder: (context) => AppErrorWidget(
-                                              title: 'Erro de Conexão',
-                                              message:
-                                                  'O servidor parou de responder ou encontrou um erro fatal.',
+                                              title: context.l10n.error.connectionErrorTitle,
+                                              message: context.l10n.error.connectionErrorMessage,
                                               logs: e.toString(),
                                               onRetry: () =>
                                                   Navigator.of(
@@ -977,9 +976,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                               context: context,
                                               builder: (c) => AppErrorWidget(
                                                 title:
-                                                    'Erro ao aplicar configurações',
+                                                    context.l10n.error.applyConfigErrorTitle,
                                                 message:
-                                                    'Falha ao aplicar as configurações no servidor: $e',
+                                                    context.l10n.error.applyConfigErrorMessage(e.toString()),
                                                 logs: st.toString(),
                                                 onRetry: () async {
                                                   Navigator.of(c).pop();

@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import '../models/controller_branding.dart';
 import '../services/host_api_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 
-String displayNameFor(ControllerPreset preset) {
+String displayNameFor(BuildContext context, ControllerPreset preset) {
   switch (preset.id) {
     case 'builtin-simple-shoulder':
-      return 'Simples';
+      return context.currentLocale.languageCode == 'pt' ? 'Simples' : 'Simple';
     case 'builtin-simple-trigger':
-      return 'Padrao';
+      return context.currentLocale.languageCode == 'pt' ? 'Padrão' : 'Standard';
     case 'builtin-full':
-      return 'Completo';
+      return context.currentLocale.languageCode == 'pt' ? 'Completo' : 'Full';
     default:
       return preset.name;
   }

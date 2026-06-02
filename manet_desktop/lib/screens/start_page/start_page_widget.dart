@@ -18,6 +18,7 @@ import '../../models/player_face.dart';
 import '../../widgets/app_error_widget.dart';
 import 'mode_selection_dialog.dart';
 import '../../widgets/juicy_widgets.dart';
+import '../../l10n/app_localizations.dart';
 
 class StartPageWidget extends StatefulWidget {
   const StartPageWidget({super.key});
@@ -99,7 +100,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AppErrorWidget(
-        title: 'Erro na Inicialização',
+        title: context.l10n.error.startupTitle,
         message: result.message,
         logs: logs,
         additionalActions: [
@@ -115,9 +116,9 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                 if (!success) {
                   showDialog(
                     context: context,
-                    builder: (_) => const AppErrorWidget(
-                      title: 'Erro de Instalação',
-                      message: 'Falha ao localizar o instalador do ViGEmBus.',
+                    builder: (_) => AppErrorWidget(
+                      title: context.l10n.error.installDriverErrorTitle,
+                      message: context.l10n.error.installDriverErrorMessage,
                     ),
                   );
                 }
@@ -131,7 +132,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                   Icon(Icons.download_rounded, size: 18, color: AppColors.screenBackground),
                   const SizedBox(width: 8),
                   Text(
-                    'Instalar Driver',
+                    context.l10n.error.installDriver,
                     style: TextStyle(
                       fontFamily: 'momo',
                       color: AppColors.screenBackground,
@@ -156,10 +157,9 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       if (port < 1024 || port > 65535) {
         showDialog(
           context: context,
-          builder: (context) => const AppErrorWidget(
-            title: 'Porta Inválida',
-            message:
-                'A porta informada não é válida. Utilize um valor entre 1024 e 65535.',
+          builder: (context) => AppErrorWidget(
+            title: context.l10n.error.invalidPortTitle,
+            message: context.l10n.error.invalidPortMessage,
           ),
         );
         return;
@@ -196,10 +196,9 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         if (!isReady) {
           showDialog(
             context: context,
-            builder: (context) => const AppErrorWidget(
-              title: 'Erro de Conexão',
-              message:
-                  'Não foi possível conectar ao servidor em execução na porta informada.',
+            builder: (context) => AppErrorWidget(
+              title: context.l10n.error.connectionErrorTitle,
+              message: context.l10n.error.connectionErrorMessage,
             ),
           );
           return;
@@ -372,7 +371,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                   bottom: 16,
                   right: 24,
                   child: Text(
-                    'v$_appVersion',
+                    context.l10n.startPage.version(_appVersion),
                     style: AppTheme.bodyMedium.copyWith(
                       fontFamily: 'momo',
                       fontSize: 14,
@@ -437,7 +436,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                     ),
                   )
                 : Text(
-                    'iniciar a festa',
+                    context.l10n.startPage.startParty,
                     style: AppTheme.titleMedium.copyWith(
                       fontFamily: 'momo',
                       fontSize: 32,
@@ -455,7 +454,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
               borderThickness: 3.0,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Text(
-                'iniciar debug',
+                context.l10n.startPage.startDebug,
                 style: AppTheme.titleMedium.copyWith(
                   fontFamily: 'momo',
                   fontSize: 20,
@@ -481,8 +480,38 @@ class _StartPageWidgetState extends State<StartPageWidget> {
             ],
           ),
           const Spacer(),
-          _buildColorSelectors(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildColorSelectors(),
+              _buildLanguageToggle(),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageToggle() {
+    final currentLocale = context.currentLocale;
+    final isEn = currentLocale.languageCode == 'en';
+
+    return JuicyButton(
+      onPressed: () {
+        SoundEffectService.instance.playThemeSelect();
+        context.setLocale(isEn ? const Locale('pt', 'BR') : const Locale('en', 'US'));
+      },
+      borderRadius: 12,
+      borderThickness: 2.0,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Text(
+        isEn ? 'EN' : 'PT',
+        style: const TextStyle(
+          fontFamily: 'momo',
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          color: AppColors.textPrimary,
+        ),
       ),
     );
   }

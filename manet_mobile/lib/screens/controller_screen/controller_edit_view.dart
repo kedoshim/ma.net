@@ -8,6 +8,7 @@ import '../../services/preferences_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/control_button.dart' hide ButtonStateCallback;
 import '../../widgets/action_buttons.dart';
+import '../../l10n/app_localizations.dart';
 import 'controller_screen_widgets.dart';
 
 class ControllerEditView extends StatefulWidget {
@@ -25,7 +26,7 @@ class ControllerEditView extends StatefulWidget {
     required this.onExit,
     required this.totalSlots,
     required this.playerIndex,
-    required this.status,
+    required this.isConnected,
     required this.playerFace,
     required this.centerPulseExpanded,
     required this.onPulseCycleEnd,
@@ -43,7 +44,7 @@ class ControllerEditView extends StatefulWidget {
   final VoidCallback onExit;
   final int totalSlots;
   final int? playerIndex;
-  final String status;
+  final bool isConnected;
   final PlayerFaceData playerFace;
   final bool centerPulseExpanded;
   final VoidCallback onPulseCycleEnd;
@@ -63,7 +64,7 @@ class _ControllerEditViewState extends State<ControllerEditView>
     super.initState();
     _tutorialController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 300),
     );
     _checkTutorial();
   }
@@ -121,11 +122,11 @@ class _ControllerEditViewState extends State<ControllerEditView>
                   flex: 2,
                   child: ControllerModeHub(
                     icon: Icons.close_rounded,
-                    title: 'editar controles',
+                    title: context.l10n.editControls.title,
                     onTap: widget.onExit,
                     totalSlots: widget.totalSlots,
                     selectedPlayerIndex: widget.playerIndex,
-                    status: widget.status,
+                    isConnected: widget.isConnected,
                     playerFace: widget.playerFace,
                     centerPulseExpanded: widget.centerPulseExpanded,
                     onPulseCycleEnd: widget.onPulseCycleEnd,
@@ -307,7 +308,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Botões disponíveis',
+                context.l10n.editControls.availableButtons,
                 style: TextStyle(
                   fontFamily: 'momo',
                   fontSize: 22,

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/controller_branding.dart';
 import '../services/host_api_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 import 'layout_editor_view.dart';
 import 'layout_preview_widgets.dart';
 
@@ -131,16 +132,16 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: AppColors.textPrimary, width: 4),
         ),
-        title: const Text(
-          'Excluir layout',
-          style: TextStyle(
+        title: Text(
+          context.l10n.layoutEditor.deleteLayoutTitle,
+          style: const TextStyle(
             fontFamily: 'momo',
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
           ),
         ),
         content: Text(
-          'Deseja excluir "${preset.name}"?',
+          context.l10n.layoutEditor.deleteLayoutConfirm(preset.name),
           style: const TextStyle(color: AppColors.textPrimary),
         ),
         actions: [
@@ -150,9 +151,9 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(
+            child: Text(
+              context.l10n.common.cancel,
+              style: const TextStyle(
                 fontFamily: 'momo',
                 fontWeight: FontWeight.bold,
               ),
@@ -173,9 +174,9 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
               ),
             ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              'Excluir',
-              style: TextStyle(
+            child: Text(
+              context.l10n.layoutEditor.deleteButton,
+              style: const TextStyle(
                 fontFamily: 'momo',
                 fontWeight: FontWeight.w900,
               ),
@@ -223,10 +224,10 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                               children: [
                                 Row(
                                   children: [
-                                    const Expanded(
+                                    Expanded(
                                       child: Text(
-                                        'Layouts',
-                                        style: TextStyle(fontFamily: 'momo', fontSize: 28, color: AppColors.textPrimary),
+                                        context.l10n.layoutEditor.browserTitle,
+                                        style: const TextStyle(fontFamily: 'momo', fontSize: 28, color: AppColors.textPrimary),
                                       ),
                                     ),
                                     ElevatedButton.icon(
@@ -244,9 +245,9 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                         ),
                                       ),
                                       icon: const Icon(Icons.add_rounded),
-                                      label: const Text(
-                                        'Criar layout',
-                                        style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold),
+                                      label: Text(
+                                        context.l10n.layoutEditor.createLayoutButton,
+                                        style: const TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -264,8 +265,8 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        const _SectionTitle(
-                                          title: 'Layouts básicos',
+                                        _SectionTitle(
+                                          title: context.l10n.layoutEditor.basicLayoutsTitle,
                                         ),
                                         const SizedBox(height: 12),
                                         Wrap(
@@ -286,8 +287,8 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                               .toList(),
                                         ),
                                         const SizedBox(height: 28),
-                                        const _SectionTitle(
-                                          title: 'Extras e Personalizados',
+                                        _SectionTitle(
+                                          title: context.l10n.layoutEditor.extraCustomLayoutsTitle,
                                         ),
                                         const SizedBox(height: 12),
                                         Wrap(
@@ -301,8 +302,8 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                                   activePresetId:
                                                       _catalog.activePresetId,
                                                   badgeLabel: p.isBuiltIn
-                                                      ? 'Jogo'
-                                                      : 'Personalizado',
+                                                      ? context.l10n.layoutEditor.badgeGame
+                                                      : context.l10n.layoutEditor.badgeCustom,
                                                   onSelect: _saving
                                                       ? null
                                                       : () => _selectLayout(p),
@@ -319,8 +320,8 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                                                 Icons
                                                                     .edit_rounded,
                                                               ),
-                                                              label: const Text(
-                                                                'Editar',
+                                                              label: Text(
+                                                                context.l10n.layoutEditor.editButton,
                                                               ),
                                                             ),
                                                             TextButton.icon(
@@ -332,8 +333,8 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                                                 Icons
                                                                     .delete_outline_rounded,
                                                               ),
-                                                              label: const Text(
-                                                                'Excluir',
+                                                              label: Text(
+                                                                context.l10n.layoutEditor.deleteButton,
                                                               ),
                                                             ),
                                                           ],
@@ -421,7 +422,7 @@ class LayoutCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          displayNameFor(preset),
+                          displayNameFor(context, preset),
                           style: const TextStyle(fontFamily: 'momo', fontSize: 22, color: AppColors.textPrimary),
                         ),
                         if (badgeLabel != null) ...[
@@ -442,7 +443,7 @@ class LayoutCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(color: AppColors.highlightColor, borderRadius: BorderRadius.circular(999)),
-                      child: const Text('Atual'),
+                      child: Text(context.l10n.layoutEditor.activeBadge),
                     ),
                 ],
               ),

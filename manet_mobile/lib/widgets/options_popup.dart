@@ -8,7 +8,9 @@ import '../models/player_face.dart';
 import '../services/haptics_manager.dart';
 import '../services/preferences_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 import 'player_face_indicator.dart';
+import 'juicy_widgets.dart';
 
 class OptionsPopup extends StatefulWidget {
   final PlayerFaceData playerFace;
@@ -126,6 +128,32 @@ class _OptionsPopupState extends State<OptionsPopup>
     }
   }
 
+  Widget _buildLanguageButton(BuildContext context, Locale locale, String label) {
+    final isSelected = context.currentLocale.languageCode == locale.languageCode;
+    return JuicyCard(
+      isSelected: isSelected,
+      selectedColor: AppColors.highlightColor,
+      backgroundColor: AppColors.backgroundColor,
+      borderRadius: 12,
+      borderThickness: 3.0,
+      onTap: () {
+        context.setLocale(locale);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'momo',
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -151,9 +179,9 @@ class _OptionsPopupState extends State<OptionsPopup>
               ),
               child: Row(
                 children: [
-                  const Text(
-                    'Opcoes',
-                    style: TextStyle(
+                  Text(
+                    context.l10n.options.title,
+                    style: const TextStyle(
                       fontFamily: 'momo',
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -185,9 +213,9 @@ class _OptionsPopupState extends State<OptionsPopup>
                           size: 18,
                           color: AppColors.textPrimary,
                         ),
-                        label: const Text(
-                          'Baixar App',
-                          style: TextStyle(
+                        label: Text(
+                          context.l10n.options.downloadApp,
+                          style: const TextStyle(
                             fontFamily: 'momo',
                             fontSize: 12,
                             color: AppColors.textPrimary,
@@ -239,14 +267,14 @@ class _OptionsPopupState extends State<OptionsPopup>
                                     icon: _rumbleEnabled
                                         ? Icons.vibration_rounded
                                         : Icons.mobile_off_rounded,
-                                    label: 'Vibracao',
+                                    label: context.l10n.options.vibration,
                                     isActive: _rumbleEnabled,
                                     onTap: _toggleRumble,
                                   ),
                                   const SizedBox(width: 12),
                                   _OptionButton(
                                     icon: Icons.mouse_outlined,
-                                    label: 'Mouse',
+                                    label: context.l10n.options.mouseMode,
                                     onTap: () {
                                       Navigator.of(context).pop();
                                       widget.onEnterMouseMode();
@@ -256,7 +284,7 @@ class _OptionsPopupState extends State<OptionsPopup>
                                   if (!kIsWeb)
                                     _OptionButton(
                                       icon: Icons.link_off_rounded,
-                                      label: 'Sair',
+                                      label: context.l10n.options.exitDisconnect,
                                       onTap: () {
                                         Navigator.of(context).pop();
                                         widget.onDisconnectRequested?.call();
@@ -286,7 +314,7 @@ class _OptionsPopupState extends State<OptionsPopup>
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'Vibracao apenas no app Android!',
+                                      context.l10n.options.vibrationAndroidOnly,
                                       style: TextStyle(
                                         fontFamily: 'momo',
                                         fontSize: 12,
@@ -301,9 +329,9 @@ class _OptionsPopupState extends State<OptionsPopup>
                             : const SizedBox.shrink(),
                       ),
                       const SizedBox(height: 32),
-                      const Text(
-                        'Cores do ma.net',
-                        style: TextStyle(
+                      Text(
+                        context.l10n.options.themeColorsTitle,
+                        style: const TextStyle(
                           fontFamily: 'momo',
                           fontSize: 14,
                           color: AppColors.textPrimary,
@@ -311,6 +339,24 @@ class _OptionsPopupState extends State<OptionsPopup>
                       ),
                       const SizedBox(height: 12),
                       _buildThemeSelector(),
+                      const SizedBox(height: 24),
+                      Text(
+                        context.l10n.options.languageTitle,
+                        style: const TextStyle(
+                          fontFamily: 'momo',
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildLanguageButton(context, const Locale('pt', 'BR'), 'Português'),
+                          const SizedBox(width: 16),
+                          _buildLanguageButton(context, const Locale('en', 'US'), 'English'),
+                        ],
+                      ),
                     ],
                   ),
                 ),

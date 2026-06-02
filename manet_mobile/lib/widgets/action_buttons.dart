@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/controller_branding.dart';
 import '../services/haptics_manager.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 
 int _failedDragTaps = 0;
 
@@ -229,8 +230,8 @@ class _ActionButtonsState extends State<ActionButtons> {
       return Center(
         child: Text(
           widget.editMode
-              ? 'Sem botões visiveis'
-              : 'Habilite botões nas configurações',
+              ? context.l10n.editControls.noButtonsVisible
+              : context.l10n.editControls.enableButtonsInSettings,
           style: TextStyle(
             fontFamily: 'momo',
             fontSize: 14,
@@ -498,9 +499,9 @@ class _DraggableEditButtonState extends State<DraggableEditButton>
             children: [
               const Icon(Icons.touch_app_rounded, color: AppColors.lightColor),
               const SizedBox(width: 12),
-              const Text(
-                'Arraste para mover',
-                style: TextStyle(fontFamily: 'momo', fontSize: 16),
+              Text(
+                context.l10n.editControls.dragToMove,
+                style: const TextStyle(fontFamily: 'momo', fontSize: 16),
               ),
             ],
           ),

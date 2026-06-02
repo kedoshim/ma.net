@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/controller_branding.dart';
 import '../services/host_api_service.dart';
+import '../l10n/app_localizations.dart';
 import 'layout_browser_dialog.dart';
 import 'layout_preview_widgets.dart';
 import '../theme/app_colors.dart';
@@ -180,7 +181,7 @@ class _LayoutSelectorWidgetState extends State<LayoutSelectorWidget> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Layout: ${displayNameFor(widget.catalog.activePreset)}',
+                'Layout: ${displayNameFor(context, widget.catalog.activePreset)}',
                 style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -294,7 +295,7 @@ class _HoverPreviewOverlay extends StatelessWidget {
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                displayNameFor(preset),
+                                displayNameFor(context, preset),
                                 style: const TextStyle(
                                   fontFamily: 'momo',
                                   fontSize: 14,

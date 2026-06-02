@@ -4,6 +4,7 @@ import 'package:media_kit/media_kit.dart';
 import 'services/server_process_service.dart';
 import 'screens/start_page/start_page_widget.dart';
 import 'utils/app_logger.dart';
+import 'l10n/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,11 +36,13 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WindowListener {
   bool _isClosing = false;
+  late final LocaleNotifier _localeNotifier;
 
   @override
   void initState() {
     super.initState();
     windowManager.addListener(this);
+    _localeNotifier = LocaleNotifier();
   }
 
   @override
@@ -62,8 +65,16 @@ class _MyAppState extends State<MyApp> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: const StartPageWidget(),
+    return AppLocalizations(
+      notifier: _localeNotifier,
+      child: Builder(
+        builder: (context) {
+          return MaterialApp(
+            locale: context.currentLocale,
+            home: const StartPageWidget(),
+          );
+        },
+      ),
     );
   }
 }

@@ -11,6 +11,7 @@ import '../../widgets/control_button.dart' hide ButtonStateCallback;
 import '../../services/haptics_manager.dart';
 import '../../widgets/joystick.dart';
 import '../../services/preferences_service.dart';
+import '../../l10n/app_localizations.dart';
 import 'controller_screen_types.dart';
 import 'controller_screen_widgets.dart';
 
@@ -94,14 +95,14 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
     }
   }
 
-  String _getNextModeLabel(MovementMode mode) {
+  String _getNextModeLabel(BuildContext context, MovementMode mode) {
     switch (mode) {
       case MovementMode.dpad:
-        return 'Mudar para Joystick Fixo';
+        return context.l10n.joystick.changeToFixed;
       case MovementMode.fixedJoystick:
-        return 'Mudar para Joystick Flutuante';
+        return context.l10n.joystick.changeToFloating;
       case MovementMode.floatingJoystick:
-        return 'Mudar para D-Pad';
+        return context.l10n.joystick.changeToDpad;
     }
   }
 
@@ -167,7 +168,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                                 ),
                                 splashRadius: 10,
                                 onPressed: _toggleMovementMode,
-                                tooltip: _getNextModeLabel(widget.movementMode),
+                                tooltip: _getNextModeLabel(context, widget.movementMode),
                               ),
                             ),
                           ),
@@ -202,6 +203,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                             name: widget.playerName,
                             onNameChanged: widget.onNameChanged,
                             onRequestRandomName: widget.onRequestRandomName,
+                            playerFace: widget.playerFace,
                           ),
                         ],
                       ),
@@ -228,7 +230,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                                 icon: const Icon(Icons.edit, size: 15),
                                 splashRadius: 10,
                                 onPressed: widget.onOpenEditControls,
-                                tooltip: 'Editar controles',
+                                tooltip: context.l10n.editControls.title,
                               ),
                             ),
                           ),
@@ -280,7 +282,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                         ControllerPlayerIndicator(
                           totalSlots: widget.totalSlots,
                           selectedPlayerIndex: widget.playerIndex,
-                          status: widget.status,
+                          isConnected: widget.connectionState == ControllerConnectionState.connected,
                           playerFace: widget.playerFace,
                           hasVacantSlot: widget.hasVacantSlot,
                           onJoinGame: widget.onJoinGame,
@@ -292,7 +294,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
                 IconButton(
                   icon: const Icon(Icons.more_horiz, size: 32),
                   onPressed: widget.onOpenOptions,
-                  tooltip: 'Opções',
+                  tooltip: context.l10n.options.title,
                 ),
                 _CenterAction(
                   onButtonStateChanged: widget.onButtonStateChanged,
@@ -572,8 +574,10 @@ void _showEditNameDialog(
   String currentName,
   ValueChanged<String> onNameChanged,
   Future<String> Function() onRequestRandomName,
+  PlayerFaceData playerFace,
 ) {
-  final controller = TextEditingController(text: currentName == 'Sem Nome' ? '' : currentName);
+  final noNamePlaceholder = context.l10n.editName.noName;
+  final controller = TextEditingController(text: currentName == noNamePlaceholder ? '' : currentName);
   bool isLoading = false;
 
   showDialog(
@@ -582,14 +586,21 @@ void _showEditNameDialog(
     barrierDismissible: true,
     barrierColor: Colors.black54,
     builder: (context) {
+      final mediaQuery = MediaQuery.of(context);
+      final isLandscape = mediaQuery.size.width > mediaQuery.size.height;
+
       return StatefulBuilder(
         builder: (context, setDialogState) {
           return Dialog(
             backgroundColor: Colors.transparent,
             elevation: 0,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: isLandscape ? 16 : 40,
+              vertical: isLandscape ? 8 : 24,
+            ),
             child: Container(
-              width: 320,
-              padding: const EdgeInsets.all(24),
+              width: isLandscape ? 400 : 320,
+              padding: EdgeInsets.all(isLandscape ? 14 : 24),
               decoration: BoxDecoration(
                 color: AppColors.screenBackground,
                 borderRadius: BorderRadius.circular(20),
@@ -605,144 +616,260 @@ void _showEditNameDialog(
                   ),
                 ],
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Editar Apelido',
-                    style: TextStyle(
-                      fontFamily: 'momo',
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.textPrimary.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.textPrimary.withValues(alpha: 0.2),
-                        width: 2,
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    child: Row(
+              child: isLandscape
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        PlayerFaceIndicator(
+                          face: playerFace,
+                          size: 72,
+                          roundedSquare: true,
+                          borderColor: AppColors.textPrimary,
+                        ),
+                        const SizedBox(width: 16),
                         Expanded(
-                          child: TextField(
-                            controller: controller,
-                            maxLength: 15,
-                            textAlign: TextAlign.center,
-                            autofocus: true,
-                            style: const TextStyle(
-                              fontFamily: 'momo_sans',
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.textPrimary.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.textPrimary.withValues(alpha: 0.2),
+                                width: 2,
+                              ),
                             ),
-                            decoration: const InputDecoration(
-                              counterText: '',
-                              border: InputBorder.none,
-                              hintText: 'Digite o apelido...',
-                              isDense: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: controller,
+                                    maxLength: 15,
+                                    textAlign: TextAlign.center,
+                                    autofocus: true,
+                                    style: const TextStyle(
+                                      fontFamily: 'momo_sans',
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                    decoration: InputDecoration(
+                                      counterText: '',
+                                      border: InputBorder.none,
+                                      hintText: context.l10n.editName.hint,
+                                      isDense: true,
+                                    ),
+                                    textInputAction: TextInputAction.done,
+                                    onSubmitted: (value) {
+                                      final trimmed = value.trim();
+                                      if (trimmed.isNotEmpty) {
+                                        onNameChanged(trimmed);
+                                      }
+                                      Navigator.of(context).pop();
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                isLoading
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      )
+                                    : GestureDetector(
+                                        onTap: () async {
+                                          setDialogState(() {
+                                            isLoading = true;
+                                          });
+                                          final randomName = await onRequestRandomName();
+                                          if (randomName.isNotEmpty) {
+                                            controller.text = randomName;
+                                            controller.selection = TextSelection.collapsed(
+                                              offset: randomName.length,
+                                            );
+                                          }
+                                          setDialogState(() {
+                                            isLoading = false;
+                                          });
+                                        },
+                                        child: const Icon(
+                                          Icons.casino_outlined,
+                                          color: AppColors.textPrimary,
+                                          size: 28,
+                                        ),
+                                      ),
+                              ],
                             ),
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (value) {
-                              final trimmed = value.trim();
-                              if (trimmed.isNotEmpty) {
-                                onNameChanged(trimmed);
-                              }
-                              Navigator.of(context).pop();
-                            },
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.textPrimary,
-                                ),
-                              )
-                            : GestureDetector(
-                                onTap: () async {
-                                  setDialogState(() {
-                                    isLoading = true;
-                                  });
-                                  final randomName = await onRequestRandomName();
-                                  if (randomName.isNotEmpty) {
-                                    controller.text = randomName;
-                                    controller.selection = TextSelection.collapsed(
-                                      offset: randomName.length,
-                                    );
-                                  }
-                                  setDialogState(() {
-                                    isLoading = false;
-                                  });
-                                },
-                                child: const Icon(
-                                  Icons.casino_outlined,
-                                  color: AppColors.textPrimary,
-                                  size: 28,
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () {
+                            final trimmed = controller.text.trim();
+                            if (trimmed.isNotEmpty) {
+                              onNameChanged(trimmed);
+                            }
+                            Navigator.of(context).pop();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.highlightColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.textPrimary,
+                                width: AppColors.borderThickness / 2,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: AppColors.textPrimary,
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          context.l10n.editName.title,
+                          style: const TextStyle(
+                            fontFamily: 'momo',
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.textPrimary.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.textPrimary.withValues(alpha: 0.2),
+                              width: 2,
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: controller,
+                                  maxLength: 15,
+                                  textAlign: TextAlign.center,
+                                  autofocus: true,
+                                  style: const TextStyle(
+                                    fontFamily: 'momo_sans',
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  decoration: InputDecoration(
+                                    counterText: '',
+                                    border: InputBorder.none,
+                                    hintText: context.l10n.editName.hint,
+                                    isDense: true,
+                                  ),
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (value) {
+                                    final trimmed = value.trim();
+                                    if (trimmed.isNotEmpty) {
+                                      onNameChanged(trimmed);
+                                    }
+                                    Navigator.of(context).pop();
+                                  },
                                 ),
                               ),
+                              const SizedBox(width: 8),
+                              isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    )
+                                  : GestureDetector(
+                                      onTap: () async {
+                                        setDialogState(() {
+                                          isLoading = true;
+                                        });
+                                        final randomName = await onRequestRandomName();
+                                        if (randomName.isNotEmpty) {
+                                          controller.text = randomName;
+                                          controller.selection = TextSelection.collapsed(
+                                            offset: randomName.length,
+                                          );
+                                        }
+                                        setDialogState(() {
+                                          isLoading = false;
+                                        });
+                                      },
+                                      child: const Icon(
+                                        Icons.casino_outlined,
+                                        color: AppColors.textPrimary,
+                                        size: 28,
+                                      ),
+                                    ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: Text(
+                                context.l10n.common.cancel,
+                                style: TextStyle(
+                                  fontFamily: 'momo',
+                                  color: AppColors.textPrimary.withValues(alpha: 0.6),
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.highlightColor,
+                                foregroundColor: AppColors.textPrimary,
+                                elevation: 0,
+                                side: const BorderSide(
+                                    color: AppColors.textPrimary,
+                                    width: AppColors.borderThickness / 2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                              ),
+                              onPressed: () {
+                                final trimmed = controller.text.trim();
+                                if (trimmed.isNotEmpty) {
+                                  onNameChanged(trimmed);
+                                }
+                                Navigator.of(context).pop();
+                              },
+                              child: Text(
+                                context.l10n.common.save,
+                                style: const TextStyle(
+                                  fontFamily: 'momo',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(
-                          'Cancelar',
-                          style: TextStyle(
-                            fontFamily: 'momo',
-                            color: AppColors.textPrimary.withValues(alpha: 0.6),
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.highlightColor,
-                          foregroundColor: AppColors.textPrimary,
-                          elevation: 0,
-                          side: const BorderSide(
-                            color: AppColors.textPrimary,
-                            width: AppColors.borderThickness / 2,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        ),
-                        onPressed: () {
-                          final trimmed = controller.text.trim();
-                          if (trimmed.isNotEmpty) {
-                            onNameChanged(trimmed);
-                          }
-                          Navigator.of(context).pop();
-                        },
-                        child: const Text(
-                          'Salvar',
-                          style: TextStyle(
-                            fontFamily: 'momo',
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           );
         },
@@ -755,17 +882,18 @@ class _PlayerNameWidget extends StatelessWidget {
   final String? name;
   final ValueChanged<String> onNameChanged;
   final Future<String> Function() onRequestRandomName;
+  final PlayerFaceData playerFace;
 
   const _PlayerNameWidget({
-    super.key,
     required this.name,
     required this.onNameChanged,
     required this.onRequestRandomName,
+    required this.playerFace,
   });
 
   @override
   Widget build(BuildContext context) {
-    final displayName = name ?? 'Sem Nome';
+    final displayName = name ?? context.l10n.editName.noName;
 
     return GestureDetector(
       onTap: () => _showEditNameDialog(
@@ -773,6 +901,7 @@ class _PlayerNameWidget extends StatelessWidget {
         displayName,
         onNameChanged,
         onRequestRandomName,
+        playerFace,
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

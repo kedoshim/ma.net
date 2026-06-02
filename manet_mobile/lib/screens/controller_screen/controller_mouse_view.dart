@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../models/player_face.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/control_button.dart';
+import '../../l10n/app_localizations.dart';
 import 'controller_screen_widgets.dart';
 import '../../widgets/quick_actions_widget.dart';
 
@@ -23,7 +24,7 @@ class ControllerMouseView extends StatelessWidget {
     required this.onQuickAction,
     required this.totalSlots,
     required this.playerIndex,
-    required this.status,
+    required this.isConnected,
     required this.playerFace,
     required this.centerPulseExpanded,
     required this.onPulseCycleEnd,
@@ -40,7 +41,7 @@ class ControllerMouseView extends StatelessWidget {
   final ValueChanged<String> onQuickAction;
   final int totalSlots;
   final int? playerIndex;
-  final String status;
+  final bool isConnected;
   final PlayerFaceData playerFace;
   final bool centerPulseExpanded;
   final VoidCallback onPulseCycleEnd;
@@ -65,11 +66,11 @@ class ControllerMouseView extends StatelessWidget {
               flex: 2,
               child: ControllerModeHub(
                 icon: Icons.close_rounded,
-                title: 'mouse mode',
+                title: context.l10n.joystick.mouseModeTitle,
                 onTap: onExit,
                 totalSlots: totalSlots,
                 selectedPlayerIndex: playerIndex,
-                status: status,
+                isConnected: isConnected,
                 playerFace: playerFace,
                 pulse: false,
                 centerPulseExpanded: centerPulseExpanded,
@@ -279,18 +280,18 @@ class _TouchpadSurfaceState extends State<_TouchpadSurface> {
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 200),
                     opacity: _isPressed ? 0.3 : 0.7,
-                    child: const Column(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.touch_app_rounded,
                           color: AppColors.textPrimary,
                           size: 48,
                         ),
-                        SizedBox(height: 12),
+                        const SizedBox(height: 12),
                         Text(
-                          'touchpad',
-                          style: TextStyle(
+                          context.l10n.joystick.touchpad,
+                          style: const TextStyle(
                             fontFamily: 'momo',
                             fontSize: 18,
                             color: AppColors.textPrimary,
@@ -404,7 +405,7 @@ class _MouseScrollStripState extends State<_MouseScrollStrip> {
                   size: 34,
                 ),
                 Text(
-                  'scroll',
+                  context.l10n.joystick.scroll,
                   style: TextStyle(
                     fontFamily: 'momo',
                     fontSize: 16,

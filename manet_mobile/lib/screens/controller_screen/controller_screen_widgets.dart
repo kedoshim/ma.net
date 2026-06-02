@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../models/player_face.dart';
 import '../../services/network_discovery_service.dart';
 import '../../theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../widgets/juicy_widgets.dart';
 import 'controller_screen_types.dart';
@@ -13,7 +14,7 @@ class ControllerPlayerIndicator extends StatelessWidget {
     super.key,
     required this.totalSlots,
     required this.selectedPlayerIndex,
-    required this.status,
+    required this.isConnected,
     required this.playerFace,
     this.hasVacantSlot = false,
     this.onJoinGame,
@@ -21,7 +22,7 @@ class ControllerPlayerIndicator extends StatelessWidget {
 
   final int totalSlots;
   final int? selectedPlayerIndex;
-  final String status;
+  final bool isConnected;
   final PlayerFaceData playerFace;
   final bool hasVacantSlot;
   final VoidCallback? onJoinGame;
@@ -34,9 +35,9 @@ class ControllerPlayerIndicator extends StatelessWidget {
         backgroundColor: AppColors.highlightColor,
         borderRadius: 16.0,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: const Text(
-          'Entrar na Partida',
-          style: TextStyle(
+        child: Text(
+          context.l10n.status.enteringGame,
+          style: const TextStyle(
             fontFamily: 'momo',
             fontSize: 14,
             fontWeight: FontWeight.bold,
@@ -52,8 +53,7 @@ class ControllerPlayerIndicator extends StatelessWidget {
 
     if (totalSlots > 12) {
       final isWaiting = selectedPlayerIndex == null;
-      final pLabel = isWaiting ? 'Banco' : 'p$selectedPlayerIndex';
-      final isConnected = status.startsWith('Conectado');
+      final pLabel = isWaiting ? context.l10n.status.waitingForSlot : 'p$selectedPlayerIndex';
 
       return AnimatedOpacity(
         opacity: isConnected ? 1.0 : 0.4,
@@ -122,9 +122,9 @@ class ControllerPlayerIndicator extends StatelessWidget {
               final isActive = selectedIndex == index;
 
               return AnimatedOpacity(
-                opacity: isActive && status.startsWith('Conectado') ? 1 : 0.4,
+                opacity: isActive && isConnected ? 1 : 0.4,
                 duration: const Duration(milliseconds: 180),
-                child: isActive && status.startsWith('Conectado')
+                child: isActive && isConnected
                     ? PlayerFaceIndicator(
                         face: playerFace,
                         size: squareSize,
@@ -174,9 +174,9 @@ class ControllerPlayerIndicator extends StatelessWidget {
                       borderColor: AppColors.textPrimary.withValues(alpha: 0.5),
                     ),
                     const SizedBox(width: 6),
-                    const Text(
-                      'Banco',
-                      style: TextStyle(
+                    Text(
+                      context.l10n.status.waitingForSlot,
+                      style: const TextStyle(
                         fontFamily: 'momo',
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -213,9 +213,9 @@ class ControllerCenterStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (connectionState == ControllerConnectionState.searching) {
-      return const Text(
-        'procurando...',
-        style: TextStyle(
+      return Text(
+        context.l10n.status.searching,
+        style: const TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
           fontFamily: 'momo',
@@ -224,9 +224,9 @@ class ControllerCenterStatus extends StatelessWidget {
     }
 
     if (connectionState == ControllerConnectionState.disconnected) {
-      return const Text(
-        'desconectado',
-        style: TextStyle(
+      return Text(
+        context.l10n.status.disconnected,
+        style: const TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
           fontFamily: 'momo',
@@ -235,9 +235,9 @@ class ControllerCenterStatus extends StatelessWidget {
     }
 
     if (connectionState == ControllerConnectionState.multipleHostsFound) {
-      return const Text(
-        'selecionar host',
-        style: TextStyle(
+      return Text(
+        context.l10n.status.multipleHostsFound,
+        style: const TextStyle(
           fontSize: 18,
           color: AppColors.textPrimary,
           fontFamily: 'momo',
@@ -282,7 +282,7 @@ class ControllerModeHub extends StatelessWidget {
     required this.onTap,
     required this.totalSlots,
     required this.selectedPlayerIndex,
-    required this.status,
+    required this.isConnected,
     required this.playerFace,
     this.pulse = false,
     required this.centerPulseExpanded,
@@ -294,7 +294,7 @@ class ControllerModeHub extends StatelessWidget {
   final VoidCallback? onTap;
   final int totalSlots;
   final int? selectedPlayerIndex;
-  final String status;
+  final bool isConnected;
   final PlayerFaceData playerFace;
   final bool pulse;
   final bool centerPulseExpanded;
@@ -354,7 +354,7 @@ class ControllerModeHub extends StatelessWidget {
           child: ControllerPlayerIndicator(
             totalSlots: totalSlots,
             selectedPlayerIndex: selectedPlayerIndex,
-            status: status,
+            isConnected: isConnected,
             playerFace: playerFace,
           ),
         ),
@@ -395,9 +395,9 @@ class MultipleHostsOverlay extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Varios Hosts Encontrados',
-                  style: TextStyle(
+                Text(
+                  context.l10n.status.multipleHostsTitle,
+                  style: const TextStyle(
                     fontFamily: 'momo',
                     color: AppColors.textPrimary,
                     fontSize: 16,
@@ -455,9 +455,9 @@ class MultipleHostsOverlay extends StatelessWidget {
                       Icons.qr_code_scanner,
                       color: AppColors.textPrimary,
                     ),
-                    label: const Text(
-                      'Escanear QR em vez disso',
-                      style: TextStyle(
+                    label: Text(
+                      context.l10n.scanner.qrScannerInstead,
+                      style: const TextStyle(
                         fontFamily: 'momo',
                         color: AppColors.textPrimary,
                       ),

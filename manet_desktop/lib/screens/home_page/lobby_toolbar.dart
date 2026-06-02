@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/layout_selector_widget.dart';
 import '../../widgets/juicy_widgets.dart';
 import 'server_alerts.dart';
+import '../../l10n/app_localizations.dart';
 
 enum ModeChangeState { idle, loading, success }
 
@@ -86,8 +87,8 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                   // Lock Icon
                   Tooltip(
                     message: _draftLocked
-                        ? 'Novos jogadores entram no banco de reservas'
-                        : 'Novos jogadores recebem uma manete automaticamente',
+                        ? context.l10n.lobby.lockTooltipReserve
+                        : context.l10n.lobby.lockTooltipAuto,
                     child: JuicyIconButton(
                       size: 36,
                       borderRadius: 10,
@@ -262,8 +263,8 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                         const SizedBox(width: 8),
                         Text(
                           widget.controllerMode.toLowerCase() == 'x360'
-                              ? 'x•input'
-                              : 'd•input',
+                              ? context.l10n.lobby.xinput
+                              : context.l10n.lobby.dinput,
                           style: AppTheme.bodyMedium.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.bold,

@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../models/player_face.dart';
 import '../../widgets/juicy_widgets.dart';
+import '../../l10n/app_localizations.dart';
 
 class ModeSelectionPage extends StatelessWidget {
   final String? initialMode;
@@ -73,7 +74,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
             children: [
               if (widget.showHeader) ...[
                 Text(
-                  'preparar a festa!',
+                  context.l10n.modeSelection.title,
                   style: AppTheme.titleMedium.copyWith(
                     fontFamily: 'momo',
                     fontSize: isCompact ? 32 : 42,
@@ -90,7 +91,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      'Como os celulares serão reconhecidos no computador?',
+                      context.l10n.modeSelection.subtitle,
                       style: AppTheme.bodyMedium.copyWith(
                         color: AppColors.textPrimary.withValues(alpha: 0.6),
                         fontWeight: FontWeight.bold,
@@ -112,8 +113,8 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                           isCompact: isCompact,
                           isVeryCompact: isVeryCompact,
                           mode: 'x360',
-                          title: 'x•input',
-                          headline: 'Recomendado: até 4 controles',
+                          title: context.l10n.modeSelection.xinputTitle,
+                          headline: context.l10n.modeSelection.xinputHeadline,
                           faceConfig: const _FaceConfig(
                             faceText: 'X)',
                             color: Color(0xFF4D96FF), // Azure
@@ -125,7 +126,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                               Navigator.of(context).pop('x360');
                             }
                           },
-                          details: 'Alta compatibilidade e vibração.',
+                          details: context.l10n.modeSelection.xinputDetails,
                         ),
                       ),
                       SizedBox(width: isCompact ? 16 : 32),
@@ -134,8 +135,8 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                           isCompact: isCompact,
                           isVeryCompact: isVeryCompact,
                           mode: 'ds4',
-                          title: 'd•Input',
-                          headline: 'Ideal para: 5+ controles',
+                          title: context.l10n.modeSelection.dinputTitle,
+                          headline: context.l10n.modeSelection.dinputHeadline,
                           faceConfig: const _FaceConfig(
                             faceText: ':D',
                             color: Color(0xFFFF6B6B), // Coral
@@ -147,7 +148,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                               Navigator.of(context).pop('ds4');
                             }
                           },
-                          details: 'Sem limites, mas sem vibração.',
+                          details: context.l10n.modeSelection.dinputDetails,
                         ),
                       ),
                     ],
@@ -174,7 +175,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                               vertical: isCompact ? 12 : 16,
                             ),
                             child: Text(
-                              'Cancelar',
+                              context.l10n.common.cancel,
                               style: AppTheme.bodyMedium.copyWith(
                                 fontFamily: 'momo',
                                 color: AppColors.textPrimary.withValues(alpha: 0.7),
@@ -212,7 +213,7 @@ class _ModeSelectionContentState extends State<ModeSelectionContent> {
                                     vertical: isCompact ? 12 : 20,
                                   ),
                                   child: Text(
-                                    'vamos jogar!',
+                                    context.l10n.modeSelection.play,
                                     style: AppTheme.titleSmall.copyWith(
                                       fontFamily: 'momo',
                                       fontSize: 20,

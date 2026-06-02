@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../l10n/app_localizations.dart';
 
 class ConnectionIntentHandler {
   /// Parses a deep link [Uri] and extracts the host and port string.
@@ -34,7 +35,7 @@ class ConnectionIntentHandler {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Conectado via link: $hostAddress'),
+          content: Text(context.l10n.status.connectViaLink(hostAddress)),
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
         ),

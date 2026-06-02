@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
 import 'juicy_widgets.dart';
+import '../l10n/app_localizations.dart';
 
 class AppErrorWidget extends StatelessWidget {
   final String title;
@@ -46,7 +47,7 @@ class AppErrorWidget extends StatelessWidget {
               height: 160,
               child: SingleChildScrollView(
                 child: Text(
-                  logs!.isEmpty ? 'Nenhum log.' : logs!,
+                  logs!.isEmpty ? context.l10n.error.noLogs : logs!,
                   style: const TextStyle(
                     fontFamily: 'Consolas',
                     fontSize: 12,
@@ -75,7 +76,7 @@ class AppErrorWidget extends StatelessWidget {
                 Icon(Icons.replay_rounded, size: 18, color: AppColors.screenBackground),
                 const SizedBox(width: 8),
                 Text(
-                  'Tentar novamente',
+                  context.l10n.error.retry,
                   style: TextStyle(
                     fontFamily: 'momo',
                     color: AppColors.screenBackground,
@@ -89,8 +90,8 @@ class AppErrorWidget extends StatelessWidget {
             onPressed: () {
               Clipboard.setData(ClipboardData(text: logs ?? ''));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Logs copiados para a área de transferência!'),
+                SnackBar(
+                  content: Text(context.l10n.error.logsCopied),
                 ),
               );
             },
@@ -104,8 +105,8 @@ class AppErrorWidget extends StatelessWidget {
                 const Icon(Icons.copy_rounded, size: 18, color: AppColors.textPrimary),
                 const SizedBox(width: 8),
                 Text(
-                  'Copiar Logs',
-                  style: TextStyle(
+                  context.l10n.error.copyLogs,
+                  style: const TextStyle(
                     fontFamily: 'momo',
                     color: AppColors.textPrimary,
                   ),
@@ -120,8 +121,8 @@ class AppErrorWidget extends StatelessWidget {
           borderRadius: 12,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Text(
-            'Fechar',
-            style: TextStyle(fontFamily: 'momo', color: AppColors.textPrimary),
+            context.l10n.common.close,
+            style: const TextStyle(fontFamily: 'momo', color: AppColors.textPrimary),
           ),
         ),
       ],

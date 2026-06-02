@@ -9,7 +9,9 @@
     "{food_m} {adjective_m}",
     "{food_f} {adjective_f}",
     "{prenoum_m} {noun_m}",
-    "{prenoum_f} {noun_f}"
+    "{prenoum_f} {noun_f}",
+    "{prenoum_m} {adjective_m}",
+    "{prenoum_f} {adjectives_f}"
   ],
 
   "prenoum_m": [
@@ -21,7 +23,8 @@
     "Pastor",
     "Camarada",
     "Vovô",
-    "São"
+    "São",
+    "Mano"
   ],
 
   "prenoum_f": [
@@ -52,10 +55,14 @@
     "Pandeiro",
     "Chapéu",
     "Açaí",
+    "Corsa",
     "Caju",
+    "Golzinho",
+    "Fusquinha",
     "Curumim",
     "Cajá",
     "Maracujá",
+    "Pança",
     "Buriti",
     "Pequi",
     "Curupira",
@@ -78,11 +85,11 @@
     "Trovão",
     "Relâmpago",
     "Redemoinho",
+    "Calvo",
     "Faíscaço",
     "Confete",
     "Carnaval",
     "Bloco",
-    "Trio",
     "Abacaxi",
     "Pé de Moleque",
     "Pudim",
@@ -95,6 +102,7 @@
     "Capivara",
     "Pamonha",
     "Pipoca",
+    "Mexirica",
     "Arara",
     "Coxinha",
     "Preguiça",
@@ -104,14 +112,16 @@
     "Paçoca",
     "Rapadura",
     "Canjica",
-    "Quermesse",
+    "Carnaval",
     "Bandeirinha",
     "Fogueira",
     "Barraca",
     "Sanfona",
     "Tapioca",
     "Pitanga",
+    "Carambola",
     "Acerola",
+    "Coroa",
     "Mula",
     "Iara",
     "Caipira",
@@ -170,13 +180,13 @@
     "Marreco",
     "Peru",
     "Avestruz",
-    "Cisne",
     "Leão",
     "Tigre",
     "Tuiuiú",
     "Furão",
     "Morcego",
-    "Corvo"
+    "Corvo",
+    "Rato"
   ],
 
   "animals_f": [
@@ -200,6 +210,8 @@
   ],
 
   "foods_m": [
+    "Pão",
+    "Picanha",
     "Pastel",
     "Brigadeiro",
     "Beijinho",
@@ -212,6 +224,7 @@
     "Baião",
     "Tropeiro",
     "Escondidinho",
+    "Estrogonofe",
     "Empadão",
     "Bolinho",
     "Quibe",
@@ -283,6 +296,7 @@
   ],
 
   "names_m": [
+    "Mario",
     "Zé",
     "Tonhão",
     "Juninho",
@@ -292,6 +306,9 @@
     "Chico",
     "Tião",
     "Nenem",
+    "Zico",
+    "Ronaldinho",
+    "James",
     "Lelé",
     "Didi",
     "Beto",
@@ -331,6 +348,7 @@
 
   "names_f": [
     "Cida",
+    "Xuxa",
     "Nina",
     "Lulu",
     "Duda",
@@ -359,6 +377,7 @@
     "Gabi",
     "Naná",
     "Bebel",
+    "Lalá",
     "Thaty",
     "Ararilda",
     "Cajuína",
@@ -366,7 +385,8 @@
     "Aparecida",
     "Pitanguinha",
     "Pipoquinha",
-    "Bibi"
+    "Bibi",
+    "Maria"
   ],
 
   "adjectives_m": [
@@ -420,7 +440,9 @@
     "Pirata",
     "Campeão",
     "Invocado",
-    "Negro",
+    "Preto",
+    "Azul",
+    "Caramelo",
     "Fantástico",
     "Incrível",
     "Formidável",
@@ -435,21 +457,24 @@
     "Brega",
     "Maravilhoso",
     "Absurdo",
+    "Absoluto",
     "Cintilante",
     "Risonho",
     "Boladão",
-    "Carnavalesco",
     "Caprichoso",
     "Brocado",
     "Boiadero",
     "Gaúcho",
     "Guarani",
+    "Boboca",
+    "Pateta",
     "sem cabeça",
     "sem noção",
     "do RU",
     "do Grau",
-    "do bandolin",
-    "da sanfona",
+    "do Bandolin",
+    "da Sanfona",
+    "do Pandeiro",
     "do Forró",
     "do papai",
     "de Bangu",
@@ -461,7 +486,8 @@
     "de Osasco",
     "da Vaquejada",
     "de Belém",
-    "do sinal"
+    "do sinal",
+    "de aluguel"
   ],
   
   "adjectives_f": [
@@ -517,6 +543,8 @@
     "Campeã",
     "Invocada",
     "Negra",
+    "Azul",
+    "Caramelo",
     "Fantástica",
     "Incrível",
     "Formidável",
@@ -530,22 +558,25 @@
     "Brega",
     "Maravilhosa",
     "Absurda",
+    "Absoluta",
     "Cintilante",
     "Risonha",
     "Boladona",
     "Forrozeira",
-    "Carnavalesca",
     "Caprichosa",
     "Brocada",
     "Boiadera",
     "Gaúcha",
     "Guarani",
+    "Boboca",
+    "Pateta",
     "sem cabeça",
     "sem noção",
     "do RU",
     "do Grau",
     "do Bandolin",
-    "da sanfona",
+    "da Sanfona",
+    "do Pandeiro",
     "do Forró",
     "do papai",
     "de Bangu",
@@ -557,6 +588,7 @@
     "de Osasco",
     "da Vaquejada",
     "de Belém",
-    "do sinal"
+    "do sinal",
+    "de aluguel"
   ]
 }

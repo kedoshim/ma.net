@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/controller_branding.dart';
 import '../services/host_api_service.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 import 'layout_preview_widgets.dart';
 
 class LayoutEditorView extends StatefulWidget {
@@ -44,13 +45,14 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
   late Map<String, bool> _visibleButtons;
   late List<String> _buttonOrder;
   bool _saving = false;
+  bool _nameInitialized = false;
 
   @override
   void initState() {
     super.initState();
     final preset = widget.preset;
     _nameController = TextEditingController(
-      text: preset?.name ?? 'Meu Layout 001',
+      text: preset?.name ?? '',
     );
     _movementMode = preset?.layout.movementMode ?? 'floatingJoystick';
     _visibleButtons = <String, bool>{
@@ -62,6 +64,17 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
     );
     for (final id in _allButtons) {
       if (!_buttonOrder.contains(id)) _buttonOrder.add(id);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_nameInitialized) {
+      if (_nameController.text.isEmpty && widget.preset == null) {
+        _nameController.text = context.l10n.layoutEditor.defaultNewLayoutName;
+      }
+      _nameInitialized = true;
     }
   }
 
@@ -127,7 +140,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                       fontWeight: FontWeight.bold,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Nome do Layout',
+                      hintText: context.l10n.layoutEditor.nameHint,
                       enabledBorder: UnderlineInputBorder(
                         borderSide: BorderSide(
                           color: AppColors.textPrimary.withValues(alpha: 0.1),
@@ -166,7 +179,9 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                     ),
                   ),
                   child: Text(
-                    widget.preset == null ? 'CRIAR' : 'SALVAR',
+                    widget.preset == null
+                        ? context.l10n.layoutEditor.createButtonUpper
+                        : context.l10n.layoutEditor.saveButtonUpper,
                     style: const TextStyle(
                       fontFamily: 'momo',
                       fontWeight: FontWeight.w900,
@@ -188,7 +203,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'MODO DE MOVIMENTO',
+                          context.l10n.layoutEditor.movementModeTitle,
                           style: TextStyle(
                             fontFamily: 'momo',
                             fontSize: 14,
@@ -199,30 +214,29 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                         ),
                         const SizedBox(height: 12),
                         _MovementChoiceChip(
-                          label: 'D-Pad',
+                          label: context.l10n.layoutEditor.dpadLabel,
                           icon: Icons.grid_view_rounded,
-                          headline: 'Digital Preciso',
-                          description: 'Ideal para jogos de plataforma e luta.',
+                          headline: context.l10n.layoutEditor.dpadHeadline,
+                          description: context.l10n.layoutEditor.dpadDesc,
                           selected: _movementMode == 'dpad',
                           onTap: () => setState(() => _movementMode = 'dpad'),
                         ),
                         const SizedBox(height: 12),
                         _MovementChoiceChip(
-                          label: 'Joystick Fixo',
+                          label: context.l10n.layoutEditor.fixedJoystickLabel,
                           icon: Icons.radio_button_checked,
-                          headline: 'Analógico Estático',
-                          description:
-                              'Posição fixa na tela para memória muscular.',
+                          headline: context.l10n.layoutEditor.fixedJoystickHeadline,
+                          description: context.l10n.layoutEditor.fixedJoystickDesc,
                           selected: _movementMode == 'fixedJoystick',
                           onTap: () =>
                               setState(() => _movementMode = 'fixedJoystick'),
                         ),
                         const SizedBox(height: 12),
                         _MovementChoiceChip(
-                          label: 'Joystick Flutuante',
+                          label: context.l10n.layoutEditor.floatingJoystickLabel,
                           icon: Icons.gesture_rounded,
-                          headline: 'Dinâmico',
-                          description: 'O joystick aparece onde você toca.',
+                          headline: context.l10n.layoutEditor.floatingJoystickHeadline,
+                          description: context.l10n.layoutEditor.floatingJoystickDesc,
                           selected: _movementMode == 'floatingJoystick',
                           onTap: () => setState(
                             () => _movementMode = 'floatingJoystick',
@@ -262,7 +276,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'BOTÕES VISÍVEIS',
+                          context.l10n.layoutEditor.visibleButtonsTitle,
                           style: TextStyle(
                             fontFamily: 'momo',
                             fontSize: 14,
@@ -302,9 +316,9 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                               width: 2,
                             ),
                           ),
-                          child: const Text(
-                            'Toque nos botões para ativar ou desativar no seu layout.',
-                            style: TextStyle(
+                          child: Text(
+                            context.l10n.layoutEditor.visibleButtonsTip,
+                            style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                               height: 1.4,

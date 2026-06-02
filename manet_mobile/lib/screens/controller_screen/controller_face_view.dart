@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/player_face.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/player_face_indicator.dart';
+import '../../l10n/app_localizations.dart';
 import 'controller_screen_widgets.dart';
 
 class ControllerFaceView extends StatelessWidget {
@@ -17,7 +18,7 @@ class ControllerFaceView extends StatelessWidget {
     required this.onExit,
     required this.totalSlots,
     required this.playerIndex,
-    required this.status,
+    required this.isConnected,
     required this.centerPulseExpanded,
     required this.onPulseCycleEnd,
   });
@@ -30,7 +31,7 @@ class ControllerFaceView extends StatelessWidget {
   final VoidCallback onExit;
   final int totalSlots;
   final int? playerIndex;
-  final String status;
+  final bool isConnected;
   final bool centerPulseExpanded;
   final VoidCallback onPulseCycleEnd;
 
@@ -61,11 +62,11 @@ class ControllerFaceView extends StatelessWidget {
           flex: 2,
           child: ControllerModeHub(
             icon: Icons.close_rounded,
-            title: 'rostinho',
+            title: context.l10n.presets.title,
             onTap: onExit,
             totalSlots: totalSlots,
             selectedPlayerIndex: playerIndex,
-            status: status,
+            isConnected: isConnected,
             playerFace: playerFace,
             centerPulseExpanded: centerPulseExpanded,
             onPulseCycleEnd: onPulseCycleEnd,
@@ -88,9 +89,9 @@ class ControllerFaceView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'cores',
-                    style: TextStyle(fontFamily: 'momo', fontSize: 16),
+                  Text(
+                    context.l10n.presets.colors,
+                    style: const TextStyle(fontFamily: 'momo', fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -116,9 +117,9 @@ class ControllerFaceView extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'rosto',
-                            style: TextStyle(
+                          Text(
+                            context.l10n.presets.face,
+                            style: const TextStyle(
                               fontFamily: 'momo',
                               fontSize: 16,
                             ),
@@ -170,9 +171,9 @@ class ControllerFaceView extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'rotacao',
-                            style: TextStyle(
+                          Text(
+                            context.l10n.presets.rotation,
+                            style: const TextStyle(
                               fontFamily: 'momo',
                               fontSize: 16,
                             ),
@@ -198,9 +199,9 @@ class ControllerFaceView extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'presets',
-                    style: TextStyle(fontFamily: 'momo', fontSize: 16),
+                  Text(
+                    context.l10n.presets.presetsTitle,
+                    style: const TextStyle(fontFamily: 'momo', fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -351,7 +352,7 @@ class _PresetChip extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              preset.label,
+              context.l10n.presets.getPresetLabel(preset.id),
               style: const TextStyle(
                 fontFamily: 'momo',
                 fontSize: 12,

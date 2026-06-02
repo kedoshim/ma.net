@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:manet_desktop/screens/home_page/gamepad_state.dart';
 import 'package:manet_desktop/services/host_api_service.dart';
+import 'package:manet_desktop/l10n/app_localizations.dart';
 import 'package:manet_desktop/theme/app_theme.dart';
 import 'package:manet_desktop/theme/app_colors.dart';
 import 'package:manet_desktop/widgets/player_face_indicator.dart';
@@ -860,6 +861,21 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: widget.scale.eighth / 2,
+                  left: widget.scale.eighth / 2,
+                ),
+                child: Text(
+                  context.l10n.players.reserveBench,
+                  style: TextStyle(
+                    fontFamily: 'momo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16.0,
+                    color: AppTheme.primaryText.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
               Container(
                 height: 160.0,
                 width: double.infinity,
@@ -871,7 +887,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                 child: state.pool.isEmpty
                     ? Center(
                         child: Text(
-                          'banco de reservas',
+                          context.l10n.players.emptyBench,
                           style: TextStyle(
                             fontFamily: 'momo',
                             fontSize: 20.0,

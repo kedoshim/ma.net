@@ -9,6 +9,7 @@ import 'package:manet_desktop/theme/app_colors.dart';
 
 import 'gamepad_handler_widget.dart';
 import '../../widgets/juicy_widgets.dart';
+import '../../l10n/app_localizations.dart';
 
 class QRCodePanel extends StatefulWidget {
   final ConnectionSnapshot? connectionSnapshot;
@@ -41,84 +42,24 @@ class QRCodePanel extends StatefulWidget {
   @override
   State<QRCodePanel> createState() => _QRCodePanelState();
 
-  static const Map<String, String> text = {
-    'connection_label_this_device': 'This device',
-    'connection_label_wifi': 'Wi-Fi',
-    'connection_label_ethernet': 'Cable',
-    'connection_label_hotspot': 'Hotspot',
-    'connection_label_backup': 'Extra',
-    'ui_more_connections': 'Outras formas de conectar',
-    'ui_more': 'More',
-    'ui_copied': 'Link copied',
-    'ui_chip_selected': 'On screen',
-    'ui_chip_recommended': 'Best pick',
-    'ui_chip_preferred': 'Saved',
-    'ui_chip_last_success': 'Worked',
-    'ui_use_this': 'Use this',
-    'ui_showing': 'Showing',
-    'ui_connection_fallback': 'Connection',
-    'ui_connection_hint_wifi': 'Phones join through the same Wi-Fi.',
-    'ui_connection_hint_hotspot': 'Good when your computer shares the signal.',
-    'ui_connection_hint_ethernet': 'Helpful when the PC is on cable internet.',
-    'ui_connection_hint_backup': 'Worth a try if the first one does not work.',
-    'diag_button_label': 'Help',
-    'diag_sheet_title': 'Connection helper',
-    'diag_sheet_healthy': 'Everything looks ready to play.',
-    'diag_sheet_attention': 'A few things may be getting in the way.',
-    'diag_action_refresh': 'Refresh',
-    'diag_action_copy_link': 'Copy link',
-    'diag_action_firewall': 'Open Firewall',
-    'diag_action_firewall_advanced': 'Advanced Firewall',
-    'diag_title_server_started': 'Server started',
-    'diag_body_server_started': 'Your game room is up and waiting.',
-    'diag_title_qr_ready': 'QR code ready',
-    'diag_body_qr_ready': 'Friends can scan this code to join.',
-    'diag_title_no_network': 'No local network found',
-    'diag_body_no_network':
-        'This computer does not look connected to a phone-friendly network yet.',
-    'diag_title_local_only': 'This code stays on this computer',
-    'diag_body_local_only':
-        'Phones may not reach this room yet. Try refreshing the network choice.',
-    'diag_title_multiple_networks': 'More than one network found',
-    'diag_body_multiple_networks':
-        'If one code does not work, try switching to another network source.',
-    'diag_title_hotspot_permission': 'Hotspot may need permission',
-    'diag_body_hotspot_permission':
-        'Using hotspot mode? Windows may need Public network access allowed.',
-    'diag_title_reachability': 'Phones may have trouble reaching this room',
-    'diag_body_reachability':
-        'Try refreshing the network source or switching to another one.',
-    'diag_title_firewall_hint': 'Firewall may be blocking phones',
-    'diag_body_firewall_hint':
-        'If nobody can join after scanning, Windows Firewall is a common reason.',
-    'diag_title_hotspot_waiting': 'Hotspot still waiting for players',
-    'diag_body_hotspot_waiting':
-        'If phones see the hotspot but cannot join, try allowing Public access.',
-    'diag_tip_title': 'If phones cannot join',
-    'diag_tip_line_1': '1. Put everyone on the same network',
-    'diag_tip_line_2': '2. Allow Windows Firewall access',
-    'diag_tip_line_3': '3. Try Hotspot if Wi-Fi fails',
-    'diag_tip_got_it': 'Got it',
-    'diag_action_done': 'Opened helper',
-  };
+  static String t(BuildContext context, String key) =>
+      context.l10n.qrPanel.textMap[key] ?? key;
 
-  static String t(String key) => text[key] ?? key;
-
-  static String displayName(ConnectionInfo connection) {
+  static String displayName(BuildContext context, ConnectionInfo connection) {
     final key = connection.displayNameKey.split('__').first;
-    return t(key);
+    return t(context, key);
   }
 
-  static String kindSubtitle(String kind) {
+  static String kindSubtitle(BuildContext context, String kind) {
     switch (kind) {
       case 'wifi':
-        return t('ui_connection_hint_wifi');
+        return t(context, 'ui_connection_hint_wifi');
       case 'hotspot':
-        return t('ui_connection_hint_hotspot');
+        return t(context, 'ui_connection_hint_hotspot');
       case 'ethernet':
-        return t('ui_connection_hint_ethernet');
+        return t(context, 'ui_connection_hint_ethernet');
       default:
-        return t('ui_connection_hint_backup');
+        return t(context, 'ui_connection_hint_backup');
     }
   }
 }
@@ -230,7 +171,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Rede atual',
+            context.l10n.qrPanel.currentNetworkLabel,
             style: AppTheme.bodyMedium.copyWith(
               fontSize: scale.eighth * 0.55,
               color: AppColors.textPrimary.withValues(alpha: 0.5),
@@ -238,7 +179,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
             ),
           ),
           Text(
-            QRCodePanel.t('ui_connection_fallback'),
+            context.l10n.qrPanel.fallbackNetworkLabel,
             style: AppTheme.bodyMedium.copyWith(
               fontFamily: 'momo',
               fontSize: scale.eighth * 0.9,
@@ -260,18 +201,18 @@ class _QRCodePanelState extends State<QRCodePanel> {
 
     String subtitle;
     if (kind == 'wifi' || kind == 'hotspot') {
-      subtitle = networkName.isNotEmpty ? networkName : 'Mesma rede do PC';
+      subtitle = networkName.isNotEmpty ? networkName : context.l10n.qrPanel.sameNetworkLabel;
     } else if (kind == 'ethernet') {
-      subtitle = 'Rede Local (Cabo)';
+      subtitle = context.l10n.qrPanel.ethernetNetworkLabel;
     } else {
-      subtitle = QRCodePanel.t('ui_connection_fallback');
+      subtitle = context.l10n.qrPanel.fallbackNetworkLabel;
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Rede atual',
+          context.l10n.qrPanel.currentNetworkLabel,
           style: AppTheme.bodyMedium.copyWith(
             fontSize: scale.eighth * 0.55,
             color: AppColors.textPrimary.withValues(alpha: 0.5),
@@ -322,7 +263,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Entra aí :)',
+          context.l10n.home.joinIn,
           style: AppTheme.titleMedium.copyWith(
             fontFamily: 'momo',
             fontSize: widget.scale.eighth * 0.9,
@@ -347,7 +288,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Entra aí :)',
+          context.l10n.home.joinIn,
           style: AppTheme.titleMedium.copyWith(
             fontFamily: 'momo',
             fontSize: widget.scale.eighth * 0.9,
@@ -392,7 +333,9 @@ class _QRCodePanelState extends State<QRCodePanel> {
                     color: AppColors.textPrimary.withValues(alpha: 0.06),
                     child: Center(
                       child: Text(
-                        widget.isLoadingConnection ? 'Criando QR...' : 'Sem QR',
+                        widget.isLoadingConnection
+                            ? context.l10n.qrPanel.qrCreating
+                            : context.l10n.qrPanel.qrMissing,
                         textAlign: TextAlign.center,
                         style: AppTheme.bodyMedium.copyWith(
                           fontFamily: 'momo',
@@ -418,7 +361,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'ou acesse o link:',
+          context.l10n.qrPanel.orAccessLink,
           style: AppTheme.bodyMedium.copyWith(
             fontSize: widget.scale.eighth * 0.55,
             color: AppColors.textPrimary.withValues(alpha: 0.5),
@@ -460,7 +403,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
             color: AppColors.textPrimary.withValues(alpha: 0.7),
           ),
           onPressed: () => _showConnectionsSheet(context),
-          tooltip: 'Outras formas de conectar',
+          tooltip: context.l10n.qrPanel.otherConnectionsTooltip,
           splashRadius: widget.scale.eighth,
         ),
       ],
@@ -488,7 +431,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
           ),
           const SizedBox(width: 8),
           Text(
-            'Ajuda',
+            context.l10n.qrPanel.helpButtonLabel,
             style: AppTheme.bodyMedium.copyWith(
               fontFamily: 'momo',
               fontSize: widget.scale.eighth * 0.8,
@@ -507,8 +450,8 @@ class _QRCodePanelState extends State<QRCodePanel> {
     final connectionUrl =
         selectedConnection?.url ??
         (widget.isLoadingConnection
-            ? 'Scanning local network...'
-            : 'Unavailable');
+            ? (context.currentLocale.languageCode == 'pt' ? 'Buscando rede local...' : 'Scanning local network...')
+            : (context.currentLocale.languageCode == 'pt' ? 'Indisponível' : 'Unavailable'));
 
     return Container(
       width: double.infinity,
@@ -803,7 +746,7 @@ class _DiagnosticsButtonState extends State<_DiagnosticsButton>
         return Transform.scale(
           scale: pulse,
           child: Tooltip(
-            message: QRCodePanel.t('diag_button_label'),
+            message: QRCodePanel.t(context, 'diag_button_label'),
             child: Material(
               color: bgColor,
               shape: RoundedRectangleBorder(
@@ -893,7 +836,7 @@ class _OnboardingTip extends StatelessWidget {
               SizedBox(width: scale.eighth / 2),
               Expanded(
                 child: Text(
-                  QRCodePanel.t('diag_tip_title'),
+                  QRCodePanel.t(context, 'diag_tip_title'),
                   style: AppTheme.bodyMedium.copyWith(
                     fontFamily: 'momo',
                     fontSize: scale.eighth * 0.78,
@@ -913,17 +856,17 @@ class _OnboardingTip extends StatelessWidget {
           _TipLine(
             scale: scale,
             icon: Icons.wifi_rounded,
-            text: QRCodePanel.t('diag_tip_line_1'),
+            text: QRCodePanel.t(context, 'diag_tip_line_1'),
           ),
           _TipLine(
             scale: scale,
             icon: Icons.shield_outlined,
-            text: QRCodePanel.t('diag_tip_line_2'),
+            text: QRCodePanel.t(context, 'diag_tip_line_2'),
           ),
           _TipLine(
             scale: scale,
             icon: Icons.portable_wifi_off_outlined,
-            text: QRCodePanel.t('diag_tip_line_3'),
+            text: QRCodePanel.t(context, 'diag_tip_line_3'),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -932,7 +875,7 @@ class _OnboardingTip extends StatelessWidget {
                 onDismiss();
               },
               child: Text(
-                QRCodePanel.t('diag_tip_got_it'),
+                QRCodePanel.t(context, 'diag_tip_got_it'),
                 style: AppTheme.bodyMedium.copyWith(
                   fontFamily: 'momo',
                   fontSize: scale.eighth * 0.72,
@@ -1036,7 +979,7 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(QRCodePanel.t('ui_copied'))));
+        ).showSnackBar(SnackBar(content: Text(QRCodePanel.t(context, 'ui_copied'))));
       }
       return;
     }
@@ -1099,7 +1042,7 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      QRCodePanel.t('diag_sheet_title'),
+                      QRCodePanel.t(context, 'diag_sheet_title'),
                       style: AppTheme.bodyMedium.copyWith(
                         fontFamily: 'momo',
                         fontSize: widget.scale.eighth * 1.05,
@@ -1143,8 +1086,8 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
                     Expanded(
                       child: Text(
                         (snapshot?.attentionNeeded ?? false)
-                            ? QRCodePanel.t('diag_sheet_attention')
-                            : QRCodePanel.t('diag_sheet_healthy'),
+                            ? QRCodePanel.t(context, 'diag_sheet_attention')
+                            : QRCodePanel.t(context, 'diag_sheet_healthy'),
                         style: AppTheme.bodyMedium.copyWith(
                           fontFamily: 'momo',
                           fontSize: widget.scale.eighth * 0.72,
@@ -1165,7 +1108,7 @@ class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
                     _ActionChip(
                       scale: widget.scale,
                       icon: _iconForName(action.icon),
-                      label: QRCodePanel.t(action.labelKey),
+                      label: QRCodePanel.t(context, action.labelKey),
                       onTap: _busy ? null : () => _runAction(action),
                     ),
                 ],
@@ -1252,7 +1195,7 @@ class _DiagnosticCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      QRCodePanel.t(check.titleKey),
+                      QRCodePanel.t(context, check.titleKey),
                       style: AppTheme.bodyMedium.copyWith(
                         fontFamily: 'momo',
                         fontSize: scale.eighth * 0.78,
@@ -1260,7 +1203,7 @@ class _DiagnosticCard extends StatelessWidget {
                     ),
                     SizedBox(height: scale.eighth / 4),
                     Text(
-                      QRCodePanel.t(check.bodyKey),
+                      QRCodePanel.t(context, check.bodyKey),
                       style: AppTheme.bodyMedium.copyWith(
                         fontSize: scale.eighth * 0.68,
                         color: AppColors.textPrimary.withValues(alpha: 0.72),
@@ -1281,7 +1224,7 @@ class _DiagnosticCard extends StatelessWidget {
                   _ActionChip(
                     scale: scale,
                     icon: _iconForName(action.icon),
-                    label: QRCodePanel.t(action.labelKey),
+                    label: QRCodePanel.t(context, action.labelKey),
                     onTap: () => onActionTap(action),
                   ),
               ],
@@ -1417,7 +1360,7 @@ class _ConnectionsSheetState extends State<ConnectionsSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      QRCodePanel.t('ui_more_connections'),
+                      QRCodePanel.t(context, 'ui_more_connections'),
                       style: AppTheme.bodyMedium.copyWith(
                         fontFamily: 'momo',
                         fontSize: widget.scale.eighth * 1.05,
@@ -1444,7 +1387,7 @@ class _ConnectionsSheetState extends State<ConnectionsSheet> {
                       ),
                       onPressed: _refresh,
                       color: AppColors.textPrimary,
-                      tooltip: QRCodePanel.t('diag_action_refresh'),
+                      tooltip: QRCodePanel.t(context, 'diag_action_refresh'),
                     ),
                 ],
               ),
@@ -1454,7 +1397,7 @@ class _ConnectionsSheetState extends State<ConnectionsSheet> {
                       child: Padding(
                         padding: EdgeInsets.all(widget.scale.eighth),
                         child: Text(
-                          'Nenhuma rede alternativa encontrada.',
+                          context.l10n.qrPanel.faqNoAlternativeNetworks,
                           style: AppTheme.bodyMedium.copyWith(
                             fontFamily: 'momo',
                           ),
@@ -1510,15 +1453,15 @@ class _CompactConnectionCard extends StatelessWidget {
       networkName = '';
     }
 
-    String typeLabel = QRCodePanel.t(kindKey);
+    String typeLabel = QRCodePanel.t(context, kindKey);
     String? subtitleLabel;
 
     if (connection.kind == 'wifi') {
-      subtitleLabel = networkName.isNotEmpty ? networkName : 'Mesma rede do PC';
+      subtitleLabel = networkName.isNotEmpty ? networkName : context.l10n.qrPanel.sameNetworkLabel;
     } else if (connection.kind == 'hotspot') {
-      subtitleLabel = networkName.isNotEmpty ? networkName : 'Hotspot Ativo';
+      subtitleLabel = networkName.isNotEmpty ? networkName : context.l10n.qrPanel.activeHotspotLabel;
     } else if (connection.kind == 'ethernet') {
-      subtitleLabel = 'Rede cabeada';
+      subtitleLabel = context.l10n.qrPanel.ethernetNetworkLabel;
     }
 
     return Container(
@@ -1602,7 +1545,7 @@ class _CompactConnectionCard extends StatelessWidget {
                   ),
               onPressed: onUse,
               child: Text(
-                'Usar',
+                context.l10n.qrPanel.useConnectionButton,
                 style: AppTheme.bodyMedium.copyWith(
                   fontFamily: 'momo',
                   fontSize: scale.eighth * 0.7,
@@ -1763,8 +1706,7 @@ class _FaqSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String wifiSolution =
-        '• Verifique se ambos estão no mesmo Wi-Fi\n• Veja se o Firewall do Windows está bloqueando\n• Tente recarregar a página do celular';
+    String wifiSolution = context.l10n.qrPanel.wifiOffSolution();
 
     if (selectedConnection != null) {
       final kind = selectedConnection!.kind;
@@ -1776,11 +1718,9 @@ class _FaqSheet extends StatelessWidget {
       }
 
       if ((kind == 'wifi' || kind == 'hotspot') && networkName.isNotEmpty) {
-        wifiSolution =
-            '• Verifique se o celular está conectado na rede:\n  "$networkName"\n• Veja se o Firewall do Windows está bloqueando\n• Tente recarregar a página';
+        wifiSolution = context.l10n.qrPanel.wifiOffSolution(networkName: networkName, kind: kind);
       } else if (kind == 'ethernet') {
-        wifiSolution =
-            '• O PC está no cabo. Certifique-se que o celular está no Wi-Fi da rede local\n• Veja se o Firewall do Windows está bloqueando\n• Tente recarregar a página';
+        wifiSolution = context.l10n.qrPanel.wifiOffSolution(kind: kind);
       }
     }
 
@@ -1789,22 +1729,22 @@ class _FaqSheet extends StatelessWidget {
         scale: scale,
         step: '1',
         icon: Icons.wifi,
-        title: 'Fique na mesma rede',
-        description: 'Seu computador e os celulares precisam estar conectados no mesmo Wi-Fi.',
+        title: context.l10n.qrPanel.faqStep1Title,
+        description: context.l10n.qrPanel.faqStep1Desc,
       ),
       _StepCard(
         scale: scale,
         step: '2',
         icon: Icons.qr_code_scanner,
-        title: 'Escaneie o QR Code',
-        description: 'Abra a câmera do celular ou um leitor de QR Code e aponte para a tela.',
+        title: context.l10n.qrPanel.faqStep2Title,
+        description: context.l10n.qrPanel.faqStep2Desc,
       ),
       _StepCard(
         scale: scale,
         step: '3',
         icon: Icons.link,
-        title: 'Acesse pelo link',
-        description: 'Se o QR Code falhar, digite o link exibido na tela no navegador do celular.',
+        title: context.l10n.qrPanel.faqStep3Title,
+        description: context.l10n.qrPanel.faqStep3Desc,
       ),
     ];
 
@@ -1826,7 +1766,7 @@ class _FaqSheet extends StatelessWidget {
               children: [
                 Expanded(child: stepCards[2]),
                 SizedBox(width: scale.eighth),
-                Expanded(child: stepCards[3]),
+                const Expanded(child: SizedBox()),
               ],
             ),
           ],
@@ -1874,7 +1814,7 @@ class _FaqSheet extends StatelessWidget {
                   ),
                   SizedBox(height: scale.eighth),
                   Text(
-                    'Guia Rápido de Conexão',
+                    context.l10n.qrPanel.faqTitle,
                     style: AppTheme.bodyMedium.copyWith(
                       fontFamily: 'momo',
                       fontSize: scale.eighth * 1.05,
@@ -1887,7 +1827,7 @@ class _FaqSheet extends StatelessWidget {
                   ),
                   SizedBox(height: scale.eighth * 1.5),
                   Text(
-                    'Problemas Comuns',
+                    context.l10n.qrPanel.faqCommonProblems,
                     style: AppTheme.bodyMedium.copyWith(
                       fontFamily: 'momo',
                       fontSize: scale.eighth * 1.05,
@@ -1898,29 +1838,25 @@ class _FaqSheet extends StatelessWidget {
                   _FaqItem(
                     scale: scale,
                     icon: Icons.wifi_off_rounded,
-                    title: 'O celular não conecta',
-                    description: 'O celular e o PC podem não estar se comunicando.',
+                    title: context.l10n.qrPanel.faqWifiOffTitle,
+                    description: context.l10n.qrPanel.faqWifiOffDesc,
                     solution: wifiSolution,
                   ),
                   SizedBox(height: scale.eighth),
                   _FaqItem(
                     scale: scale,
                     icon: Icons.videogame_asset_off_rounded,
-                    title: 'O controle não funciona no jogo',
-                    description:
-                        'Alguns jogos só reconhecem tipos específicos de controles.',
-                    solution:
-                        '• Tente trocar entre XInput e DInput nas configurações\n• Alguns jogos funcionam melhor com modos diferentes',
+                    title: context.l10n.qrPanel.faqGameControllerNotWorkingTitle,
+                    description: context.l10n.qrPanel.faqGameControllerNotWorkingDesc,
+                    solution: context.l10n.qrPanel.faqGameControllerNotWorkingSolution,
                   ),
                   SizedBox(height: scale.eighth),
                   _FaqItem(
                     scale: scale,
                     icon: Icons.group_off_rounded,
-                    title: 'Mais de 4 jogadores não funcionam',
-                    description:
-                        'O Windows limita controles XInput a no máximo 4 jogadores.',
-                    solution:
-                        '• Sugerimos trocar o modo do servidor para DInput para jogar com mais pessoas',
+                    title: context.l10n.qrPanel.faqPlayerLimitTitle,
+                    description: context.l10n.qrPanel.faqPlayerLimitDesc,
+                    solution: context.l10n.qrPanel.faqPlayerLimitSolution,
                   ),
                 ],
               ),

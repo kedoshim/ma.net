@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/controller_layout_preset.dart';
 import '../models/controller_branding.dart';
 import '../models/player_face.dart';
@@ -93,7 +94,20 @@ class _ControllerScreenState extends State<ControllerScreen>
   ControllerScreenMode _activeMode = ControllerScreenMode.gameplay;
   List<DiscoveredHost> _discoveredHosts = [];
 
-  String status = 'Conectando...';
+  String get status {
+    if (_connectionState == ControllerConnectionState.searching) {
+      return context.l10n.status.searching;
+    }
+    if (_connectionState == ControllerConnectionState.disconnected) {
+      return context.l10n.status.disconnected;
+    }
+    if (_connectionState == ControllerConnectionState.multipleHostsFound) {
+      return context.l10n.status.multipleHostsFound;
+    }
+    return playerIndex != null
+        ? context.l10n.status.connected
+        : context.l10n.status.connectedWaiting;
+  }
   int? playerIndex;
   MovementMode _movementMode = MovementMode.fixedJoystick;
   bool _mouseModeOwned = false;
@@ -225,7 +239,6 @@ class _ControllerScreenState extends State<ControllerScreen>
 
       setState(() {
         _connectionState = ControllerConnectionState.connected;
-        status = 'Conectado';
       });
 
       ws!.channel.stream.listen(
@@ -309,12 +322,12 @@ class _ControllerScreenState extends State<ControllerScreen>
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.screenBackground,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            SizedBox(width: 8),
+            const SizedBox(width: 8),
             Text(
-              'O celular não conectou :P',
-              style: TextStyle(
+              context.l10n.connectionTips.title,
+              style: const TextStyle(
                 fontFamily: 'momo',
                 color: AppColors.textPrimary,
                 fontSize: 18,
@@ -328,7 +341,7 @@ class _ControllerScreenState extends State<ControllerScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Algumas dicas para tentar resolver:',
+                context.l10n.connectionTips.subtitle,
                 style: TextStyle(
                   color: AppColors.textPrimary.withValues(alpha: 0.8),
                   fontSize: 14,
@@ -337,17 +350,17 @@ class _ControllerScreenState extends State<ControllerScreen>
               const SizedBox(height: 16),
               _buildTipRow(
                 Icons.wifi_rounded,
-                '1. Verifique se ambos estão na mesma rede Wi-Fi.',
+                context.l10n.connectionTips.wifiSame,
               ),
               const SizedBox(height: 12),
               _buildTipRow(
                 Icons.shield_outlined,
-                '2. O Firewall do Windows pode estar bloqueando a conexão.',
+                context.l10n.connectionTips.firewall,
               ),
               const SizedBox(height: 12),
               _buildTipRow(
                 Icons.portable_wifi_off_outlined,
-                '3. Tente usar o roteador (Hotspot) do próprio computador se o Wi-Fi falhar.',
+                context.l10n.connectionTips.hotspot,
               ),
             ],
           ),
@@ -356,7 +369,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(
-              'Entendi',
+              context.l10n.connectionTips.gotIt,
               style: TextStyle(
                 fontFamily: 'momo',
                 color: AppColors.highlightColor,
@@ -407,7 +420,6 @@ class _ControllerScreenState extends State<ControllerScreen>
 
     setState(() {
       playerIndex = slot + 1;
-      status = 'Conectado';
 
       if (colorHex != null) {
         final parsedColor = colorFromHex(colorHex);
@@ -575,7 +587,6 @@ class _ControllerScreenState extends State<ControllerScreen>
   void _clearPlayerSlot() {
     setState(() {
       playerIndex = null;
-      status = 'Conectado (Aguardando Vaga)';
     });
   }
 
@@ -698,8 +709,10 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _showFaceTextEditDialog() {
+    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+
     showDialog(
-      context: context,
+      context: dialogContext,
       useRootNavigator: false,
       barrierDismissible: true,
       barrierColor: Colors.black54,
@@ -808,9 +821,9 @@ class _ControllerScreenState extends State<ControllerScreen>
                     : Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
-                            'Editar Rostinho',
-                            style: TextStyle(
+                          Text(
+                            context.l10n.presets.editFaceTitle,
+                            style: const TextStyle(
                               fontFamily: 'momo',
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -879,9 +892,9 @@ class _ControllerScreenState extends State<ControllerScreen>
                                 padding: const EdgeInsets.symmetric(vertical: 12),
                               ),
                               onPressed: () => Navigator.of(context).pop(),
-                              child: const Text(
-                                'Salvar',
-                                style: TextStyle(
+                              child: Text(
+                                context.l10n.common.save,
+                                style: const TextStyle(
                                   fontFamily: 'momo',
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -1098,7 +1111,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onQuickAction: _sendQuickAction,
           totalSlots: totalSlots,
           playerIndex: playerIndex,
-          status: status,
+          isConnected: _connectionState == ControllerConnectionState.connected,
           playerFace: _playerFace,
           centerPulseExpanded: _centerPulseExpanded,
           onPulseCycleEnd: _toggleCenterPulse,
@@ -1117,7 +1130,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onExit: _exitTemporaryMode,
           totalSlots: totalSlots,
           playerIndex: playerIndex,
-          status: status,
+          isConnected: _connectionState == ControllerConnectionState.connected,
           playerFace: _playerFace,
           centerPulseExpanded: _centerPulseExpanded,
           onPulseCycleEnd: _toggleCenterPulse,
@@ -1140,7 +1153,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onExit: _exitTemporaryMode,
           totalSlots: totalSlots,
           playerIndex: playerIndex,
-          status: status,
+          isConnected: _connectionState == ControllerConnectionState.connected,
           centerPulseExpanded: _centerPulseExpanded,
           onPulseCycleEnd: _toggleCenterPulse,
         );
@@ -1225,13 +1238,13 @@ class _ControllerScreenState extends State<ControllerScreen>
   Widget _buildControllerNavigator() {
     return Navigator(
       key: _controllerNavigatorKey,
-      onDidRemovePage: (page) {},
-      pages: [
-        MaterialPage<void>(
-          key: const ValueKey('controller-canvas'),
-          child: _buildControllerCanvas(),
-        ),
-      ],
+      initialRoute: '/',
+      onGenerateRoute: (settings) {
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (context) => _buildControllerCanvas(),
+        );
+      },
     );
   }
 

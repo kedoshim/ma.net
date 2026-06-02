@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/quick_actions_definition.dart';
 import '../theme/app_colors.dart';
+import '../l10n/app_localizations.dart';
 import 'juicy_widgets.dart';
 
 typedef QuickActionCallback = void Function(String actionId);
@@ -49,7 +50,7 @@ class QuickActionsMenu extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Actions',
+              context.l10n.quickActions.title,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -83,19 +84,19 @@ class _QuickActionsDialogState extends State<_QuickActionsDialog> {
   @override
   Widget build(BuildContext context) {
     return JuicyDialog(
-      title: 'Quick Actions',
+      title: context.l10n.quickActions.title,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildSection(QuickActionGroup.volumeMedia),
+          _buildSection(context, QuickActionGroup.volumeMedia),
           const SizedBox(height: 24),
-          _buildSection(QuickActionGroup.windowsSystem),
+          _buildSection(context, QuickActionGroup.windowsSystem),
         ],
       ),
     );
   }
 
-  Widget _buildSection(QuickActionGroup group) {
+  Widget _buildSection(BuildContext context, QuickActionGroup group) {
     final actions = quickActionsForGroup(group);
 
     return Column(
@@ -114,7 +115,9 @@ class _QuickActionsDialogState extends State<_QuickActionsDialog> {
               ),
               const SizedBox(width: 8),
               Text(
-                quickActionGroupLabel(group),
+                group == QuickActionGroup.volumeMedia
+                    ? context.l10n.quickActions.volumeMediaSection
+                    : context.l10n.quickActions.windowsSystemSection,
                 style: const TextStyle(
                   fontFamily: 'momo',
                   fontSize: 14,
@@ -212,7 +215,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4.0),
               child: Text(
-                widget.action.title,
+                context.l10n.quickActions.getActionTitle(widget.action.id),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
