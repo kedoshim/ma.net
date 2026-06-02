@@ -56,9 +56,10 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
   @override
   void didUpdateWidget(covariant LobbyToolbar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.serverSlots != widget.serverSlots ||
-        oldWidget.serverLocked != widget.serverLocked) {
+    if (oldWidget.serverSlots != widget.serverSlots) {
       _draftSlots = widget.serverSlots;
+    }
+    if (oldWidget.serverLocked != widget.serverLocked) {
       _draftLocked = widget.serverLocked;
     }
   }
@@ -111,7 +112,7 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                         // Try/finally garante que o estado de loading seja removido
                         // mesmo se widget.onApply lançar uma exceção silenciosa
                         try {
-                          await widget.onApply(_draftSlots, newLockedState);
+                          await widget.onApply(widget.serverSlots, newLockedState);
                         } finally {
                           if (mounted) {
                             setState(() {

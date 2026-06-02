@@ -20,7 +20,8 @@
     "Padre",
     "Pastor",
     "Camarada",
-    "Vovô"
+    "Vovô",
+    "São"
   ],
 
   "prenoum_f": [
@@ -40,12 +41,11 @@
     "Tatu",
     "Jacaré",
     "Saci",
-    "Pererê"
+    "Pererê",
     "Bolo",
     "Pão de Queijo",
     "Tucano",
     "Guaraná",
-    "Balão",
     "Vasco",
     "Berrante",
     "Catavento",
@@ -400,7 +400,7 @@
     "Malandro",
     "Caótico",
     "Travesso",
-    "Arteiro",
+    "Caipira",
     "Maroto",
     "Curioso",
     "Esperto",
@@ -461,7 +461,7 @@
     "de Osasco",
     "da Vaquejada",
     "de Belém",
-    "do saco"
+    "do sinal"
   ],
   
   "adjectives_f": [
@@ -496,6 +496,7 @@
     "Malandra",
     "Caótica",
     "Travessa",
+    "Caipira",
     "Marota",
     "Curiosa",
     "Esperta",
@@ -521,7 +522,6 @@
     "Formidável",
     "Tunada",
     "do Pagodinho",
-    "Meteórica",
     "Bailarina",
     "Treme-Treme",
     "Piscante",
@@ -553,10 +553,10 @@
     "do podrão",
     "do balacobaco",
     "do Gás",
-    "do Mato",
+    "da Mata",
     "de Osasco",
     "da Vaquejada",
     "de Belém",
-    "do saco"
+    "do sinal"
   ]
 }
