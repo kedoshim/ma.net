@@ -145,6 +145,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _startupPipeline = StartupConnectionPipeline(
       api: _api,
       onNetworkChanged: _handleNetworkChanged,
+      onPresetUpdated: (catalog) {
+        if (mounted) {
+          setState(() {
+            _presetCatalog = catalog;
+          });
+        }
+      },
     );
     _startupPipeline.state.addListener(_handlePipelineUpdate);
     _startupPipeline.initialize();

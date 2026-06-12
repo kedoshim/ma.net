@@ -131,7 +131,124 @@ class HTTPRoutes:
             )
 
     async def presets_handler(self, request):
-        return web.json_response(self.manager.preset_store.list_payload())
+        if request.query.get("format") == "catalog" or request.query.get("catalog") == "true":
+            return web.json_response(self.manager.preset_store.list_payload())
+        
+        presets = []
+        for preset in self.manager.preset_store.all_presets_by_id.values():
+            presets.append({
+                "id": preset["id"],
+                "name": preset["name"]
+            })
+        return web.json_response(presets)
+
+    async def current_preset_handler(self, request):
+        preset = self.manager.preset_store.get_active_preset()
+        return web.json_response(preset)
+
+    async def apply_preset_handler(self, request):
+        try:
+            data = await request.json()
+        except Exception:
+            LOG.error("[PRESET API] Failed to apply preset: Invalid request body (not valid JSON)")
+            return web.json_response(
+                {"success": False, "code": "invalid_body", "message": "Invalid JSON body"},
+                status=400
+            )
+
+        if not isinstance(data, dict):
+            LOG.error("[PRESET API] Failed to apply preset: Invalid request body (must be JSON object)")
+            return web.json_response(
+                {"success": False, "code": "invalid_body", "message": "Request body must be a JSON object"},
+                status=400
+            )
+
+        preset_id = data.get("presetId")
+        preset_name = data.get("presetName")
+
+        if not preset_id and not preset_name:
+            LOG.error("[PRESET API] Failed to apply preset: Missing presetId or presetName")
+            return web.json_response(
+                {"success": False, "code": "invalid_request", "message": "Either presetId or presetName must be provided"},
+                status=400
+            )
+
+        all_presets = self.manager.preset_store.all_presets_by_id
+        if not all_presets:
+            identifier = preset_id or preset_name
+            LOG.error("[PRESET API] Failed to apply preset %s: No presets available", identifier)
+            return web.json_response(
+                {"success": False, "code": "empty_presets", "message": "No presets are loaded in the server"},
+                status=400
+            )
+
+        if preset_id:
+            LOG.info("[PRESET API] Applying preset %s", preset_id)
+            if preset_id not in all_presets:
+                LOG.error("[PRESET API] Failed to apply preset %s: Preset ID not found", preset_id)
+                return web.json_response(
+                    {"success": False, "code": "preset_not_found", "message": f"Preset ID '{preset_id}' not found"},
+                    status=404
+                )
+            
+            try:
+                preset = self.manager.preset_store.set_active_preset(preset_id)
+                self.manager.broadcast_active_layout()
+                LOG.info("[PRESET API] Preset applied successfully")
+                return web.json_response({"success": True})
+            except Exception as e:
+                LOG.error("[PRESET API] Failed to apply preset %s: %s", preset_id, str(e))
+                return web.json_response(
+                    {"success": False, "code": "apply_failed", "message": str(e)},
+                    status=500
+                )
+        else:
+            LOG.info("[PRESET API] Applying preset %s", preset_name)
+            # Find matching presets by name
+            # 1. Exact case-sensitive match
+            matches = [p for p in all_presets.values() if p.get("name") == preset_name]
+            if not matches:
+                # 2. Case-insensitive and whitespace trimmed match
+                target_norm = preset_name.strip().lower()
+                matches = [
+                    p for p in all_presets.values()
+                    if p.get("name") and p["name"].strip().lower() == target_norm
+                ]
+            
+            if len(matches) == 0:
+                LOG.error("[PRESET API] Failed to apply preset %s: Preset name not found", preset_name)
+                return web.json_response(
+                    {"success": False, "code": "preset_not_found", "message": f"Preset name '{preset_name}' not found"},
+                    status=404
+                )
+            
+            if len(matches) > 1:
+                LOG.error("[PRESET API] Failed to apply preset %s: Multiple presets match the name", preset_name)
+                matching_ids = [p["id"] for p in matches]
+                return web.json_response(
+                    {
+                        "success": False,
+                        "code": "duplicate_preset_names",
+                        "message": f"Multiple presets found with the name '{preset_name}'. Please use presetId instead.",
+                        "matches": matching_ids
+                    },
+                    status=400
+                )
+            
+            # Exactly one match found
+            matched_preset = matches[0]
+            matched_id = matched_preset["id"]
+            try:
+                preset = self.manager.preset_store.set_active_preset(matched_id)
+                self.manager.broadcast_active_layout()
+                LOG.info("[PRESET API] Preset applied successfully")
+                return web.json_response({"success": True})
+            except Exception as e:
+                LOG.error("[PRESET API] Failed to apply preset %s: %s", preset_name, str(e))
+                return web.json_response(
+                    {"success": False, "code": "apply_failed", "message": str(e)},
+                    status=500
+                )
 
     async def select_preset_handler(self, request):
         data = await request.json()

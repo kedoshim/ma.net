@@ -39,7 +39,7 @@ begin
   begin
     Exec(
       'netsh',
-      'advfirewall firewall add rule name="MaNet Network Service" dir=in action=allow program="' + ExpandConstant('{app}\data\flutter_assets\assets\server\manet_network_service.exe') + '" enable=yes profile=private',
+      'advfirewall firewall add rule name="MaNet Controller Server" dir=in action=allow program="' + ExpandConstant('{app}\data\flutter_assets\assets\server\manet_network_service.exe') + '" enable=yes profile=private,public',
       '',
       SW_HIDE,
       ewWaitUntilTerminated,

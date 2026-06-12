@@ -206,8 +206,10 @@ class Step3Illustration extends StatelessWidget {
               brandingMode: ControllerBrandingMode.xinput,
               layout: ControllerPresetLayout(
                 movementMode: 'dpad',
-                visibleButtons: {'a': true, 'b': true, 'x': true, 'y': true},
-                buttonOrder: ['a', 'b', 'x', 'y'],
+                visibleButtons: const {'a': true, 'b': true, 'x': true, 'y': true},
+                buttonOrder: const ['a', 'b', 'x', 'y'],
+                rightLayoutMode: 'columns',
+                buttonSizes: const {},
               ),
               compact: true,
             ),

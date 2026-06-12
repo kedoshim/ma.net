@@ -67,6 +67,8 @@ class StartupConnectionPipeline {
   final ValueNotifier<StartupConnectionState> state;
   final void Function(ConnectionInfo oldConn, ConnectionInfo newConn)? onNetworkChanged;
 
+  final void Function(PresetCatalog catalog)? onPresetUpdated;
+
   late final Future<SharedPreferences> _prefsFuture;
   final Stopwatch _startupWatch = Stopwatch();
   bool _firstQrRendered = false;
@@ -78,6 +80,7 @@ class StartupConnectionPipeline {
     EndpointPriorityResolver? resolver,
     QrCodeCacheService? qrCache,
     this.onNetworkChanged,
+    this.onPresetUpdated,
   }) : resolver = resolver ?? EndpointPriorityResolver(),
        qrCache = qrCache ?? QrCodeCacheService.instance,
        state = ValueNotifier(const StartupConnectionState()) {
@@ -165,6 +168,11 @@ class StartupConnectionPipeline {
         if (ipChanged && previousSelected != null) {
           onNetworkChanged?.call(previousSelected, newSelected);
         }
+      } else if (data['type'] == 'preset_update') {
+        debugPrint('[STARTUP PIPELINE] Preset update received from server.');
+        final payload = data['catalog'] as Map<String, dynamic>;
+        final catalog = PresetCatalog.fromJson(payload);
+        onPresetUpdated?.call(catalog);
       }
     } catch (e) {
       debugPrint('[STARTUP PIPELINE] Error parsing admin socket event: $e');

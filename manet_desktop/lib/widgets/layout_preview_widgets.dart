@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/controller_branding.dart';
 import '../services/host_api_service.dart';
@@ -48,6 +49,25 @@ class StructuredLayoutPreview extends StatelessWidget {
     return [left, right];
   }
 
+  List<List<String>> _splitIntoRows(List<String> buttons) {
+    final top = <String>[];
+    final bottom = <String>[];
+
+    for (final button in buttons) {
+      if (top.length <= bottom.length) {
+        top.add(button);
+      } else {
+        bottom.add(button);
+      }
+    }
+
+    if (top.length < bottom.length) {
+      return [bottom, top];
+    }
+
+    return [top, bottom];
+  }
+
   @override
   Widget build(BuildContext context) {
     final double height = compact ? 100 : 140;
@@ -56,7 +76,8 @@ class StructuredLayoutPreview extends StatelessWidget {
         .where((buttonId) => layout.visibleButtons[buttonId] == true)
         .toList();
 
-    final columns = _splitIntoColumns(visible);
+    final bool isRows = layout.rightLayoutMode == 'rows';
+    final groups = isRows ? _splitIntoRows(visible) : _splitIntoColumns(visible);
 
     return Container(
       height: height,
@@ -106,13 +127,39 @@ class StructuredLayoutPreview extends StatelessWidget {
           SizedBox(width: compact ? 4 : 8),
           Expanded(
             flex: 3,
-            child: Row(
-              children: [
-                PreviewColumn(brandingMode: brandingMode, buttons: columns[0]),
-                SizedBox(width: compact ? 2 : 4),
-                PreviewColumn(brandingMode: brandingMode, buttons: columns[1]),
-              ],
-            ),
+            child: isRows
+                ? Column(
+                    children: [
+                      PreviewColumn(
+                        brandingMode: brandingMode,
+                        buttons: groups[0],
+                        buttonSizes: layout.buttonSizes,
+                        isHorizontal: true,
+                      ),
+                      SizedBox(height: compact ? 2 : 4),
+                      PreviewColumn(
+                        brandingMode: brandingMode,
+                        buttons: groups[1],
+                        buttonSizes: layout.buttonSizes,
+                        isHorizontal: true,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      PreviewColumn(
+                        brandingMode: brandingMode,
+                        buttons: groups[0],
+                        buttonSizes: layout.buttonSizes,
+                      ),
+                      SizedBox(width: compact ? 2 : 4),
+                      PreviewColumn(
+                        brandingMode: brandingMode,
+                        buttons: groups[1],
+                        buttonSizes: layout.buttonSizes,
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -151,6 +198,25 @@ class ReorderLayoutPreview extends StatelessWidget {
     return [left, right];
   }
 
+  List<List<String>> _splitIntoRows(List<String> buttons) {
+    final top = <String>[];
+    final bottom = <String>[];
+
+    for (final button in buttons) {
+      if (top.length <= bottom.length) {
+        top.add(button);
+      } else {
+        bottom.add(button);
+      }
+    }
+
+    if (top.length < bottom.length) {
+      return [bottom, top];
+    }
+
+    return [top, bottom];
+  }
+
   @override
   Widget build(BuildContext context) {
     final Color surface = AppColors.backgroundColor;
@@ -159,7 +225,8 @@ class ReorderLayoutPreview extends StatelessWidget {
         .where((buttonId) => layout.visibleButtons[buttonId] == true)
         .toList();
 
-    final columns = _splitIntoColumns(visible);
+    final bool isRows = layout.rightLayoutMode == 'rows';
+    final groups = isRows ? _splitIntoRows(visible) : _splitIntoColumns(visible);
 
     return Center(
       child: AspectRatio(
@@ -176,12 +243,13 @@ class ReorderLayoutPreview extends StatelessWidget {
             children: [
               Expanded(
                 flex: 3,
-                child: layout.movementMode == 'dpad'
-                    ? const PreviewDpad()
-                    : PreviewStick(
-                        floating: layout.movementMode == 'floatingJoystick',
-                      ),
-              ).scale(1.15),
+                child: (layout.movementMode == 'dpad'
+                        ? const PreviewDpad()
+                        : PreviewStick(
+                            floating: layout.movementMode == 'floatingJoystick',
+                          ))
+                    .scale(1.15),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
@@ -199,21 +267,43 @@ class ReorderLayoutPreview extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 flex: 3,
-                child: Row(
-                  children: [
-                    PreviewColumn(
-                      brandingMode: brandingMode,
-                      buttons: columns[0],
-                      onReorder: onReorder,
-                    ),
-                    const SizedBox(width: 6),
-                    PreviewColumn(
-                      brandingMode: brandingMode,
-                      buttons: columns[1],
-                      onReorder: onReorder,
-                    ),
-                  ],
-                ).scale(1.15),
+                child: isRows
+                    ? Column(
+                        children: [
+                          PreviewColumn(
+                            brandingMode: brandingMode,
+                            buttons: groups[0],
+                            buttonSizes: layout.buttonSizes,
+                            onReorder: onReorder,
+                            isHorizontal: true,
+                          ),
+                          const SizedBox(height: 6),
+                          PreviewColumn(
+                            brandingMode: brandingMode,
+                            buttons: groups[1],
+                            buttonSizes: layout.buttonSizes,
+                            onReorder: onReorder,
+                            isHorizontal: true,
+                          ),
+                        ],
+                      ).scale(1.15)
+                    : Row(
+                        children: [
+                          PreviewColumn(
+                            brandingMode: brandingMode,
+                            buttons: groups[0],
+                            buttonSizes: layout.buttonSizes,
+                            onReorder: onReorder,
+                          ),
+                          const SizedBox(width: 6),
+                          PreviewColumn(
+                            brandingMode: brandingMode,
+                            buttons: groups[1],
+                            buttonSizes: layout.buttonSizes,
+                            onReorder: onReorder,
+                          ),
+                        ],
+                      ).scale(1.15),
               ),
             ],
           ),
@@ -305,62 +395,82 @@ class PreviewColumn extends StatelessWidget {
     super.key,
     required this.brandingMode,
     required this.buttons,
+    this.buttonSizes = const {},
     this.onReorder,
+    this.isHorizontal = false,
   });
   final ControllerBrandingMode brandingMode;
   final List<String> buttons;
+  final Map<String, int> buttonSizes;
   final void Function(String, String)? onReorder;
+  final bool isHorizontal;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: buttons.map((buttonId) {
-          final presentation = ControllerBranding.presentationFor(
-            buttonId,
-            brandingMode,
-          );
-          final box = Container(
-            width: double.infinity,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.backgroundColor,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: AppColors.textPrimary.withValues(alpha: 0.3),
-                width: 1.5,
+    final children = buttons.map((buttonId) {
+      final defaultFlex = buttonId == 'RS_SWIPE' ? 2 : 1;
+      final flex = buttonSizes[buttonId] ?? defaultFlex;
+
+      Widget box;
+      if (buttonId == 'RS_FIXED') {
+        box = const RightStickFixedPreview();
+      } else if (buttonId == 'RS_BUTTON') {
+        box = const RightStickFloatingPreview(faded: true);
+      } else if (buttonId == 'RS_SWIPE') {
+        box = const RightStickSwipePreview();
+      } else {
+        final presentation = ControllerBranding.presentationFor(
+          buttonId,
+          brandingMode,
+        );
+        box = Container(
+          width: double.infinity,
+          height: isHorizontal ? double.infinity : null,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.backgroundColor,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: AppColors.textPrimary.withValues(alpha: 0.3),
+              width: 1.5,
+            ),
+          ),
+          child: ControllerButtonBrand(
+            presentation: presentation,
+            size: 14,
+            textColor: AppColors.textPrimary,
+          ),
+        );
+      }
+
+      final content = Padding(padding: const EdgeInsets.all(2), child: box);
+      if (onReorder == null) return Expanded(flex: flex, child: content);
+
+      return Expanded(
+        flex: flex,
+        child: DragTarget<String>(
+          onWillAcceptWithDetails: (details) => details.data != buttonId,
+          onAcceptWithDetails: (details) =>
+              onReorder!(details.data, buttonId),
+          builder: (context, candidateData, rejectedData) {
+            return Draggable<String>(
+              data: buttonId,
+              feedback: Material(
+                color: Colors.transparent,
+                child: SizedBox(width: 60, height: 30, child: box),
               ),
-            ),
-            child: ControllerButtonBrand(
-              presentation: presentation,
-              size: 14,
-              textColor: AppColors.textPrimary,
-            ),
-          );
+              childWhenDragging: Opacity(opacity: 0.3, child: content),
+              child: content,
+            );
+          },
+        ),
+      );
+    }).toList();
 
-          final content = Padding(padding: const EdgeInsets.all(2), child: box);
-          if (onReorder == null) return Expanded(child: content);
-
-          return Expanded(
-            child: DragTarget<String>(
-              onWillAcceptWithDetails: (details) => details.data != buttonId,
-              onAcceptWithDetails: (details) =>
-                  onReorder!(details.data, buttonId),
-              builder: (context, candidateData, rejectedData) {
-                return Draggable<String>(
-                  data: buttonId,
-                  feedback: Material(
-                    color: Colors.transparent,
-                    child: SizedBox(width: 60, height: 30, child: box),
-                  ),
-                  childWhenDragging: Opacity(opacity: 0.3, child: content),
-                  child: content,
-                );
-              },
-            ),
-          );
-        }).toList(),
-      ),
+    return Expanded(
+      child: isHorizontal
+          ? Row(children: children)
+          : Column(children: children),
     );
   }
 }
@@ -393,4 +503,201 @@ class PreviewCenterButton extends StatelessWidget {
 
 extension LayoutWidgetScaling on Widget {
   Widget scale(double factor) => Transform.scale(scale: factor, child: this);
+}
+
+class RightStickFixedPreview extends StatelessWidget {
+  const RightStickFixedPreview({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = math.min(constraints.maxWidth, constraints.maxHeight);
+        final knobSize = size * 0.33;
+        final borderRadius = size * 0.3;
+        final borderWidth = size > 60 ? AppColors.borderThickness : 1.5;
+
+        return Center(
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundColor,
+                    borderRadius: BorderRadius.circular(borderRadius),
+                    border: Border.all(
+                      color: AppColors.textPrimary,
+                      width: borderWidth,
+                    ),
+                  ),
+                ),
+                Container(
+                  width: knobSize,
+                  height: knobSize,
+                  decoration: BoxDecoration(
+                    color: AppColors.textPrimary,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.lightColor,
+                      width: borderWidth,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class RightStickFloatingPreview extends StatelessWidget {
+  final bool faded;
+
+  const RightStickFloatingPreview({
+    super.key,
+    this.faded = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = math.min(constraints.maxWidth, constraints.maxHeight);
+        final symbolSize = size * 0.7;
+        final knobSize = symbolSize * 0.33;
+        final borderRadius = symbolSize * 0.3;
+        final opacity = faded ? 0.3 : 1.0;
+        final borderWidth = symbolSize > 60 ? AppColors.borderThickness : 1.5;
+
+        return Center(
+          child: SizedBox(
+            width: symbolSize,
+            height: symbolSize,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: symbolSize,
+                  height: symbolSize,
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundColor.withValues(alpha: opacity * 0.15),
+                    borderRadius: BorderRadius.circular(borderRadius),
+                    border: Border.all(
+                      color: AppColors.textPrimary.withValues(alpha: opacity),
+                      width: borderWidth,
+                    ),
+                  ),
+                ),
+                Container(
+                  width: knobSize,
+                  height: knobSize,
+                  decoration: BoxDecoration(
+                    color: AppColors.textPrimary.withValues(alpha: opacity),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class RightStickSwipePreview extends StatelessWidget {
+  final bool active;
+
+  const RightStickSwipePreview({
+    super.key,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = active
+        ? AppColors.highlightColor
+        : AppColors.textPrimary.withValues(alpha: 0.6);
+    final iconColor = active
+        ? AppColors.highlightColor.withValues(alpha: 0.4)
+        : AppColors.textPrimary.withValues(alpha: 0.2);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final size = math.min(width, height);
+        final fontSize = size > 80 ? 14.0 : 10.0;
+        final iconSize = size > 80 ? 24.0 : 16.0;
+
+        return Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.highlightColor.withValues(alpha: 0.15)
+                : AppColors.backgroundColor.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: active ? AppColors.highlightColor : AppColors.textPrimary,
+              width: AppColors.borderThickness,
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Text(
+                'SWIPE PAD',
+                style: TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              Positioned(
+                left: size > 80 ? 10 : 4,
+                child: Icon(
+                  Icons.keyboard_arrow_left_rounded,
+                  size: iconSize,
+                  color: iconColor,
+                ),
+              ),
+              Positioned(
+                right: size > 80 ? 10 : 4,
+                child: Icon(
+                  Icons.keyboard_arrow_right_rounded,
+                  size: iconSize,
+                  color: iconColor,
+                ),
+              ),
+              Positioned(
+                top: size > 80 ? 10 : 4,
+                child: Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  size: iconSize,
+                  color: iconColor,
+                ),
+              ),
+              Positioned(
+                bottom: size > 80 ? 10 : 4,
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: iconSize,
+                  color: iconColor,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

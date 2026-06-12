@@ -86,6 +86,13 @@ class ControllerManager:
     def broadcast_active_layout(self):
         LOGGER.info("Broadcasting active layout to all devices")
         self.broadcast_to_devices(self.build_active_layout_payload())
+        try:
+            self.admin_panel.broadcast_event({
+                "type": "preset_update",
+                "catalog": self.preset_store.list_payload()
+            })
+        except Exception:
+            LOGGER.exception("Failed to broadcast preset update to admin panel")
 
     def cleanup_gamepads(self):
         LOGGER.info("[LIFECYCLE] Cleaning up all gamepads... Total slots: %d", len(self.slots))

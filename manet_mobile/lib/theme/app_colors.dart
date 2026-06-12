@@ -35,8 +35,8 @@ class AppColors {
       highlight: Color.fromARGB(255, 234, 207, 153), // Candy orange
     ),
     ColorTheme.red: ThemeColors(
-      background: Color.fromARGB(255, 255, 230, 230), // Pastel red
-      highlight: Color.fromARGB(255, 141, 220, 220), // Candy cyan
+      background: Color.fromARGB(255, 255, 230, 241), // Pastel red
+      highlight: Color.fromARGB(255, 126, 199, 199), // Candy cyan
     ),
     ColorTheme.green: ThemeColors(
       background: Color.fromARGB(255, 230, 255, 240), // Pastel green

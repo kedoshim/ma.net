@@ -47,6 +47,8 @@ def register_http_routes(app, services):
     app.router.add_post('/api/server/connections/select', services.select_connection_handler)
     app.router.add_get('/api/server/qrcode', services.qr_code_handler)
     app.router.add_get('/api/presets', services.presets_handler)
+    app.router.add_get('/api/presets/current', services.current_preset_handler)
+    app.router.add_post('/api/presets/apply', services.apply_preset_handler)
     app.router.add_post('/api/presets/select', services.select_preset_handler)
     app.router.add_post('/api/presets/custom', services.create_preset_handler)
     app.router.add_put('/api/presets/custom/{preset_id}', services.update_preset_handler)

@@ -2,7 +2,7 @@ import asyncio
 import time
 import logging
 
-from src.input.input_handler import apply_stick
+from src.input.input_handler import apply_stick, apply_right_stick
 
 LOGGER = logging.getLogger("watchdog")
 
@@ -34,15 +34,24 @@ async def stick_watchdog(manager, admin_panel=None):
             if not slot.connected:
                 continue
 
-            if (
+            # Left stick watchdog
+            if not (
                 abs(slot.last_stick_x) <= 0.05
                 and abs(slot.last_stick_y) <= 0.05
             ):
-                continue
+                if now - slot.last_input_at > 0.15:
+                    slot.last_stick_x = 0
+                    slot.last_stick_y = 0
+                    apply_stick(slot, 0, 0)
 
-            if now - slot.last_input_at > 0.15:
-                slot.last_stick_x = 0
-                slot.last_stick_y = 0
-                apply_stick(slot, 0, 0)
+            # Right stick watchdog
+            if hasattr(slot, "last_rstick_x") and not (
+                abs(slot.last_rstick_x) <= 0.05
+                and abs(slot.last_rstick_y) <= 0.05
+            ):
+                if now - slot.last_input_at > 0.15:
+                    slot.last_rstick_x = 0
+                    slot.last_rstick_y = 0
+                    apply_right_stick(slot, 0, 0)
 
         await asyncio.sleep(0.03)

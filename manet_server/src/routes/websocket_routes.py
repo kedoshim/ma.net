@@ -6,7 +6,7 @@ from aiohttp import WSMsgType, web
 
 import logging
 
-from src.input.input_handler import apply_button, apply_stick
+from src.input.input_handler import apply_button, apply_stick, apply_right_stick
 from src.input.keyboard_controller import KeyboardController
 from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
@@ -112,8 +112,8 @@ class WebSocketRoutes:
                     current_slot = self.manager.get_slot_by_device(device_id)
                     is_mouse_owner = self.manager.is_mouse_mode_owner(device_id)
 
-                    if msg_type in ("stick", "button"):
-                        LOG.info("Received input packet")
+                    if msg_type in ("stick", "rstick", "button"):
+                        LOG.debug("Received input packet")
 
                     if msg_type == "stick":
                         if is_mouse_owner:
@@ -127,7 +127,7 @@ class WebSocketRoutes:
                             current_slot.last_stick_x = x
                             current_slot.last_stick_y = y
 
-                            LOG.info("Applying controller state")
+                            LOG.debug("Applying controller state")
                             apply_stick(current_slot, x, y)
 
                         input_msg = {
@@ -143,12 +143,40 @@ class WebSocketRoutes:
                             except Exception:
                                 pass
 
+                    elif msg_type == "rstick":
+                        if is_mouse_owner:
+                            continue
+
+                        x = float(data.get("x", 0))
+                        y = float(data.get("y", 0))
+
+                        if current_slot:
+                            current_slot.last_input_at = time.time()
+                            current_slot.last_rstick_x = x
+                            current_slot.last_rstick_y = y
+
+                            LOG.debug("Applying right controller state")
+                            apply_right_stick(current_slot, x, y)
+
+                        input_msg = {
+                            "type": "input_event",
+                            "deviceId": device_id,
+                            "event": "rstick",
+                            "x": x,
+                            "y": y
+                        }
+                        for client in list(self.admin_panel.admin_clients):
+                            try:
+                                await client.send_json(input_msg)
+                            except Exception:
+                                pass
+
                     elif msg_type == "button":
                         if is_mouse_owner:
                             continue
 
                         if current_slot:
-                            LOG.info("Applying controller state")
+                            LOG.debug("Applying controller state")
                             apply_button(
                                 current_slot,
                                 data.get("id"),
@@ -286,6 +314,8 @@ class WebSocketRoutes:
                 LOG.info("Player %d (%s) disconnected", current_slot.slot_id + 1, current_slot.player_name)
                 current_slot.last_stick_x = 0
                 current_slot.last_stick_y = 0
+                current_slot.last_rstick_x = 0
+                current_slot.last_rstick_y = 0
                 current_slot.last_input_at = time.time()
                 reset_slot_gamepad(current_slot)
                 self.manager.disconnect_slot(current_slot.slot_id)

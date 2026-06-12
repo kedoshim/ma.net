@@ -3,6 +3,15 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
+// --- JOYSTICK BEHAVIOR CONFIGURATIONS ---
+// If true, joystick output values (x, y) are restricted to a unit circle (magnitude <= 1.0).
+// If false, values are clamped independently to [-1.0, 1.0] (allowing diagonals to reach 1.0, 1.0).
+const bool kNormalizeJoystickInCircle = false;
+
+// If true, the visual stick knob position is restricted to a circle.
+// If false, the visual knob position is clamped to a square.
+const bool kClampVisualKnobInCircle = true;
+
 typedef StickCallback = void Function(double x, double y);
 
 class Joystick extends StatefulWidget {
@@ -24,12 +33,10 @@ class Joystick extends StatefulWidget {
 class _JoystickState extends State<Joystick> {
   Offset _stickOffset = Offset.zero;
   bool _active = false;
+  int? _pointerId;
 
   double _currentX = 0;
   double _currentY = 0;
-
-  double _lastSentX = 0;
-  double _lastSentY = 0;
 
   Timer? _heartbeatTimer;
 
@@ -39,8 +46,6 @@ class _JoystickState extends State<Joystick> {
     _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
       if (!_active) return;
 
-      _lastSentX = _currentX;
-      _lastSentY = _currentY;
       widget.onChanged(_currentX, _currentY);
     });
   }
@@ -56,20 +61,38 @@ class _JoystickState extends State<Joystick> {
     final dx = (localPosition.dx - center.dx) / (widget.size / 2);
     final dy = (localPosition.dy - center.dy) / (widget.size / 2);
 
-    double distance = Offset(dx, dy).distance;
-    double clampedDistance = distance.clamp(0.0, 1.0);
-    final direction = Offset(dx, dy).direction;
+    if (kNormalizeJoystickInCircle) {
+      double distance = Offset(dx, dy).distance;
+      double clampedDistance = distance.clamp(0.0, 1.0);
+      final direction = Offset(dx, dy).direction;
 
-    final clampedX = math.cos(direction) * clampedDistance;
-    final clampedY = math.sin(direction) * clampedDistance;
+      final clampedX = math.cos(direction) * clampedDistance;
+      final clampedY = math.sin(direction) * clampedDistance;
 
-    _currentX = clampedX;
-    _currentY = -clampedY;
+      _currentX = clampedX;
+      _currentY = -clampedY;
+    } else {
+      _currentX = dx.clamp(-1.0, 1.0);
+      _currentY = -dy.clamp(-1.0, 1.0);
+    }
+
+    double visualX;
+    double visualY;
+    if (kClampVisualKnobInCircle) {
+      double distance = Offset(dx, dy).distance;
+      double clampedDistance = distance.clamp(0.0, 1.0);
+      final direction = Offset(dx, dy).direction;
+      visualX = math.cos(direction) * clampedDistance;
+      visualY = math.sin(direction) * clampedDistance;
+    } else {
+      visualX = dx.clamp(-1.0, 1.0);
+      visualY = dy.clamp(-1.0, 1.0);
+    }
 
     setState(() {
       _stickOffset = Offset(
-        clampedX * (widget.size / 2 - 20),
-        clampedY * (widget.size / 2 - 20),
+        visualX * (widget.size / 2 - 20),
+        visualY * (widget.size / 2 - 20),
       );
     });
   }
@@ -82,8 +105,6 @@ class _JoystickState extends State<Joystick> {
       _active = false;
       _currentX = 0;
       _currentY = 0;
-      _lastSentX = 0;
-      _lastSentY = 0;
     });
 
     widget.onReleased();
@@ -95,27 +116,46 @@ class _JoystickState extends State<Joystick> {
     super.dispose();
   }
 
+  void _handlePointerDown(PointerDownEvent event, Size bounds) {
+    if (_pointerId != null) return;
+    _pointerId = event.pointer;
+    _active = true;
+    _updateStick(event.localPosition, bounds);
+    widget.onChanged(_currentX, _currentY);
+    _startHeartbeat();
+  }
+
+  void _handlePointerMove(PointerMoveEvent event, Size bounds) {
+    if (event.pointer != _pointerId) return;
+    if (_active) {
+      _updateStick(event.localPosition, bounds);
+    }
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer == _pointerId) {
+      _pointerId = null;
+      _resetStick();
+    }
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer == _pointerId) {
+      _pointerId = null;
+      _resetStick();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return GestureDetector(
+        return Listener(
           behavior: HitTestBehavior.opaque,
-          onPanDown: (details) {
-            _active = true;
-            _updateStick(details.localPosition, constraints.biggest);
-            _lastSentX = _currentX;
-            _lastSentY = _currentY;
-            widget.onChanged(_currentX, _currentY);
-            _startHeartbeat();
-          },
-          onPanUpdate: (details) {
-            if (_active) {
-              _updateStick(details.localPosition, constraints.biggest);
-            }
-          },
-          onPanEnd: (_) => _resetStick(),
-          onPanCancel: _resetStick,
+          onPointerDown: (event) => _handlePointerDown(event, constraints.biggest),
+          onPointerMove: (event) => _handlePointerMove(event, constraints.biggest),
+          onPointerUp: _handlePointerUp,
+          onPointerCancel: _handlePointerCancel,
           child: Container(
             width: double.infinity,
             height: double.infinity,
@@ -197,12 +237,10 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
   Offset? _baseOffset;
   Offset _stickOffset = Offset.zero;
   bool _active = false;
+  int? _pointerId;
 
   double _currentX = 0;
   double _currentY = 0;
-
-  double _lastSentX = 0;
-  double _lastSentY = 0;
 
   Timer? _heartbeatTimer;
 
@@ -233,8 +271,6 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
       if (!_active) return;
-      _lastSentX = _currentX;
-      _lastSentY = _currentY;
       widget.onChanged(_currentX, _currentY);
     });
   }
@@ -244,9 +280,11 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     _heartbeatTimer = null;
   }
 
-  void _handlePanDown(DragDownDetails details, Size bounds) {
+  void _handlePointerDown(PointerDownEvent event, Size bounds) {
+    if (_pointerId != null) return;
+    _pointerId = event.pointer;
     _active = true;
-    final touchPos = details.localPosition;
+    final touchPos = event.localPosition;
 
     _baseOffset = touchPos;
     _appearController.forward(from: 0.0);
@@ -260,24 +298,29 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     );
 
     _updateStick(touchPos, bounds);
-    _lastSentX = _currentX;
-    _lastSentY = _currentY;
     widget.onChanged(_currentX, _currentY);
     _startHeartbeat();
   }
 
-  void _handlePanUpdate(DragUpdateDetails details, Size bounds) {
+  void _handlePointerMove(PointerMoveEvent event, Size bounds) {
+    if (event.pointer != _pointerId) return;
     if (_active) {
-      _updateStick(details.localPosition, bounds);
+      _updateStick(event.localPosition, bounds);
     }
   }
 
-  void _handlePanEnd(DragEndDetails details) {
-    _resetStick();
+  void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer == _pointerId) {
+      _pointerId = null;
+      _resetStick();
+    }
   }
 
-  void _handlePanCancel() {
-    _resetStick();
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer == _pointerId) {
+      _pointerId = null;
+      _resetStick();
+    }
   }
 
   void _updateStick(Offset touchPos, Size bounds) {
@@ -310,18 +353,41 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
       distance = delta.distance;
     }
 
-    final clampedDistance = distance.clamp(0.0, maxDistance);
-    final clampedDelta = Offset.fromDirection(delta.direction, clampedDistance);
+    if (kNormalizeJoystickInCircle) {
+      final clampedDistance = distance.clamp(0.0, maxDistance);
+      final clampedDelta = Offset.fromDirection(delta.direction, clampedDistance);
 
-    final dx = clampedDelta.dx / maxDistance;
-    final dy = clampedDelta.dy / maxDistance;
+      final dx = clampedDelta.dx / maxDistance;
+      final dy = clampedDelta.dy / maxDistance;
 
-    _currentX = dx.clamp(-1.0, 1.0);
-    _currentY = -dy.clamp(-1.0, 1.0);
+      _currentX = dx.clamp(-1.0, 1.0);
+      _currentY = -dy.clamp(-1.0, 1.0);
 
-    setState(() {
-      _stickOffset = clampedDelta;
-    });
+      setState(() {
+        _stickOffset = clampedDelta;
+      });
+    } else {
+      final rawDx = delta.dx / maxDistance;
+      final rawDy = delta.dy / maxDistance;
+
+      _currentX = rawDx.clamp(-1.0, 1.0);
+      _currentY = -rawDy.clamp(-1.0, 1.0);
+
+      Offset visualDelta;
+      if (kClampVisualKnobInCircle) {
+        final clampedDistance = distance.clamp(0.0, maxDistance);
+        visualDelta = Offset.fromDirection(delta.direction, clampedDistance);
+      } else {
+        visualDelta = Offset(
+          rawDx.clamp(-1.0, 1.0) * maxDistance,
+          rawDy.clamp(-1.0, 1.0) * maxDistance,
+        );
+      }
+
+      setState(() {
+        _stickOffset = visualDelta;
+      });
+    }
   }
 
   void _resetStick() {
@@ -332,8 +398,6 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
       _active = false;
       _currentX = 0;
       _currentY = 0;
-      _lastSentX = 0;
-      _lastSentY = 0;
       // Deliberately leave _baseOffset untouched so it stays faintly visible
     });
 
@@ -348,12 +412,12 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
         final effectiveBaseOffset =
             _baseOffset ?? Offset(bounds.width / 2, bounds.height * 0.7);
 
-        return GestureDetector(
+        return Listener(
           behavior: HitTestBehavior.opaque,
-          onPanDown: (d) => _handlePanDown(d, bounds),
-          onPanUpdate: (d) => _handlePanUpdate(d, bounds),
-          onPanEnd: _handlePanEnd,
-          onPanCancel: _handlePanCancel,
+          onPointerDown: (event) => _handlePointerDown(event, bounds),
+          onPointerMove: (event) => _handlePointerMove(event, bounds),
+          onPointerUp: _handlePointerUp,
+          onPointerCancel: _handlePointerCancel,
           child: Container(
             width: double.infinity,
             height: double.infinity,

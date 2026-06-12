@@ -182,6 +182,14 @@ abstract class LayoutEditorStrings {
   
   String get visibleButtonsTitle;
   String get visibleButtonsTip;
+  String get rightSticksTitle;
+  String get rightStickFixedLabel;
+  String get rightStickFloatingLabel;
+  String get rightStickSwipeLabel;
+
+  String get rightLayoutTitle;
+  String get rightLayoutColumnsLabel;
+  String get rightLayoutRowsLabel;
 }
 
 abstract class QrPanelStrings {

@@ -40,6 +40,9 @@ class ControllerBranding {
     'LT',
     'RSB',
     'LSB',
+    'RS_BUTTON',
+    'RS_FIXED',
+    'RS_SWIPE',
   ];
 
   static const Set<String> faceButtons = <String>{'A', 'B', 'X', 'Y'};

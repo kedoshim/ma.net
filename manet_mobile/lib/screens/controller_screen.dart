@@ -63,6 +63,9 @@ class _ControllerScreenState extends State<ControllerScreen>
     'LT',
     'RSB',
     'LSB',
+    'RS_BUTTON',
+    'RS_FIXED',
+    'RS_SWIPE',
   ];
 
   final Map<String, bool> visibleButtons = {
@@ -76,8 +79,12 @@ class _ControllerScreenState extends State<ControllerScreen>
     'LB': false,
     'LT': false,
     'LSB': false,
+    'RS_BUTTON': false,
+    'RS_FIXED': false,
+    'RS_SWIPE': false,
   };
   List<String> _buttonOrder = List<String>.from(_defaultButtonOrder);
+  Map<String, int> _buttonSizes = const {};
 
   WebSocketService? ws;
   final GlobalKey<NavigatorState> _controllerNavigatorKey =
@@ -110,6 +117,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
   int? playerIndex;
   MovementMode _movementMode = MovementMode.fixedJoystick;
+  String _rightLayoutMode = 'columns';
   bool _mouseModeOwned = false;
   String? _mouseModeOwnerName;
   bool _centerPulseExpanded = false;
@@ -566,6 +574,7 @@ class _ControllerScreenState extends State<ControllerScreen>
 
     setState(() {
       _movementMode = preset.movementMode;
+      _rightLayoutMode = preset.rightLayoutMode;
       _brandingMode = ControllerBranding.modeFromWire(
         data['controllerMode'] as String?,
       );
@@ -577,11 +586,14 @@ class _ControllerScreenState extends State<ControllerScreen>
           preset.buttonOrder,
         );
       }
+      _buttonSizes = Map<String, int>.from(preset.buttonSizes);
     });
 
     PreferencesService.instance.setMovementMode(_movementMode.index);
+    PreferencesService.instance.setRightLayoutMode(_rightLayoutMode);
     PreferencesService.instance.setButtonVisibility(visibleButtons);
     PreferencesService.instance.setButtonOrder(_buttonOrder);
+    PreferencesService.instance.setButtonSizes(_buttonSizes);
   }
 
   void _clearPlayerSlot() {
@@ -947,6 +959,20 @@ class _ControllerScreenState extends State<ControllerScreen>
     });
   }
 
+  void _onRightStickChanged(Offset offset) {
+    _send({'type': 'rstick', 'x': offset.dx, 'y': offset.dy});
+  }
+
+  void _onRightStickRelease() {
+    _send({'type': 'rstick', 'x': 0, 'y': 0});
+    Future.delayed(const Duration(milliseconds: 40), () {
+      _send({'type': 'rstick', 'x': 0, 'y': 0});
+    });
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _send({'type': 'rstick', 'x': 0, 'y': 0});
+    });
+  }
+
   void _onMouseStickChanged(Offset offset) {
     if (!_mouseModeOwned) {
       return;
@@ -1042,6 +1068,13 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setButtonOrder(_buttonOrder);
   }
 
+  void _setButtonSizes(Map<String, int> sizes) {
+    setState(() {
+      _buttonSizes = sizes;
+    });
+    PreferencesService.instance.setButtonSizes(_buttonSizes);
+  }
+
   void _toggleTapHaptics() {
     setState(() => tapHapticsEnabled = !tapHapticsEnabled);
     PreferencesService.instance.setTapHapticsEnabled(tapHapticsEnabled);
@@ -1063,6 +1096,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       playerName = await prefs.getPlayerName();
       final modeIndex = await prefs.getMovementMode();
       _movementMode = MovementMode.values[modeIndex];
+      _rightLayoutMode = await prefs.getRightLayoutMode();
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
 
       final savedVisibility = await prefs.getButtonVisibility();
@@ -1074,6 +1108,10 @@ class _ControllerScreenState extends State<ControllerScreen>
       final savedOrder = await prefs.getButtonOrder();
       if (savedOrder != null && savedOrder.isNotEmpty) {
         _buttonOrder = ControllerBranding.normalizeCanonicalOrder(savedOrder);
+      }
+      final savedSizes = await prefs.getButtonSizes();
+      if (savedSizes != null) {
+        _buttonSizes = Map<String, int>.from(savedSizes);
       }
     } catch (_) {
       AppColors.setTheme(ColorTheme.blue);
@@ -1134,6 +1172,15 @@ class _ControllerScreenState extends State<ControllerScreen>
           playerFace: _playerFace,
           centerPulseExpanded: _centerPulseExpanded,
           onPulseCycleEnd: _toggleCenterPulse,
+          buttonSizes: _buttonSizes,
+          onButtonSizesChanged: _setButtonSizes,
+          rightLayoutMode: _rightLayoutMode,
+          onRightLayoutModeChanged: (mode) {
+            setState(() {
+              _rightLayoutMode = mode;
+            });
+            PreferencesService.instance.setRightLayoutMode(mode);
+          },
         );
       case ControllerScreenMode.face:
         return ControllerFaceView(
@@ -1188,6 +1235,10 @@ class _ControllerScreenState extends State<ControllerScreen>
           onJoinGame: () {
             _send({'type': 'request_slot'});
           },
+          onRightStickChanged: _onRightStickChanged,
+          onRightStickRelease: _onRightStickRelease,
+          buttonSizes: _buttonSizes,
+          rightLayoutMode: _rightLayoutMode,
         );
     }
   }

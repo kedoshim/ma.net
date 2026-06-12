@@ -140,11 +140,17 @@ class PtBrEditControlsStrings implements EditControlsStrings {
   @override
   String get availableButtons => 'Botões disponíveis';
   @override
+  String get rightStickControls => 'Controles do Analógico Direito';
+  @override
   String get dragToMove => 'Arraste para mover';
   @override
   String get noButtonsVisible => 'Sem botões visíveis';
   @override
   String get enableButtonsInSettings => 'Habilite botões nas configurações';
+  @override
+  String get columnsMode => 'Duas colunas';
+  @override
+  String get rowsMode => 'Duas linhas';
 }
 
 class PtBrEditNameStrings implements EditNameStrings {

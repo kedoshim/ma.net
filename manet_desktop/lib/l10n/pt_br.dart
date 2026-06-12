@@ -308,6 +308,20 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   String get visibleButtonsTitle => 'BOTÕES VISÍVEIS';
   @override
   String get visibleButtonsTip => 'Toque nos botões para ativar ou desativar no seu layout.';
+  @override
+  String get rightSticksTitle => 'ANALÓGICOS DIREITOS';
+  @override
+  String get rightStickFixedLabel => 'Analógico direito fixo';
+  @override
+  String get rightStickFloatingLabel => 'Analógico direito flutuante';
+  @override
+  String get rightStickSwipeLabel => 'Touchpad';
+  @override
+  String get rightLayoutTitle => 'ARRANJO DOS BOTÕES';
+  @override
+  String get rightLayoutColumnsLabel => 'Colunas';
+  @override
+  String get rightLayoutRowsLabel => 'Linhas';
 }
 
 class PtBrAlertsStrings implements AlertsStrings {

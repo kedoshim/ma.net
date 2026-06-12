@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/controller_branding.dart';
 import '../../models/player_face.dart';
 import '../../services/preferences_service.dart';
+import '../../services/haptics_manager.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/control_button.dart' hide ButtonStateCallback;
 import '../../widgets/action_buttons.dart';
@@ -30,6 +31,10 @@ class ControllerEditView extends StatefulWidget {
     required this.playerFace,
     required this.centerPulseExpanded,
     required this.onPulseCycleEnd,
+    required this.buttonSizes,
+    required this.onButtonSizesChanged,
+    required this.rightLayoutMode,
+    required this.onRightLayoutModeChanged,
   });
 
   final ControllerBrandingMode brandingMode;
@@ -48,6 +53,10 @@ class ControllerEditView extends StatefulWidget {
   final PlayerFaceData playerFace;
   final bool centerPulseExpanded;
   final VoidCallback onPulseCycleEnd;
+  final Map<String, int> buttonSizes;
+  final void Function(Map<String, int>) onButtonSizesChanged;
+  final String rightLayoutMode;
+  final ValueChanged<String> onRightLayoutModeChanged;
 
   @override
   State<ControllerEditView> createState() => _ControllerEditViewState();
@@ -91,9 +100,52 @@ class _ControllerEditViewState extends State<ControllerEditView>
     super.dispose();
   }
 
+  Widget _buildLayoutModeSegment(String mode, String label) {
+    final isSelected = widget.rightLayoutMode == mode;
+    return GestureDetector(
+      onTap: () {
+        if (widget.tapHapticsEnabled) {
+          HapticsManager.instance.softTap();
+        }
+        widget.onRightLayoutModeChanged(mode);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.highlightColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.textPrimary : Colors.transparent,
+            width: isSelected ? AppColors.borderThickness / 2 : 0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'momo',
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: isSelected ? AppColors.textPrimary : AppColors.textPrimary.withValues(alpha: 0.6),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final availableButtons = widget.editableButtons
+        .where((key) => widget.visibleButtons[key] != true)
+        .toList();
+
+    const rightStickControls = [
+      'RS_BUTTON',
+      'RS_FIXED',
+      'RS_SWIPE',
+    ];
+
+    final availableRightStick = rightStickControls
         .where((key) => widget.visibleButtons[key] != true)
         .toList();
 
@@ -108,6 +160,7 @@ class _ControllerEditViewState extends State<ControllerEditView>
                 brandingMode: widget.brandingMode,
                 isDragging: _isDragging,
                 buttons: availableButtons,
+                rightStickControls: availableRightStick,
                 tapHapticsEnabled: widget.tapHapticsEnabled,
                 onButtonDropped: (buttonKey) =>
                     widget.onSetButtonVisibility(buttonKey, false),
@@ -159,35 +212,66 @@ class _ControllerEditViewState extends State<ControllerEditView>
             const SizedBox(width: 24),
             Expanded(
               flex: 3,
-              child: DragTarget<String>(
-                onWillAcceptWithDetails: (details) {
-                  return availableButtons.contains(details.data);
-                },
-                onAcceptWithDetails: (details) {
-                  widget.onSetButtonVisibility(details.data, true);
-                },
-                builder: (context, candidateData, rejectedData) {
-                  final isTarget = candidateData.isNotEmpty;
-                  return Container(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: isTarget
-                          ? AppColors.dragTargetGreen.withValues(alpha: 0.3)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(28),
+                      color: AppColors.backgroundColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppColors.textPrimary,
+                        width: AppColors.borderThickness / 2,
+                      ),
                     ),
-                    child: ActionButtons(
-                      brandingMode: widget.brandingMode,
-                      visibleButtons: widget.visibleButtons,
-                      buttonOrder: widget.buttonOrder,
-                      onButtonStateChanged: widget.onGameButtonStateChanged,
-                      editMode: true,
-                      tapHapticsEnabled: widget.tapHapticsEnabled,
-                      onDragStarted: () => setState(() => _isDragging = true),
-                      onDragEnded: () => setState(() => _isDragging = false),
-                      onButtonOrderChanged: widget.onButtonOrderChanged,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildLayoutModeSegment('columns', context.l10n.editControls.columnsMode),
+                        const SizedBox(width: 4),
+                        _buildLayoutModeSegment('rows', context.l10n.editControls.rowsMode),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                  Expanded(
+                    child: DragTarget<String>(
+                      onWillAcceptWithDetails: (details) {
+                        return availableButtons.contains(details.data) ||
+                            availableRightStick.contains(details.data);
+                      },
+                      onAcceptWithDetails: (details) {
+                        widget.onSetButtonVisibility(details.data, true);
+                      },
+                      builder: (context, candidateData, rejectedData) {
+                        final isTarget = candidateData.isNotEmpty;
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: isTarget
+                                ? AppColors.dragTargetGreen.withValues(alpha: 0.3)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                          child: ActionButtons(
+                            brandingMode: widget.brandingMode,
+                            visibleButtons: widget.visibleButtons,
+                            buttonOrder: widget.buttonOrder,
+                            onButtonStateChanged: widget.onGameButtonStateChanged,
+                            editMode: true,
+                            tapHapticsEnabled: widget.tapHapticsEnabled,
+                            onDragStarted: () => setState(() => _isDragging = true),
+                            onDragEnded: () => setState(() => _isDragging = false),
+                            onButtonOrderChanged: widget.onButtonOrderChanged,
+                            buttonSizes: widget.buttonSizes,
+                            onButtonSizesChanged: widget.onButtonSizesChanged,
+                            rightLayoutMode: widget.rightLayoutMode,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -265,6 +349,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
     required this.brandingMode,
     required this.isDragging,
     required this.buttons,
+    required this.rightStickControls,
     required this.onButtonDropped,
     required this.onDragStarted,
     required this.onDragEnded,
@@ -274,6 +359,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
   final ControllerBrandingMode brandingMode;
   final bool isDragging;
   final List<String> buttons;
+  final List<String> rightStickControls;
   final ValueChanged<String> onButtonDropped;
   final VoidCallback onDragStarted;
   final VoidCallback onDragEnded;
@@ -283,7 +369,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return DragTarget<String>(
       onWillAcceptWithDetails: (details) {
-        return !buttons.contains(details.data);
+        return !buttons.contains(details.data) && !rightStickControls.contains(details.data);
       },
       onAcceptWithDetails: (details) {
         onButtonDropped(details.data);
@@ -311,7 +397,7 @@ class _AvailableButtonsPanel extends StatelessWidget {
                 context.l10n.editControls.availableButtons,
                 style: TextStyle(
                   fontFamily: 'momo',
-                  fontSize: 22,
+                  fontSize: 20,
                   color: AppColors.textPrimary.withValues(
                     alpha: isTarget ? 1.0 : 0.8,
                   ),
@@ -320,29 +406,100 @@ class _AvailableButtonsPanel extends StatelessWidget {
               const SizedBox(height: 8),
               Expanded(
                 child: SingleChildScrollView(
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: buttons.map((buttonKey) {
-                      final presentation = ControllerBranding.presentationFor(
-                        buttonKey,
-                        brandingMode,
-                      );
-                      return DraggableEditButton(
-                        btnId: buttonKey,
-                        label: presentation.shortLabel,
-                        labelWidget: ControllerButtonBrand(
-                          presentation: presentation,
-                          size: 24,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: buttons.map((buttonKey) {
+                          final presentation = ControllerBranding.presentationFor(
+                            buttonKey,
+                            brandingMode,
+                          );
+                          return DraggableEditButton(
+                            btnId: buttonKey,
+                            label: presentation.shortLabel,
+                            labelWidget: ControllerButtonBrand(
+                              presentation: presentation,
+                              size: 24,
+                            ),
+                            onDragStarted: onDragStarted,
+                            onDragEnded: onDragEnded,
+                            tapHapticsEnabled: tapHapticsEnabled,
+                            baseColor: AppColors.backgroundColor.withValues(
+                              alpha: 0.2,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        context.l10n.editControls.rightStickControls,
+                        style: TextStyle(
+                          fontFamily: 'momo',
+                          fontSize: 20,
+                          color: AppColors.textPrimary.withValues(
+                            alpha: isTarget ? 1.0 : 0.8,
+                          ),
                         ),
-                        onDragStarted: onDragStarted,
-                        onDragEnded: onDragEnded,
-                        tapHapticsEnabled: tapHapticsEnabled,
-                        baseColor: AppColors.backgroundColor.withValues(
-                          alpha: 0.2,
-                        ),
-                      );
-                    }).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: rightStickControls.map((buttonKey) {
+                          String label = '';
+                          Widget? labelWidget;
+                          if (buttonKey == 'RS_BUTTON') {
+                            label = 'RS Btn';
+                            labelWidget = const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.videocam_rounded, size: 16, color: AppColors.textPrimary),
+                                SizedBox(width: 4),
+                                Text('RS Btn', style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold, fontSize: 12)),
+                              ],
+                            );
+                          } else if (buttonKey == 'RS_FIXED') {
+                            label = 'Fixed RS';
+                            labelWidget = const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.adjust_rounded, size: 16, color: AppColors.textPrimary),
+                                SizedBox(width: 4),
+                                Text('Fixed RS', style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold, fontSize: 12)),
+                              ],
+                            );
+                          } else if (buttonKey == 'RS_SWIPE') {
+                            label = 'Swipe Pad';
+                            labelWidget = const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.visibility_rounded, size: 16, color: AppColors.textPrimary),
+                                SizedBox(width: 4),
+                                Text('Swipe Pad', style: TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold, fontSize: 12)),
+                              ],
+                            );
+                          }
+
+                          return DraggableEditButton(
+                            btnId: buttonKey,
+                            label: label,
+                            labelWidget: labelWidget,
+                            onDragStarted: onDragStarted,
+                            onDragEnded: onDragEnded,
+                            tapHapticsEnabled: tapHapticsEnabled,
+                            baseColor: AppColors.backgroundColor.withValues(
+                              alpha: 0.2,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ),
                 ),
               ),

@@ -8,6 +8,7 @@ def build_dependencies(server_config: ServerConfig):
     manager = ControllerManager(server_config)
 
     admin_panel = AdminPanel(manager)
+    manager.admin_panel = admin_panel
     debug_cli = DebugCLI(manager, server_config.http_port)
 
     return manager, admin_panel, debug_cli

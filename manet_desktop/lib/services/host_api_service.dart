@@ -255,17 +255,31 @@ class ControllerPresetLayout {
   final String movementMode;
   final Map<String, bool> visibleButtons;
   final List<String> buttonOrder;
+  final String rightLayoutMode;
+  final Map<String, int> buttonSizes;
 
   ControllerPresetLayout({
     required this.movementMode,
     required this.visibleButtons,
     required this.buttonOrder,
+    required this.rightLayoutMode,
+    required this.buttonSizes,
   });
 
   factory ControllerPresetLayout.fromJson(Map<String, dynamic> json) {
     final rawVisibility =
         json['visibleButtons'] as Map<String, dynamic>? ??
         const <String, dynamic>{};
+    final rawSizes =
+        json['buttonSizes'] as Map<String, dynamic>? ??
+        const <String, dynamic>{};
+
+    final Map<String, int> buttonSizes = {};
+    rawSizes.forEach((key, value) {
+      if (value is num) {
+        buttonSizes[key] = value.toInt();
+      }
+    });
 
     return ControllerPresetLayout(
       movementMode: json['movementMode'] as String? ?? 'floatingJoystick',
@@ -273,6 +287,8 @@ class ControllerPresetLayout {
       buttonOrder: ControllerBranding.normalizeCanonicalOrder(
         json['buttonOrder'] as List<dynamic>? ?? const [],
       ),
+      rightLayoutMode: json['rightLayoutMode'] as String? ?? 'columns',
+      buttonSizes: buttonSizes,
     );
   }
 
@@ -281,6 +297,8 @@ class ControllerPresetLayout {
       'movementMode': movementMode,
       'visibleButtons': visibleButtons,
       'buttonOrder': buttonOrder,
+      'rightLayoutMode': rightLayoutMode,
+      'buttonSizes': buttonSizes,
     };
   }
 }
@@ -556,7 +574,8 @@ class HostApiService {
   }
 
   Future<PresetCatalog> fetchPresets() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/presets'));
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/presets?format=catalog'));
 
     if (response.statusCode == 200) {
       return PresetCatalog.fromJson(json.decode(response.body));

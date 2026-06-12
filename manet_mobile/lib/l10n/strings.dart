@@ -56,9 +56,12 @@ abstract class ScannerStrings {
 abstract class EditControlsStrings {
   String get title;
   String get availableButtons;
+  String get rightStickControls;
   String get dragToMove;
   String get noButtonsVisible;
   String get enableButtonsInSettings;
+  String get columnsMode;
+  String get rowsMode;
 }
 
 abstract class EditNameStrings {

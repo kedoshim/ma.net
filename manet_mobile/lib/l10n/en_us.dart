@@ -140,11 +140,17 @@ class EnUsEditControlsStrings implements EditControlsStrings {
   @override
   String get availableButtons => 'Available buttons';
   @override
+  String get rightStickControls => 'Right Stick Controls';
+  @override
   String get dragToMove => 'Drag to move';
   @override
   String get noButtonsVisible => 'No visible buttons';
   @override
   String get enableButtonsInSettings => 'Enable buttons in settings';
+  @override
+  String get columnsMode => 'Two columns';
+  @override
+  String get rowsMode => 'Two rows';
 }
 
 class EnUsEditNameStrings implements EditNameStrings {

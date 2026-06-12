@@ -12,6 +12,8 @@ class PlayerSlot:
     last_input_at: float = field(default_factory=time.time)
     last_stick_x: float = 0
     last_stick_y: float = 0
+    last_rstick_x: float = 0
+    last_rstick_y: float = 0
 
     assigned_device_id: Optional[str] = None
     player_name: Optional[str] = None
@@ -30,5 +32,9 @@ class PlayerSlot:
     last_rumble_strong: float = 0.0
     last_rumble_weak: float = 0.0
     last_rumble_sent_at: float = 0.0
+
+    # D-pad state tracking for DS4 diagonal resolution
+    active_dpad: set = field(default_factory=set)
+
     def is_available(self):
         return self.assigned_device_id is None

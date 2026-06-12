@@ -44,6 +44,10 @@ class ControllerDefaultView extends StatefulWidget {
     required this.playerName,
     required this.onNameChanged,
     required this.onRequestRandomName,
+    this.onRightStickChanged,
+    this.onRightStickRelease,
+    required this.buttonSizes,
+    required this.rightLayoutMode,
   });
 
   final String? playerName;
@@ -71,6 +75,10 @@ class ControllerDefaultView extends StatefulWidget {
   final List<String> buttonOrder;
   final bool hasVacantSlot;
   final VoidCallback? onJoinGame;
+  final ValueChanged<Offset>? onRightStickChanged;
+  final VoidCallback? onRightStickRelease;
+  final Map<String, int> buttonSizes;
+  final String rightLayoutMode;
 
   @override
   State<ControllerDefaultView> createState() => _ControllerDefaultViewState();
@@ -312,6 +320,10 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView> {
               buttonOrder: widget.buttonOrder,
               onButtonStateChanged: widget.onButtonStateChanged,
               editMode: false,
+              onRightStickChanged: widget.onRightStickChanged,
+              onRightStickRelease: widget.onRightStickRelease,
+              buttonSizes: widget.buttonSizes,
+              rightLayoutMode: widget.rightLayoutMode,
             ),
           ),
         ],
@@ -332,6 +344,12 @@ class _ControllerDpad extends StatefulWidget {
 class _ControllerDpadState extends State<_ControllerDpad> {
   List<String> _activeDirections = [];
 
+  // --- CONFIGURATION FOR 8-DIRECTIONAL DPAD ---
+  // The center of each diagonal is at 45° (down-right), 135° (down-left), 225° (up-left), and 315° (up-right).
+  // If the touch angle is within this half-width of a diagonal angle, it triggers a diagonal press.
+  // Otherwise, it falls back to a cardinal direction.
+  static const double diagonalConeHalfWidthDegrees = 15.0;
+
   void _updateDirection(Offset localPosition, Size size) {
     final center = Offset(144.0, size.height - 137.0);
     final delta = localPosition - center;
@@ -341,21 +359,55 @@ class _ControllerDpadState extends State<_ControllerDpad> {
       return;
     }
 
-    String newDir;
-    if (delta.dx.abs() > delta.dy.abs()) {
-      newDir = delta.dx > 0 ? 'RIGHT' : 'LEFT';
-    } else {
-      newDir = delta.dy > 0 ? 'DOWN' : 'UP';
+    // Convert direction to degrees in [0, 360) range
+    double angleDegrees = delta.direction * 180 / math.pi;
+    if (angleDegrees < 0) {
+      angleDegrees += 360.0;
     }
 
-    if (!_activeDirections.contains(newDir) || _activeDirections.length > 1) {
-      _releaseDirection();
+    List<String> newDirs = [];
 
-      _activeDirections = [newDir];
-      // Trigger vibration strictly when a new cardinal direction is established
+    // Check diagonal cones
+    if (angleDegrees >= 45.0 - diagonalConeHalfWidthDegrees && angleDegrees <= 45.0 + diagonalConeHalfWidthDegrees) {
+      newDirs = ['DOWN', 'RIGHT'];
+    } else if (angleDegrees >= 135.0 - diagonalConeHalfWidthDegrees && angleDegrees <= 135.0 + diagonalConeHalfWidthDegrees) {
+      newDirs = ['DOWN', 'LEFT'];
+    } else if (angleDegrees >= 225.0 - diagonalConeHalfWidthDegrees && angleDegrees <= 225.0 + diagonalConeHalfWidthDegrees) {
+      newDirs = ['UP', 'LEFT'];
+    } else if (angleDegrees >= 315.0 - diagonalConeHalfWidthDegrees && angleDegrees <= 315.0 + diagonalConeHalfWidthDegrees) {
+      newDirs = ['UP', 'RIGHT'];
+    }
+    // Check cardinal zones
+    else if (angleDegrees >= 0.0 && angleDegrees < 45.0 - diagonalConeHalfWidthDegrees || angleDegrees > 315.0 + diagonalConeHalfWidthDegrees) {
+      newDirs = ['RIGHT'];
+    } else if (angleDegrees > 45.0 + diagonalConeHalfWidthDegrees && angleDegrees < 135.0 - diagonalConeHalfWidthDegrees) {
+      newDirs = ['DOWN'];
+    } else if (angleDegrees > 135.0 + diagonalConeHalfWidthDegrees && angleDegrees < 225.0 - diagonalConeHalfWidthDegrees) {
+      newDirs = ['LEFT'];
+    } else {
+      newDirs = ['UP'];
+    }
+
+    // Determine if active directions have changed
+    bool changed = _activeDirections.length != newDirs.length ||
+        !_activeDirections.every((d) => newDirs.contains(d));
+
+    if (changed) {
+      // Release directions that are no longer active
+      for (var d in _activeDirections) {
+        if (!newDirs.contains(d)) {
+          widget.onButtonStateChanged(d, 'up');
+        }
+      }
+      // Press directions that are newly active
+      for (var d in newDirs) {
+        if (!_activeDirections.contains(d)) {
+          widget.onButtonStateChanged(d, 'down');
+        }
+      }
+
+      _activeDirections = newDirs;
       HapticsManager.instance.softTap();
-
-      widget.onButtonStateChanged(newDir, 'down');
       setState(() {});
     }
   }

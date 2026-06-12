@@ -18,6 +18,9 @@ BUTTON_ORDER = [
     "B",
     "X",
     "A",
+    "RS_BUTTON",
+    "RS_FIXED",
+    "RS_SWIPE",
 ]
 
 
@@ -54,6 +57,7 @@ def _preset(
     movement_mode,
     visible_ids,
     button_order=None,
+    right_layout_mode="columns",
 ):
     raw_order = []
     for item in button_order or []:
@@ -72,11 +76,20 @@ def _preset(
             "movementMode": movement_mode,
             "visibleButtons": _build_visibility(visible_ids),
             "buttonOrder": final_order,
+            "rightLayoutMode": right_layout_mode,
         },
     }
 
 
 BUILT_IN_PRESETS = [
+    _preset(
+        "builtin-minimal",
+        name="Minimal",
+        category="builtin",
+        movement_mode="floatingJoystick",
+        visible_ids=["A", "B", "X", "Y",],
+        button_order=["Y", "B", "X", "A"],
+    ),
     _preset(
         "builtin-simple-shoulder",
         name="Simple + Shoulder",
@@ -131,6 +144,38 @@ GAME_PRESETS = [
         button_order=["B", "A"],
     ),
     _preset(
+        "game-knight-squad-2",
+        name="Knight Squad 2",
+        category="game",
+        movement_mode="floatingJoystick",
+        visible_ids=["A", "B"],
+        button_order=["B", "A"],
+    ),
+    # _preset(
+    #     "game-samurai-gunn",
+    #     name="Samurai Gunn",
+    #     category="game",
+    #     movement_mode="floatingJoystick",
+    #     visible_ids=["A", "B", "X", "Y","RB","LB"],
+    #     button_order=["Y","B","LB","RB","X","A"],
+    # ),
+    _preset(
+        "game-speedrunners",
+        name="Speedrunners",
+        category="game",
+        movement_mode="floatingJoystick",
+        visible_ids=["A", "B", "X", "Y","RT"],
+        button_order=["B","RT","Y","X","A"],
+    ),
+    _preset(
+        "game-runbow",
+        name="Runbow",
+        category="game",
+        movement_mode="floatingJoystick",
+        visible_ids=["A", "B", "X",],
+        button_order=["B","X","A"],
+    ),
+    _preset(
         "game-boomerang-fu",
         name="Boomerang Fu",
         category="game",
@@ -145,6 +190,30 @@ GAME_PRESETS = [
         movement_mode="floatingJoystick",
         visible_ids=["A", "B", "X", "Y","RB","LB"],
         button_order=["LB", "RB", "Y", "B", "X", "A"],
+    ),
+    _preset(
+        "game-mario-kart-8",
+        name="Mario Kart 8",
+        category="game",
+        movement_mode="floatingJoystick",
+        visible_ids=["A", "B","RB","LB"],
+        button_order=["LB", "RB", "A", "B"],
+    ),
+    _preset(
+        "game-towerfall",
+        name="Towerfall",
+        category="game",
+        movement_mode="floatingJoystick",
+        visible_ids=["A", "X","RT"],
+        button_order=["X", "RT", "A"],
+    ),
+    _preset(
+        "game-tricky-towers",
+        name="Tricky Towers",
+        category="game",
+        movement_mode="dpad",
+        visible_ids=["A", "B", "X", "Y","RB","LB"],
+        button_order=["X","B","LB","RB","A","Y"],
     ),
 ]
 
@@ -234,10 +303,23 @@ class ControllerPresetStore:
         if movement_mode not in {"dpad", "fixedJoystick", "floatingJoystick"}:
             movement_mode = "floatingJoystick"
 
+        raw_sizes = layout.get("buttonSizes") or {}
+        button_sizes = {
+            _canonical_button_id(key): int(value)
+            for key, value in raw_sizes.items()
+            if _canonical_button_id(key) in base_visibility and value is not None
+        }
+
+        right_layout_mode = layout.get("rightLayoutMode")
+        if right_layout_mode not in {"columns", "rows"}:
+            right_layout_mode = "columns"
+
         return {
             "movementMode": movement_mode,
             "visibleButtons": base_visibility,
             "buttonOrder": [*raw_order, *remaining],
+            "buttonSizes": button_sizes,
+            "rightLayoutMode": right_layout_mode,
         }
 
     def _normalize_custom_preset(self, payload):

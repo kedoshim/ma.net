@@ -310,6 +310,20 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   String get visibleButtonsTitle => 'VISIBLE BUTTONS';
   @override
   String get visibleButtonsTip => 'Tap buttons to show or hide them in your layout.';
+  @override
+  String get rightSticksTitle => 'RIGHT STICKS';
+  @override
+  String get rightStickFixedLabel => 'Fixed Right Stick';
+  @override
+  String get rightStickFloatingLabel => 'Floating Right Stick';
+  @override
+  String get rightStickSwipeLabel => 'Touchpad';
+  @override
+  String get rightLayoutTitle => 'BUTTON LAYOUT';
+  @override
+  String get rightLayoutColumnsLabel => 'Columns';
+  @override
+  String get rightLayoutRowsLabel => 'Rows';
 }
 
 class EnUsAlertsStrings implements AlertsStrings {

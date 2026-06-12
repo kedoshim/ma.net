@@ -52,6 +52,7 @@ class _ControlButtonState extends State<ControlButton> {
         onTap: () {},
         backgroundColor: AppColors.backgroundColor,
         borderRadius: widget.borderRadius ?? BorderRadius.circular(16),
+        borderThickness: 3,
         padding: EdgeInsets.zero,
         child: Center(
           child: widget.icon ??

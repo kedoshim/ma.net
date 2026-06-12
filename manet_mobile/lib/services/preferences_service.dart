@@ -129,6 +129,7 @@ class PreferencesService {
     return dpad ? 0 : 2;
   }
 
+
   @Deprecated('Use setMovementMode instead')
   Future<void> setDpadMode(bool mode) async => setMovementMode(mode ? 0 : 1);
 
@@ -162,6 +163,23 @@ class PreferencesService {
     }
   }
 
+  Future<void> setButtonSizes(Map<String, int> sizes) async {
+    final p = await _getInstance;
+    await p.setString('buttonSizes', jsonEncode(sizes));
+  }
+
+  Future<Map<String, int>?> getButtonSizes() async {
+    final p = await _getInstance;
+    final str = p.getString('buttonSizes');
+    if (str == null) return null;
+    try {
+      final Map<String, dynamic> decoded = jsonDecode(str);
+      return decoded.map((k, v) => MapEntry(k, v as int));
+    } catch (_) {
+      return null;
+    }
+  }
+
   // --- Rumble / Haptics ---
   Future<void> setRumbleEnabled(bool enabled) async =>
       (await _getInstance).setBool('rumbleEnabled', enabled);
@@ -180,4 +198,10 @@ class PreferencesService {
 
   Future<bool> getHasSeenEditTutorial() async =>
       (await _getInstance).getBool('hasSeenEditTutorial') ?? false;
+
+  Future<void> setRightLayoutMode(String mode) async =>
+      (await _getInstance).setString('rightLayoutMode', mode);
+
+  Future<String> getRightLayoutMode() async =>
+      (await _getInstance).getString('rightLayoutMode') ?? 'columns';
 }
