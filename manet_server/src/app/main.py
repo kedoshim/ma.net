@@ -100,12 +100,19 @@ def main():
     initial_slots = min(args.slots, 32)
     max_slots = min(args.max_slots, 32)
 
+    # Load persisted settings if any
+    from src.app.config import load_settings
+    persisted = load_settings()
+    controller_type = persisted.get("controller_type", args.controller_type)
+    if controller_type not in ("x360", "ds4", "mixed"):
+        controller_type = args.controller_type
+
     config = ServerConfig(
         web_page_static_path=args.static_path,
         http_port=args.port,
         initial_slots=initial_slots,
         max_slots=max_slots,
-        controller_type=args.controller_type,
+        controller_type=controller_type,
         auto_expand_slots=args.auto_expand,
         debug=args.debug
     )

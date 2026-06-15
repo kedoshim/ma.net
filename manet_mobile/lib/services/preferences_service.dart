@@ -204,4 +204,85 @@ class PreferencesService {
 
   Future<String> getRightLayoutMode() async =>
       (await _getInstance).getString('rightLayoutMode') ?? 'columns';
+
+  // --- Sensitivity Settings ---
+  Future<void> setLeftStickSensitivity(double value) async =>
+      (await _getInstance).setDouble('leftStickSensitivity', value);
+
+  Future<double> getLeftStickSensitivity() async =>
+      (await _getInstance).getDouble('leftStickSensitivity') ?? 1.0;
+
+  Future<void> setRightStickSensitivity(double value) async =>
+      (await _getInstance).setDouble('rightStickSensitivity', value);
+
+  Future<double> getRightStickSensitivity() async =>
+      (await _getInstance).getDouble('rightStickSensitivity') ?? 1.0;
+
+  Future<void> setSwipeAccelerationIntensity(double value) async =>
+      (await _getInstance).setDouble('swipeAccelerationIntensity', value);
+
+  Future<double> getSwipeAccelerationIntensity() async =>
+      (await _getInstance).getDouble('swipeAccelerationIntensity') ?? 0.0;
+
+  Future<void> setRightStickAntiDeadzone(double value) async =>
+      (await _getInstance).setDouble('rightStickAntiDeadzone', value);
+
+  Future<double> getRightStickAntiDeadzone() async =>
+      (await _getInstance).getDouble('rightStickAntiDeadzone') ?? 0.10;
+
+  Future<void> setRightStickResponseCurve(double value) async =>
+      (await _getInstance).setDouble('rightStickResponseCurve', value);
+
+  Future<double> getRightStickResponseCurve() async =>
+      (await _getInstance).getDouble('rightStickResponseCurve') ?? 0.5;
+
+  Future<void> setShowDpadInSecondary(bool value) async =>
+      (await _getInstance).setBool('showDpadInSecondary', value);
+
+  Future<bool> getShowDpadInSecondary() async =>
+      (await _getInstance).getBool('showDpadInSecondary') ?? false;
+
+  // --- Disconnection Diagnostics & History ---
+  Future<void> setLastKnownSsid(String? ssid) async {
+    final p = await _getInstance;
+    if (ssid != null) {
+      await p.setString('last_known_ssid', ssid);
+    } else {
+      await p.remove('last_known_ssid');
+    }
+  }
+
+  Future<String?> getLastKnownSsid() async =>
+      (await _getInstance).getString('last_known_ssid');
+
+  Future<void> setLastKnownHostIp(String? ip) async {
+    final p = await _getInstance;
+    if (ip != null) {
+      await p.setString('last_known_host_ip', ip);
+    } else {
+      await p.remove('last_known_host_ip');
+    }
+  }
+
+  Future<String?> getLastKnownHostIp() async =>
+      (await _getInstance).getString('last_known_host_ip');
+
+  Future<void> setLastValidCommunicationTimestamp(int timestamp) async =>
+      (await _getInstance).setInt('last_valid_communication', timestamp);
+
+  Future<int?> getLastValidCommunicationTimestamp() async =>
+      (await _getInstance).getInt('last_valid_communication');
+
+  Future<void> setHasEverConnected(bool value) async =>
+      (await _getInstance).setBool('has_ever_connected', value);
+
+  Future<bool> getHasEverConnected() async =>
+      (await _getInstance).getBool('has_ever_connected') ?? false;
+
+  Future<void> setHasSeenAndroidOnboarding(bool value) async =>
+      (await _getInstance).setBool('has_seen_android_onboarding', value);
+
+  Future<bool> getHasSeenAndroidOnboarding() async =>
+      (await _getInstance).getBool('has_seen_android_onboarding') ?? false;
 }
+

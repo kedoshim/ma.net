@@ -9,6 +9,8 @@ abstract class AppStrings {
   ConnectionTipsStrings get connectionTips;
   PresetsStrings get presets;
   JoystickStrings get joystick;
+  DisconnectStrings get disconnect;
+  AndroidOnboardingStrings get androidOnboarding;
 }
 
 abstract class CommonStrings {
@@ -27,6 +29,22 @@ abstract class OptionsStrings {
   String get exitDisconnect;
   String get themeColorsTitle;
   String get languageTitle;
+  String get sensitivity;
+  String get sensitivityTitle;
+  String get leftStickSensitivity;
+  String get rightStickSensitivity;
+  String get swipeAcceleration;
+  String get secondaryControls;
+  String get collapse;
+  String get antiDeadzone;
+  String get responseCurve;
+  String get responseCurveLinear;
+  String get responseCurveMild;
+  String get responseCurveMedium;
+  String get responseCurveAggressive;
+  String get secondaryButtonsTitle;
+  String get movementTitle;
+  String get rightStickTitle;
 }
 
 abstract class QuickActionsStrings {
@@ -62,6 +80,8 @@ abstract class EditControlsStrings {
   String get enableButtonsInSettings;
   String get columnsMode;
   String get rowsMode;
+  String get editMode;
+  String get useMode;
 }
 
 abstract class EditNameStrings {
@@ -96,4 +116,26 @@ abstract class JoystickStrings {
   String get touchpad;
   String get scroll;
   String get mouseModeTitle;
+}
+
+abstract class DisconnectStrings {
+  String get title;
+  String get subtitle;
+  String get hostOffline;
+  String wifiChanged(String expected);
+  String get noWifi;
+  String get noInternet;
+  String get unknown;
+  String currentNetwork(String current);
+  String expectedNetwork(String expected);
+  String get tryAgain;
+  String get reconnect;
+  String get diagnosing;
+}
+
+abstract class AndroidOnboardingStrings {
+  String get title;
+  String get subtitle;
+  String get download;
+  String get continueInBrowser;
 }

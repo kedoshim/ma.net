@@ -742,6 +742,21 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                             });
                                       }
                                     },
+                                    onControllerModeChanged: (newMode) {
+                                      if (_controllerMode != newMode) {
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              if (mounted) {
+                                                setState(() {
+                                                  _controllerMode = newMode;
+                                                });
+                                                _syncAlerts();
+                                                _brandingModeNotifier.value =
+                                                    ControllerBranding.modeFromWire(newMode);
+                                              }
+                                            });
+                                      }
+                                    },
                                     onGamepadLimitReached: (message) {
                                       if (mounted) {
                                         _addAlert(message, isError: false);

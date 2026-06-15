@@ -38,3 +38,36 @@ class ServerConfig:
         "#006D81",  # ciano
 
     ]
+
+
+def get_settings_path() -> Path:
+    import sys
+    is_frozen = getattr(sys, 'frozen', False)
+    if is_frozen:
+        return Path.home() / ".manet" / "settings.json"
+    else:
+        return Path(__file__).resolve().parents[2] / "data" / "settings.json"
+
+
+def load_settings() -> dict:
+    import json
+    path = get_settings_path()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        import logging
+        logging.getLogger("config").error("Failed to load settings from %s: %s", path, e)
+        return {}
+
+
+def save_settings(settings: dict):
+    import json
+    path = get_settings_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        import logging
+        logging.getLogger("config").error("Failed to save settings to %s: %s", path, e)

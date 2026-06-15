@@ -140,8 +140,8 @@ GAME_PRESETS = [
         name="Pico Park",
         category="game",
         movement_mode="dpad",
-        visible_ids=["A", "B"],
-        button_order=["B", "A"],
+        visible_ids=["A", "B", "X"],
+        button_order=["B","X", "A"],
     ),
     _preset(
         "game-knight-squad-2",
@@ -214,6 +214,14 @@ GAME_PRESETS = [
         movement_mode="dpad",
         visible_ids=["A", "B", "X", "Y","RB","LB"],
         button_order=["X","B","LB","RB","A","Y"],
+    ),
+    _preset(
+        "game-judofuri",
+        name="Judofuri",
+        category="game",
+        movement_mode="dpad",
+        visible_ids=["A"],
+        button_order=["A"],
     ),
 ]
 
@@ -366,6 +374,12 @@ class ControllerPresetStore:
         preset_id = payload.get("id")
         if not preset_id:
             raise ValueError("missing_preset_id")
+        
+        name = (payload.get("name") or "Novo preset").strip()
+        existing_names = {p["name"].lower() for p in self.all_presets_by_id.values()}
+        if name.lower() in existing_names:
+            raise ValueError("name_not_unique")
+
         normalized = self._normalize_custom_preset(payload)
         self._custom[preset_id] = normalized
         self._save()
@@ -379,6 +393,16 @@ class ControllerPresetStore:
         merged = deepcopy(current)
         merged.update({k: v for k, v in payload.items() if k != "id"})
         merged["id"] = preset_id
+
+        name = (merged.get("name") or current.get("name") or "Novo preset").strip()
+        existing_names = {
+            p["name"].lower()
+            for pid, p in self.all_presets_by_id.items()
+            if pid != preset_id
+        }
+        if name.lower() in existing_names:
+            raise ValueError("name_not_unique")
+
         normalized = self._normalize_custom_preset(merged)
         self._custom[preset_id] = normalized
         self._save()

@@ -2,15 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/player_face.dart';
 import '../services/haptics_manager.dart';
 import '../services/preferences_service.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
-import 'player_face_indicator.dart';
 import 'juicy_widgets.dart';
+import 'android_onboarding_dialog.dart';
 
 class OptionsPopup extends StatefulWidget {
   final PlayerFaceData playerFace;
@@ -117,16 +116,18 @@ class _OptionsPopupState extends State<OptionsPopup>
     }
   }
 
-  IconData _getNextModeIcon(MovementMode mode) {
-    switch (mode) {
-      case MovementMode.dpad:
-        return Icons.control_camera_rounded;
-      case MovementMode.fixedJoystick:
-        return Icons.touch_app_rounded;
-      case MovementMode.floatingJoystick:
-        return Icons.gamepad_outlined;
-    }
+  void _showSensitivityDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (context) {
+        return const SensitivityDialog();
+      },
+    );
   }
+
+
 
   Widget _buildLanguageButton(BuildContext context, Locale locale, String label) {
     final isSelected = context.currentLocale.languageCode == locale.languageCode;
@@ -221,13 +222,22 @@ class _OptionsPopupState extends State<OptionsPopup>
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        onPressed: () async {
-                          final url = Uri.base.resolve('/apk');
-                          try {
-                            await launchUrl(url, webOnlyWindowName: '_blank');
-                          } catch (e) {
-                            debugPrint('Could not launch download URL: $e');
-                          }
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: true,
+                            useRootNavigator: true,
+                            builder: (dialogContext) {
+                              return AndroidOnboardingDialog(
+                                onDownloadClicked: () {
+                                  PreferencesService.instance.setHasSeenAndroidOnboarding(true);
+                                },
+                                onDismissClicked: () {
+                                  PreferencesService.instance.setHasSeenAndroidOnboarding(true);
+                                },
+                              );
+                            },
+                          );
                         },
                       ),
                     ),
@@ -270,6 +280,12 @@ class _OptionsPopupState extends State<OptionsPopup>
                                     label: context.l10n.options.vibration,
                                     isActive: _rumbleEnabled,
                                     onTap: _toggleRumble,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _OptionButton(
+                                    icon: Icons.tune_rounded,
+                                    label: context.l10n.options.sensitivity,
+                                    onTap: _showSensitivityDialog,
                                   ),
                                   const SizedBox(width: 12),
                                   _OptionButton(
@@ -474,6 +490,278 @@ class _OptionButtonState extends State<_OptionButton> {
                   fontSize: 12,
                   color: fgColor,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SensitivityDialog extends StatefulWidget {
+  const SensitivityDialog({super.key});
+
+  @override
+  State<SensitivityDialog> createState() => _SensitivityDialogState();
+}
+
+class _SensitivityDialogState extends State<SensitivityDialog> {
+  double _leftStick = 1.0;
+  double _rightStick = 1.0;
+  double _swipeAccel = 0.0;
+  double _antiDeadzone = 0.10;
+  double _responseCurve = 0.5;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = PreferencesService.instance;
+    final left = await prefs.getLeftStickSensitivity();
+    final right = await prefs.getRightStickSensitivity();
+    final swipe = await prefs.getSwipeAccelerationIntensity();
+    final antiDead = await prefs.getRightStickAntiDeadzone();
+    final respCurve = await prefs.getRightStickResponseCurve();
+    if (mounted) {
+      setState(() {
+        _leftStick = left;
+        _rightStick = right;
+        _swipeAccel = swipe;
+        _antiDeadzone = antiDead;
+        _responseCurve = respCurve;
+        _loaded = true;
+      });
+    }
+  }
+
+  Future<void> _savePreferences() async {
+    final prefs = PreferencesService.instance;
+    await prefs.setLeftStickSensitivity(_leftStick);
+    await prefs.setRightStickSensitivity(_rightStick);
+    await prefs.setSwipeAccelerationIntensity(_swipeAccel);
+    await prefs.setRightStickAntiDeadzone(_antiDeadzone);
+    await prefs.setRightStickResponseCurve(_responseCurve);
+  }
+
+  String _getCurveLabel(double val) {
+    if (val == 0.0) return context.l10n.options.responseCurveLinear;
+    if (val <= 0.5) return context.l10n.options.responseCurveMild;
+    if (val <= 1.2) return context.l10n.options.responseCurveMedium;
+    return context.l10n.options.responseCurveAggressive;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) {
+      return const SizedBox.shrink();
+    }
+
+    return Dialog(
+      backgroundColor: AppColors.screenBackground,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: const BorderSide(
+          color: AppColors.textPrimary,
+          width: AppColors.borderThickness,
+        ),
+      ),
+      child: Container(
+        width: 320,
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.options.sensitivityTitle,
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Left Stick Slider
+              Text(
+                '${context.l10n.options.leftStickSensitivity}: ${_leftStick.toStringAsFixed(1)}x',
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SliderTheme(
+                data: SliderThemeData(
+                  activeTrackColor: AppColors.highlightColor,
+                  inactiveTrackColor: AppColors.textPrimary.withValues(alpha: 0.1),
+                  thumbColor: AppColors.textPrimary,
+                  overlayColor: AppColors.highlightColor.withValues(alpha: 0.2),
+                ),
+                child: Slider(
+                  value: _leftStick,
+                  min: 0.5,
+                  max: 2.5,
+                  divisions: 20,
+                  onChanged: (val) {
+                    setState(() => _leftStick = val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Right Stick Slider
+              Text(
+                '${context.l10n.options.rightStickSensitivity}: ${_rightStick.toStringAsFixed(1)}x',
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SliderTheme(
+                data: SliderThemeData(
+                  activeTrackColor: AppColors.highlightColor,
+                  inactiveTrackColor: AppColors.textPrimary.withValues(alpha: 0.1),
+                  thumbColor: AppColors.textPrimary,
+                  overlayColor: AppColors.highlightColor.withValues(alpha: 0.2),
+                ),
+                child: Slider(
+                  value: _rightStick,
+                  min: 0.5,
+                  max: 2.5,
+                  divisions: 20,
+                  onChanged: (val) {
+                    setState(() => _rightStick = val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Swipe Acceleration Slider
+              Text(
+                '${context.l10n.options.swipeAcceleration}: ${_swipeAccel.toStringAsFixed(1)}x',
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SliderTheme(
+                data: SliderThemeData(
+                  activeTrackColor: AppColors.highlightColor,
+                  inactiveTrackColor: AppColors.textPrimary.withValues(alpha: 0.1),
+                  thumbColor: AppColors.textPrimary,
+                  overlayColor: AppColors.highlightColor.withValues(alpha: 0.2),
+                ),
+                child: Slider(
+                  value: _swipeAccel,
+                  min: 0.0,
+                  max: 2.0,
+                  divisions: 20,
+                  onChanged: (val) {
+                    setState(() => _swipeAccel = val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Anti-Deadzone Slider
+              Text(
+                '${context.l10n.options.antiDeadzone}: ${(_antiDeadzone * 100).toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SliderTheme(
+                data: SliderThemeData(
+                  activeTrackColor: AppColors.highlightColor,
+                  inactiveTrackColor: AppColors.textPrimary.withValues(alpha: 0.1),
+                  thumbColor: AppColors.textPrimary,
+                  overlayColor: AppColors.highlightColor.withValues(alpha: 0.2),
+                ),
+                child: Slider(
+                  value: _antiDeadzone,
+                  min: 0.0,
+                  max: 0.30,
+                  divisions: 30,
+                  onChanged: (val) {
+                    setState(() => _antiDeadzone = val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Response Curve Slider
+              Text(
+                '${context.l10n.options.responseCurve}: ${_getCurveLabel(_responseCurve)} (${_responseCurve.toStringAsFixed(1)})',
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SliderTheme(
+                data: SliderThemeData(
+                  activeTrackColor: AppColors.highlightColor,
+                  inactiveTrackColor: AppColors.textPrimary.withValues(alpha: 0.1),
+                  thumbColor: AppColors.textPrimary,
+                  overlayColor: AppColors.highlightColor.withValues(alpha: 0.2),
+                ),
+                child: Slider(
+                  value: _responseCurve,
+                  min: 0.0,
+                  max: 2.0,
+                  divisions: 20,
+                  onChanged: (val) {
+                    setState(() => _responseCurve = val);
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      context.l10n.common.cancel,
+                      style: const TextStyle(
+                        fontFamily: 'momo',
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  JuicyButton(
+                    onTap: () async {
+                      await _savePreferences();
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                    backgroundColor: AppColors.highlightColor,
+                    borderRadius: 12,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      context.l10n.common.save,
+                      style: const TextStyle(
+                        fontFamily: 'momo',
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

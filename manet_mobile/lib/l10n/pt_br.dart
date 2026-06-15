@@ -30,6 +30,12 @@ class PtBrStrings implements AppStrings {
 
   @override
   final joystick = PtBrJoystickStrings();
+
+  @override
+  final disconnect = PtBrDisconnectStrings();
+
+  @override
+  final androidOnboarding = PtBrAndroidOnboardingStrings();
 }
 
 class PtBrCommonStrings implements CommonStrings {
@@ -60,6 +66,38 @@ class PtBrOptionsStrings implements OptionsStrings {
   String get themeColorsTitle => 'Cores do ma.net';
   @override
   String get languageTitle => 'Idioma';
+  @override
+  String get sensitivity => 'Sensibilidade';
+  @override
+  String get sensitivityTitle => 'Ajustes de Sensibilidade';
+  @override
+  String get leftStickSensitivity => 'Analógico Esquerdo';
+  @override
+  String get rightStickSensitivity => 'Analógico Direito';
+  @override
+  String get swipeAcceleration => 'Aceleração do Swipe';
+  @override
+  String get secondaryControls => 'Controles Secundários';
+  @override
+  String get collapse => 'Recolher';
+  @override
+  String get antiDeadzone => 'Anti-Deadzone';
+  @override
+  String get responseCurve => 'Curva de Resposta';
+  @override
+  String get responseCurveLinear => 'Linear';
+  @override
+  String get responseCurveMild => 'Suave';
+  @override
+  String get responseCurveMedium => 'Média';
+  @override
+  String get responseCurveAggressive => 'Agressiva';
+  @override
+  String get secondaryButtonsTitle => 'Botões Secundários';
+  @override
+  String get movementTitle => 'Movimento';
+  @override
+  String get rightStickTitle => 'Analógico Direito';
 }
 
 class PtBrQuickActionsStrings implements QuickActionsStrings {
@@ -151,6 +189,10 @@ class PtBrEditControlsStrings implements EditControlsStrings {
   String get columnsMode => 'Duas colunas';
   @override
   String get rowsMode => 'Duas linhas';
+  @override
+  String get editMode => 'Editar';
+  @override
+  String get useMode => 'Uso';
 }
 
 class PtBrEditNameStrings implements EditNameStrings {
@@ -229,4 +271,42 @@ class PtBrJoystickStrings implements JoystickStrings {
   String get scroll => 'scroll';
   @override
   String get mouseModeTitle => 'mouse mode';
+}
+
+class PtBrDisconnectStrings implements DisconnectStrings {
+  @override
+  String get title => 'Você foi desconectado';
+  @override
+  String get subtitle => 'Não foi possível continuar conectado ao MaNet.';
+  @override
+  String get hostOffline => 'O computador que estava hospedando a partida foi desligado ou encerrou o MaNet.';
+  @override
+  String wifiChanged(String expected) => 'Parece que você mudou de rede Wi-Fi. Volte para a rede "$expected" para continuar jogando.';
+  @override
+  String get noWifi => 'Verifique se você ainda está conectado à mesma rede Wi-Fi do computador que está hospedando a partida.';
+  @override
+  String get noInternet => 'Seu dispositivo parece estar sem conexão no momento.';
+  @override
+  String get unknown => 'A conexão com o MaNet foi perdida. Tente fechar e abrir novamente o aplicativo ou reconectar ao Wi-Fi utilizado durante a partida.';
+  @override
+  String currentNetwork(String current) => 'Rede atual: "$current"';
+  @override
+  String expectedNetwork(String expected) => 'Rede esperada: "$expected"';
+  @override
+  String get tryAgain => 'Tentar novamente';
+  @override
+  String get reconnect => 'Reconectar';
+  @override
+  String get diagnosing => 'Analisando conexão...';
+}
+
+class PtBrAndroidOnboardingStrings implements AndroidOnboardingStrings {
+  @override
+  String get title => 'Experiência melhor no aplicativo';
+  @override
+  String get subtitle => 'O MaNet possui um aplicativo Android com uma experiência mais estável e confortável para jogar.\n\nVocê pode continuar usando o navegador normalmente ou instalar o aplicativo.';
+  @override
+  String get download => 'Baixar aplicativo';
+  @override
+  String get continueInBrowser => 'Continuar no navegador';
 }

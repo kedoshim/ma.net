@@ -103,6 +103,14 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
     return layouts;
   }
 
+  List<String> get _allPresetNames {
+    return [
+      ..._catalog.builtInPresets.map((p) => p.name),
+      ..._catalog.gamePresets.map((p) => p.name),
+      ..._catalog.customPresets.map((p) => p.name),
+    ];
+  }
+
   Future<void> _selectLayout(ControllerPreset preset) async {
     setState(() => _saving = true);
     try {
@@ -352,16 +360,21 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                           : LayoutEditorView(
                               api: widget.api,
                               preset: _editingPreset,
+                              existingNames: _allPresetNames,
                               brandingModeListenable:
                                   widget.brandingModeListenable,
                               onCancel: () => setState(
                                 () => _currentView = _LayoutDialogView.list,
                               ),
-                              onSaved: () async {
-                                await _load();
-                                setState(
-                                  () => _currentView = _LayoutDialogView.list,
-                                );
+                              onSaved: (createdPreset) async {
+                                if (createdPreset != null) {
+                                  await _selectLayout(createdPreset);
+                                } else {
+                                  await _load();
+                                  setState(
+                                    () => _currentView = _LayoutDialogView.list,
+                                  );
+                                }
                               },
                             ),
                     ),

@@ -41,8 +41,9 @@ class GamepadState extends ChangeNotifier {
   final Map<String, DeviceInputState> _inputStates = {};
   final void Function(int slots)? onSlotsUpdated;
   final void Function(String message)? onGamepadLimitReached;
+  final void Function(String mode)? onControllerModeChanged;
 
-  GamepadState(this._api, {this.onSlotsUpdated, this.onGamepadLimitReached});
+  GamepadState(this._api, {this.onSlotsUpdated, this.onGamepadLimitReached, this.onControllerModeChanged});
 
   void _log(String action) {
     debugPrint(
@@ -58,6 +59,12 @@ class GamepadState extends ChangeNotifier {
         pool = state.pool;
         slots = state.slots;
         onSlotsUpdated?.call(slots.length);
+        if (slots.isNotEmpty) {
+          final firstSlotType = slots.first.type;
+          if (firstSlotType != null) {
+            onControllerModeChanged?.call(firstSlotType);
+          }
+        }
         notifyListeners();
       } else if (data['type'] == 'gamepad_creation_limit_reached') {
         final message = data['message'] as String? ?? 'Limite de controles atingido.';
@@ -88,6 +95,12 @@ class GamepadState extends ChangeNotifier {
         print('Slot ${slot.slot} - ${slot.type}');
       }
       onSlotsUpdated?.call(slots.length);
+      if (slots.isNotEmpty) {
+        final firstSlotType = slots.first.type;
+        if (firstSlotType != null) {
+          onControllerModeChanged?.call(firstSlotType);
+        }
+      }
       notifyListeners();
     } catch (e) {
       lastErrorMessage = e.toString();

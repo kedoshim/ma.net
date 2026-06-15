@@ -51,147 +51,110 @@ class ControllerPlayerIndicator extends StatelessWidget {
         ? selectedPlayerIndex! - 1
         : null;
 
-    if (totalSlots > 12) {
-      final isWaiting = selectedPlayerIndex == null;
-      final pLabel = isWaiting ? context.l10n.status.waitingForSlot : 'p$selectedPlayerIndex';
+    final isWaiting = selectedPlayerIndex == null;
 
-      return AnimatedOpacity(
-        opacity: isConnected ? 1.0 : 0.4,
-        duration: const Duration(milliseconds: 180),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            border: Border.all(
-              color: AppColors.textPrimary,
-              width: AppColors.borderThickness,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isConnected) ...[
-                PlayerFaceIndicator(
-                  face: playerFace,
-                  size: 16,
-                  roundedSquare: true,
-                  borderColor: AppColors.textPrimary,
-                ),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                pLabel,
-                style: const TextStyle(
-                  fontFamily: 'momo',
-                  fontSize: 18,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Center(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final int safeTotal = totalSlots > 0 ? totalSlots : 1;
+            final int columns = safeTotal > 12
+                ? 8
+                : (safeTotal > 8 ? 6 : (safeTotal > 6 ? 4 : (safeTotal > 4 ? 6 : 4)));
+            const double spacing = 4.0;
+            const double runSpacing = 4.0;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final int safeTotal = totalSlots > 0 ? totalSlots : 1;
-        final int columns = safeTotal > 6 ? 6 : safeTotal;
-        const double spacing = 6.0;
-        const double runSpacing = 6.0;
+            final double maxSquareSize = constraints.maxWidth.isFinite
+                ? ((constraints.maxWidth - ((columns - 1) * spacing)) / columns)
+                : 18.0;
 
-        final double maxSquareSize = constraints.maxWidth.isFinite
-            ? ((constraints.maxWidth - ((columns - 1) * spacing)) / columns)
-            : 22.0;
+            final double squareSize = maxSquareSize.clamp(10.0, 18.0);
+            final double expectedWidth =
+                columns * squareSize + (columns - 1) * spacing;
 
-        final double squareSize = maxSquareSize.clamp(12.0, 22.0);
-        final double expectedWidth =
-            columns * squareSize + (columns - 1) * spacing;
+            final grid = SizedBox(
+              width: expectedWidth,
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: spacing,
+                runSpacing: runSpacing,
+                children: List.generate(safeTotal, (index) {
+                  final isActive = selectedIndex == index;
 
-        final isWaiting = selectedPlayerIndex == null;
-
-        final grid = SizedBox(
-          width: expectedWidth,
-          child: Wrap(
-            alignment: WrapAlignment.start,
-            spacing: spacing,
-            runSpacing: runSpacing,
-            children: List.generate(safeTotal, (index) {
-              final isActive = selectedIndex == index;
-
-              return AnimatedOpacity(
-                opacity: isActive && isConnected ? 1 : 0.4,
-                duration: const Duration(milliseconds: 180),
-                child: isActive && isConnected
-                    ? PlayerFaceIndicator(
-                        face: playerFace,
-                        size: squareSize,
-                        roundedSquare: true,
-                        borderColor: AppColors.textPrimary,
-                      )
-                    : Container(
-                        width: squareSize,
-                        height: squareSize,
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          border: Border.all(
-                            color: AppColors.textPrimary,
-                            width: AppColors.borderThickness,
+                  return AnimatedOpacity(
+                    opacity: isActive && isConnected ? 1 : 0.4,
+                    duration: const Duration(milliseconds: 180),
+                    child: isActive && isConnected
+                        ? PlayerFaceIndicator(
+                            face: playerFace,
+                            size: squareSize,
+                            roundedSquare: true,
+                            borderColor: AppColors.textPrimary,
+                          )
+                        : Container(
+                            width: squareSize,
+                            height: squareSize,
+                            decoration: BoxDecoration(
+                              color: Colors.transparent,
+                              border: Border.all(
+                                color: AppColors.textPrimary,
+                                width: AppColors.borderThickness,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-              );
-            }),
-          ),
-        );
-
-        if (isWaiting) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              grid,
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: AppColors.textPrimary.withValues(alpha: 0.3),
-                    width: 2,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    PlayerFaceIndicator(
-                      face: playerFace,
-                      size: 16,
-                      roundedSquare: true,
-                      borderColor: AppColors.textPrimary.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      context.l10n.status.waitingForSlot,
-                      style: const TextStyle(
-                        fontFamily: 'momo',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                }),
               ),
-            ],
-          );
-        }
+            );
 
-        return grid;
-      },
+            if (isWaiting) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(child: grid),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.textPrimary.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppColors.textPrimary.withValues(alpha: 0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PlayerFaceIndicator(
+                          face: playerFace,
+                          size: 16,
+                          roundedSquare: true,
+                          borderColor: AppColors.textPrimary.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          context.l10n.status.waitingForSlot,
+                          style: const TextStyle(
+                            fontFamily: 'momo',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Center(child: grid);
+          },
+        ),
+      ),
     );
   }
 }

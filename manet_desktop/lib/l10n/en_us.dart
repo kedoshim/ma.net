@@ -324,6 +324,10 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   String get rightLayoutColumnsLabel => 'Columns';
   @override
   String get rightLayoutRowsLabel => 'Rows';
+  @override
+  String get duplicateNameError => 'A layout with this name already exists';
+  @override
+  String get nameEmptyError => 'Layout name cannot be empty';
 }
 
 class EnUsAlertsStrings implements AlertsStrings {

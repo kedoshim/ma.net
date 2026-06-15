@@ -190,6 +190,9 @@ abstract class LayoutEditorStrings {
   String get rightLayoutTitle;
   String get rightLayoutColumnsLabel;
   String get rightLayoutRowsLabel;
+
+  String get duplicateNameError;
+  String get nameEmptyError;
 }
 
 abstract class QrPanelStrings {

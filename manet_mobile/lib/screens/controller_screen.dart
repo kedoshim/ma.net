@@ -18,12 +18,16 @@ import '../theme/app_colors.dart';
 import '../widgets/options_popup.dart';
 import '../widgets/player_face_indicator.dart';
 import 'controller_screen/controller_default_view.dart';
-import 'controller_screen/controller_edit_view.dart';
 import 'controller_screen/controller_face_view.dart';
 import 'controller_screen/controller_mouse_view.dart';
 import 'controller_screen/controller_screen_types.dart';
 import 'controller_screen/controller_screen_widgets.dart';
 import 'qr_scanner_screen.dart';
+import '../services/gamepad_input_engine.dart';
+import '../services/connection_diagnostics_service.dart';
+import '../widgets/disconnect_dialog.dart';
+import '../utils/platform_detector.dart';
+import '../widgets/android_onboarding_dialog.dart';
 
 class ControllerScreen extends StatefulWidget {
   const ControllerScreen({super.key});
@@ -48,8 +52,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     'RB',
     'LT',
     'RT',
-    'LSB',
-    'RSB',
+    'L',
+    'R',
   ];
 
   static const List<String> _defaultButtonOrder = [
@@ -61,8 +65,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     'RT',
     'LB',
     'LT',
-    'RSB',
-    'LSB',
+    'R',
+    'L',
     'RS_BUTTON',
     'RS_FIXED',
     'RS_SWIPE',
@@ -75,10 +79,10 @@ class _ControllerScreenState extends State<ControllerScreen>
     'Y': true,
     'RB': false,
     'RT': false,
-    'RSB': false,
+    'R': false,
     'LB': false,
     'LT': false,
-    'LSB': false,
+    'L': false,
     'RS_BUTTON': false,
     'RS_FIXED': false,
     'RS_SWIPE': false,
@@ -99,6 +103,8 @@ class _ControllerScreenState extends State<ControllerScreen>
   ControllerConnectionState _connectionState =
       ControllerConnectionState.searching;
   ControllerScreenMode _activeMode = ControllerScreenMode.gameplay;
+  bool _isPanelExpanded = false;
+  ControllerPanelMode _panelMode = ControllerPanelMode.use;
   List<DiscoveredHost> _discoveredHosts = [];
 
   String get status {
@@ -134,6 +140,20 @@ class _ControllerScreenState extends State<ControllerScreen>
   ControllerBrandingMode _brandingMode = ControllerBrandingMode.xinput;
   bool _hasVacantSlot = false;
   String? playerName;
+  double leftStickSensitivity = 1.0;
+  double rightStickSensitivity = 1.0;
+  double swipeAccelerationIntensity = 0.0;
+  double rightStickAntiDeadzone = 0.10;
+  double rightStickResponseCurve = 0.5;
+
+  Offset? _lastSentLeftStick;
+  Offset? _lastSentRightStick;
+
+  bool _isDisconnectModalOpen = false;
+  BuildContext? _disconnectDialogContext;
+  bool _intentionalDisconnect = false;
+  Timer? _backgroundReconnectTimer;
+  bool _pulseOptionsButton = false;
 
   bool get _isTemporaryModeActive =>
       _activeMode != ControllerScreenMode.gameplay;
@@ -156,10 +176,16 @@ class _ControllerScreenState extends State<ControllerScreen>
     ]);
     HapticsManager.instance.init();
     _checkSetupRequired();
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        _checkAndShowAndroidOnboarding();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _backgroundReconnectTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _faceController.dispose();
     ControllerConnectionManager.instance.disconnect();
@@ -231,6 +257,139 @@ class _ControllerScreenState extends State<ControllerScreen>
     });
   }
 
+  Future<void> _recordSuccessfulConnection() async {
+    try {
+      final prefs = PreferencesService.instance;
+      final host = await prefs.getServerHost() ?? Uri.base.host;
+      await prefs.setLastKnownHostIp(host);
+      await prefs.setHasEverConnected(true);
+
+      // Fetch and save SSID if Wi-Fi name is available
+      final ssid = await ConnectionDiagnosticsService.instance.getCurrentWifiSsid();
+      if (ssid != null) {
+        await prefs.setLastKnownSsid(ssid);
+      }
+    } catch (_) {}
+  }
+
+  void _startBackgroundReconnection() {
+    _backgroundReconnectTimer?.cancel();
+    _backgroundReconnectTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+      if (_connectionState == ControllerConnectionState.connected ||
+          ws != null ||
+          _listenerAttached) {
+        return;
+      }
+
+      final prefs = PreferencesService.instance;
+      final host = await prefs.getServerHost();
+      if (host != null) {
+        await _connectWebSocket();
+      } else {
+        _retryConnection();
+      }
+    });
+  }
+
+  void _stopBackgroundReconnection() {
+    _backgroundReconnectTimer?.cancel();
+    _backgroundReconnectTimer = null;
+  }
+
+  Future<void> _showDisconnectDialog() async {
+    if (_isDisconnectModalOpen) return;
+    _isDisconnectModalOpen = true;
+
+    final prefs = PreferencesService.instance;
+    final lastHost = await prefs.getLastKnownHostIp() ?? await prefs.getServerHost();
+    final lastPort = await prefs.getServerPort();
+    final expectedSsid = await prefs.getLastKnownSsid();
+    final isHttps = await prefs.getServerHttps() ?? (Uri.base.scheme == 'https');
+
+    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+    if (!dialogContext.mounted) {
+      _isDisconnectModalOpen = false;
+      return;
+    }
+
+    _startBackgroundReconnection();
+
+    await showDialog(
+      context: dialogContext,
+      barrierDismissible: false,
+      useRootNavigator: false,
+      builder: (dialogContext) {
+        _disconnectDialogContext = dialogContext;
+        return DisconnectDialog(
+          hostIp: lastHost ?? Uri.base.host,
+          port: lastPort ?? Uri.base.port,
+          expectedSsid: expectedSsid,
+          isHttps: isHttps,
+          onReconnect: () {
+            if (_isDisconnectModalOpen) {
+              try {
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              } catch (_) {}
+              _isDisconnectModalOpen = false;
+              _disconnectDialogContext = null;
+            }
+            _stopBackgroundReconnection();
+            _retryConnection();
+          },
+          onClose: () {
+            if (_isDisconnectModalOpen) {
+              try {
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              } catch (_) {}
+              _isDisconnectModalOpen = false;
+              _disconnectDialogContext = null;
+            }
+            _stopBackgroundReconnection();
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _checkAndShowAndroidOnboarding() async {
+    if (!kIsWeb) return;
+    final isAndroidBrowser = getIsAndroidBrowser();
+    final isStandalone = getIsStandalonePwa();
+    if (isAndroidBrowser && !isStandalone) {
+      final hasSeen = await PreferencesService.instance.getHasSeenAndroidOnboarding();
+      if (!hasSeen && mounted) {
+        final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+        if (!dialogContext.mounted) return;
+
+        final wasDownloaded = await showDialog<bool>(
+          context: dialogContext,
+          barrierDismissible: true,
+          useRootNavigator: false,
+          builder: (dialogContext) {
+            return AndroidOnboardingDialog(
+              onDownloadClicked: () {
+                PreferencesService.instance.setHasSeenAndroidOnboarding(true);
+              },
+              onDismissClicked: () {
+                PreferencesService.instance.setHasSeenAndroidOnboarding(true);
+              },
+            );
+          },
+        );
+
+        if (wasDownloaded != true && mounted) {
+          setState(() {
+            _pulseOptionsButton = true;
+          });
+        }
+      }
+    }
+  }
+
   Future<bool> _connectWebSocket() async {
     if (ws != null || _listenerAttached) {
       return true;
@@ -248,6 +407,22 @@ class _ControllerScreenState extends State<ControllerScreen>
       setState(() {
         _connectionState = ControllerConnectionState.connected;
       });
+
+      unawaited(_recordSuccessfulConnection());
+
+      if (_isDisconnectModalOpen) {
+        final dCtx = _disconnectDialogContext;
+        try {
+          if (dCtx != null && dCtx.mounted) {
+            Navigator.of(dCtx).pop();
+          }
+        } catch (_) {}
+        _isDisconnectModalOpen = false;
+        _disconnectDialogContext = null;
+        _stopBackgroundReconnection();
+      }
+
+      GamepadInputEngine.instance.init(_send);
 
       ws!.channel.stream.listen(
         _handleWebSocketMessage,
@@ -271,6 +446,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       return;
     }
 
+    final bool wasConnected = _hasReceivedMessage;
     bool failedToConnect = !_hasReceivedMessage && _listenerAttached;
     bool shouldShowDialog = _showDialogOnFail;
     _showDialogOnFail = false;
@@ -283,6 +459,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     setState(() {
       _connectionState = ControllerConnectionState.disconnected;
       _activeMode = ControllerScreenMode.gameplay;
+      _isPanelExpanded = false;
+      _panelMode = ControllerPanelMode.use;
       _mouseModeOwned = false;
       _mouseModeOwnerName = null;
       _hasVacantSlot = false;
@@ -290,6 +468,10 @@ class _ControllerScreenState extends State<ControllerScreen>
 
     _clearPlayerSlot();
     _autoConnectEnabled = false;
+    _lastSentLeftStick = null;
+    _lastSentRightStick = null;
+
+    GamepadInputEngine.instance.dispose();
 
     if (failedToConnect) {
       if (shouldShowDialog) {
@@ -299,6 +481,11 @@ class _ControllerScreenState extends State<ControllerScreen>
         _handleConnectionFailure();
       }
     }
+
+    if (wasConnected && !_intentionalDisconnect) {
+      unawaited(_showDisconnectDialog());
+    }
+    _intentionalDisconnect = false;
   }
 
   Future<void> _connectToHost(DiscoveredHost host) async {
@@ -406,6 +593,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   Future<void> _resetConnection() async {
+    _intentionalDisconnect = true;
     ControllerConnectionManager.instance.disconnect();
     await PreferencesService.instance.clearConnection();
     _autoConnectEnabled = false;
@@ -452,6 +640,10 @@ class _ControllerScreenState extends State<ControllerScreen>
     _hasReceivedMessage = true;
     _connectionFailedCount = 0;
     _showDialogOnFail = false;
+
+    PreferencesService.instance.setLastValidCommunicationTimestamp(
+      DateTime.now().millisecondsSinceEpoch,
+    );
 
     if (message is! String) {
       return;
@@ -704,7 +896,9 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   void _enterEditMode() {
     setState(() {
-      _activeMode = ControllerScreenMode.edit;
+      _activeMode = ControllerScreenMode.gameplay;
+      _isPanelExpanded = true;
+      _panelMode = ControllerPanelMode.edit;
       _mouseModeOwned = false;
       _mouseModeOwnerName = null;
     });
@@ -946,10 +1140,15 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _onStickChanged(Offset offset) {
+    if (_lastSentLeftStick == offset) {
+      return;
+    }
+    _lastSentLeftStick = offset;
     _send({'type': 'stick', 'x': offset.dx, 'y': offset.dy});
   }
 
   void _onStickRelease() {
+    _lastSentLeftStick = Offset.zero;
     _send({'type': 'stick', 'x': 0, 'y': 0});
     Future.delayed(const Duration(milliseconds: 40), () {
       _send({'type': 'stick', 'x': 0, 'y': 0});
@@ -960,10 +1159,15 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _onRightStickChanged(Offset offset) {
+    if (_lastSentRightStick == offset) {
+      return;
+    }
+    _lastSentRightStick = offset;
     _send({'type': 'rstick', 'x': offset.dx, 'y': offset.dy});
   }
 
   void _onRightStickRelease() {
+    _lastSentRightStick = Offset.zero;
     _send({'type': 'rstick', 'x': 0, 'y': 0});
     Future.delayed(const Duration(milliseconds: 40), () {
       _send({'type': 'rstick', 'x': 0, 'y': 0});
@@ -988,10 +1192,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _sendButton(String xinputId, String state) {
-    if (state == 'down' && tapHapticsEnabled) {
-      HapticsManager.instance.softTap();
-    }
-    _send({'type': 'button', 'id': xinputId, 'state': state});
+    GamepadInputEngine.instance.updateButtonState(xinputId, state, tapHapticsEnabled);
   }
 
   void _sendMouseButton(String button, String state) {
@@ -1039,7 +1240,9 @@ class _ControllerScreenState extends State<ControllerScreen>
           onRumbleTest: _onRumbleTest,
         );
       },
-    );
+    ).then((_) {
+      _loadInitialPreferences();
+    });
   }
 
   void _showControllerSnackBar(SnackBar snackBar) {
@@ -1099,6 +1302,12 @@ class _ControllerScreenState extends State<ControllerScreen>
       _rightLayoutMode = await prefs.getRightLayoutMode();
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
 
+      leftStickSensitivity = await prefs.getLeftStickSensitivity();
+      rightStickSensitivity = await prefs.getRightStickSensitivity();
+      swipeAccelerationIntensity = await prefs.getSwipeAccelerationIntensity();
+      rightStickAntiDeadzone = await prefs.getRightStickAntiDeadzone();
+      rightStickResponseCurve = await prefs.getRightStickResponseCurve();
+
       final savedVisibility = await prefs.getButtonVisibility();
       if (savedVisibility != null) {
         visibleButtons.addAll(
@@ -1155,32 +1364,71 @@ class _ControllerScreenState extends State<ControllerScreen>
           onPulseCycleEnd: _toggleCenterPulse,
         );
       case ControllerScreenMode.edit:
-        return ControllerEditView(
+        return ControllerDefaultView(
           brandingMode: _brandingMode,
-          tapHapticsEnabled: tapHapticsEnabled,
-          onTapHapticsToggled: _toggleTapHaptics,
-          editableButtons: _editableButtons,
+          movementMode: _movementMode,
+          playerName: playerName,
+          onNameChanged: _updatePlayerName,
+          onRequestRandomName: _requestRandomName,
+          onStickChanged: _onStickChanged,
+          onStickRelease: _onStickRelease,
+          onButtonStateChanged: _sendButton,
+          onOpenOptions: _showOptionsDialog,
+          onOpenFaceEditor: _enterFaceMode,
+          onOpenEditControls: _enterEditMode,
+          onRetryConnection: _retryConnection,
+          onOpenQrScanner: kIsWeb ? null : _openQRScanner,
+          onMovementModeChanged: (value) {
+            setState(() => _movementMode = value);
+            PreferencesService.instance.setMovementMode(value.index);
+          },
+          connectionState: _connectionState,
+          status: status,
+          playerFace: _playerFace,
+          playerColor: playerColor,
+          playerIndex: playerIndex,
+          totalSlots: totalSlots,
           visibleButtons: visibleButtons,
           buttonOrder: _buttonOrder,
+          hasVacantSlot: _hasVacantSlot,
+          onJoinGame: () {
+            _send({'type': 'request_slot'});
+          },
+          onRightStickChanged: _onRightStickChanged,
+          onRightStickRelease: _onRightStickRelease,
+          buttonSizes: _buttonSizes,
+          rightLayoutMode: _rightLayoutMode,
+          leftStickSensitivity: leftStickSensitivity,
+          rightStickSensitivity: rightStickSensitivity,
+          swipeAccelerationIntensity: swipeAccelerationIntensity,
+          rightStickAntiDeadzone: rightStickAntiDeadzone,
+          rightStickResponseCurve: rightStickResponseCurve,
+          isPanelExpanded: true,
+          panelMode: ControllerPanelMode.edit,
+          onPanelExpandedChanged: (expanded) {
+            setState(() {
+              _isPanelExpanded = expanded;
+            });
+          },
+          onPanelModeChanged: (mode) {
+            setState(() {
+              _panelMode = mode;
+            });
+          },
+          editableButtons: _editableButtons,
           onSetButtonVisibility: _setButtonVisibility,
           onButtonOrderChanged: _setButtonOrder,
-          onGameButtonStateChanged: _sendButton,
-          onExit: _exitTemporaryMode,
-          totalSlots: totalSlots,
-          playerIndex: playerIndex,
-          isConnected: _connectionState == ControllerConnectionState.connected,
-          playerFace: _playerFace,
-          centerPulseExpanded: _centerPulseExpanded,
-          onPulseCycleEnd: _toggleCenterPulse,
-          buttonSizes: _buttonSizes,
           onButtonSizesChanged: _setButtonSizes,
-          rightLayoutMode: _rightLayoutMode,
           onRightLayoutModeChanged: (mode) {
             setState(() {
               _rightLayoutMode = mode;
             });
             PreferencesService.instance.setRightLayoutMode(mode);
           },
+          tapHapticsEnabled: tapHapticsEnabled,
+          onTapHapticsToggled: _toggleTapHaptics,
+          pulseOptionsButton: _pulseOptionsButton,
+          onResetOptionsPulse: () => setState(() => _pulseOptionsButton = false),
         );
       case ControllerScreenMode.face:
         return ControllerFaceView(
@@ -1239,6 +1487,37 @@ class _ControllerScreenState extends State<ControllerScreen>
           onRightStickRelease: _onRightStickRelease,
           buttonSizes: _buttonSizes,
           rightLayoutMode: _rightLayoutMode,
+          leftStickSensitivity: leftStickSensitivity,
+          rightStickSensitivity: rightStickSensitivity,
+          swipeAccelerationIntensity: swipeAccelerationIntensity,
+          rightStickAntiDeadzone: rightStickAntiDeadzone,
+          rightStickResponseCurve: rightStickResponseCurve,
+          isPanelExpanded: _isPanelExpanded,
+          panelMode: _panelMode,
+          onPanelExpandedChanged: (expanded) {
+            setState(() {
+              _isPanelExpanded = expanded;
+            });
+          },
+          onPanelModeChanged: (mode) {
+            setState(() {
+              _panelMode = mode;
+            });
+          },
+          editableButtons: _editableButtons,
+          onSetButtonVisibility: _setButtonVisibility,
+          onButtonOrderChanged: _setButtonOrder,
+          onButtonSizesChanged: _setButtonSizes,
+          onRightLayoutModeChanged: (mode) {
+            setState(() {
+              _rightLayoutMode = mode;
+            });
+            PreferencesService.instance.setRightLayoutMode(mode);
+          },
+          tapHapticsEnabled: tapHapticsEnabled,
+          onTapHapticsToggled: _toggleTapHaptics,
+          pulseOptionsButton: _pulseOptionsButton,
+          onResetOptionsPulse: () => setState(() => _pulseOptionsButton = false),
         );
     }
   }
@@ -1265,20 +1544,56 @@ class _ControllerScreenState extends State<ControllerScreen>
         body: SafeArea(
           child: Padding(
             padding: EdgeInsets.all(minimumPadding),
-            child: Stack(
-              children: [
-                _buildControllerSurface(),
-                if (_connectionState ==
-                    ControllerConnectionState.multipleHostsFound)
-                  MultipleHostsOverlay(
-                    hosts: _discoveredHosts,
-                    onHostSelected: (host) {
-                      _autoConnectEnabled = true;
-                      _connectToHost(host);
-                    },
-                    onOpenQrScanner: kIsWeb ? null : _openQRScanner,
-                  ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final height = constraints.maxHeight;
+                final width = constraints.maxWidth;
+                final targetHeight = 380.0;
+
+                if (height < targetHeight && height > 0) {
+                  final scale = height / targetHeight;
+                  final targetWidth = width / scale;
+
+                  return FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: targetWidth,
+                      height: targetHeight,
+                      child: Stack(
+                        children: [
+                          _buildControllerSurface(),
+                          if (_connectionState ==
+                              ControllerConnectionState.multipleHostsFound)
+                            MultipleHostsOverlay(
+                              hosts: _discoveredHosts,
+                              onHostSelected: (host) {
+                                _autoConnectEnabled = true;
+                                _connectToHost(host);
+                              },
+                              onOpenQrScanner: kIsWeb ? null : _openQRScanner,
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return Stack(
+                  children: [
+                    _buildControllerSurface(),
+                    if (_connectionState ==
+                        ControllerConnectionState.multipleHostsFound)
+                      MultipleHostsOverlay(
+                        hosts: _discoveredHosts,
+                        onHostSelected: (host) {
+                          _autoConnectEnabled = true;
+                          _connectToHost(host);
+                        },
+                        onOpenQrScanner: kIsWeb ? null : _openQRScanner,
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -1323,10 +1638,16 @@ class _ControllerScreenState extends State<ControllerScreen>
     super.build(context);
 
     return PopScope(
-      canPop: _activeMode == ControllerScreenMode.gameplay,
+      canPop: _activeMode == ControllerScreenMode.gameplay && !_isPanelExpanded,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        _exitTemporaryMode();
+        if (_isPanelExpanded) {
+          setState(() {
+            _isPanelExpanded = false;
+          });
+        } else {
+          _exitTemporaryMode();
+        }
       },
       child: Scaffold(
         body: AnimatedContainer(

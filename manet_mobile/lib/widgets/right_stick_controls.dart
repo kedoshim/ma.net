@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../services/haptics_manager.dart';
+import '../services/gamepad_input_engine.dart';
 
 class RightStickConfig {
   final double sensitivity;
@@ -10,6 +10,9 @@ class RightStickConfig {
   final bool invertY;
   final double returnToCenterSpeed;
   final double deadzone;
+  final double swipeAccelerationIntensity;
+  final double antiDeadzone;
+  final double responseCurve;
 
   const RightStickConfig({
     this.sensitivity = 1.0,
@@ -17,6 +20,9 @@ class RightStickConfig {
     this.invertY = false,
     this.returnToCenterSpeed = 0.2,
     this.deadzone = 0.05,
+    this.swipeAccelerationIntensity = 0.0,
+    this.antiDeadzone = 0.10,
+    this.responseCurve = 0.5,
   });
 }
 
@@ -32,32 +38,11 @@ class RightStickOutput {
   });
 
   void processRawInput(double rawX, double rawY) {
-    double x = rawX;
-    double y = rawY;
-    double magnitude = math.sqrt(x * x + y * y);
-    if (magnitude < config.deadzone) {
-      x = 0;
-      y = 0;
-    } else {
-      double scaledMagnitude = (magnitude - config.deadzone) / (1.0 - config.deadzone);
-      x = (x / magnitude) * scaledMagnitude;
-      y = (y / magnitude) * scaledMagnitude;
-    }
-
-    x *= config.sensitivity;
-    y *= config.sensitivity;
-
-    x = x.clamp(-1.0, 1.0);
-    y = y.clamp(-1.0, 1.0);
-
-    if (config.invertX) x = -x;
-    if (config.invertY) y = -y;
-
-    onSendValue(x, y);
+    // Kept to maintain backward compatibility.
   }
 
   void release() {
-    onReleased();
+    // Kept to maintain backward compatibility.
   }
 }
 
@@ -86,254 +71,210 @@ class FloatingRightStick extends StatefulWidget {
 
 class _FloatingRightStickState extends State<FloatingRightStick>
     with TickerProviderStateMixin {
-  bool _active = false;
-  Offset? _baseOffset;
-  Offset _stickOffset = Offset.zero;
-  double _currentX = 0;
-  double _currentY = 0;
-  Timer? _heartbeatTimer;
   late AnimationController _appearController;
+
+  final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _active = ValueNotifier(false);
+  final ValueNotifier<Offset> _basePos = ValueNotifier(Offset.zero);
 
   static const double baseSize = 150.0;
   static const double stickSize = 50.0;
-  static const double maxDistance = baseSize / 2;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('[INSTRUMENTATION] FloatingRightStick state created. State Hash: ${identityHashCode(this)}');
     _appearController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
       value: 0.0,
     );
+    _active.addListener(_onActiveChanged);
   }
 
   @override
   void dispose() {
-    _stopHeartbeat();
+    debugPrint('[INSTRUMENTATION] FloatingRightStick state disposed. State Hash: ${identityHashCode(this)}');
+    _active.removeListener(_onActiveChanged);
+    GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
     _appearController.dispose();
+    _visualOffset.dispose();
+    _active.dispose();
+    _basePos.dispose();
     super.dispose();
   }
 
-  void _startHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
-      if (!_active) return;
-      widget.output.processRawInput(_currentX, _currentY);
-    });
+  void _onActiveChanged() {
+    if (!mounted) return;
+    if (_active.value) {
+      _appearController.forward(from: 0.0);
+    } else {
+      _appearController.reverse();
+    }
   }
 
-  void _stopHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
+  Offset _clampBase(Offset proposedLocalBase) {
+    if (!mounted) return proposedLocalBase;
+    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+    final rootBox = _getVirtualRoot(context);
+    if (renderBox != null && rootBox != null) {
+      final globalBase = renderBox.localToGlobal(proposedLocalBase);
+      final baseOverlay = rootBox.globalToLocal(globalBase);
+      final double padding = baseSize / 2;
+      final clampedOverlay = Offset(
+        baseOverlay.dx.clamp(padding, rootBox.size.width - padding),
+        baseOverlay.dy.clamp(padding, rootBox.size.height - padding),
+      );
+      return renderBox.globalToLocal(rootBox.localToGlobal(clampedOverlay));
+    }
+    return proposedLocalBase;
   }
 
-  void _resetStick() {
-    _stopHeartbeat();
-    widget.output.release();
+  void _handlePointerDown(PointerDownEvent event) {
+    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+    debugPrint('[INSTRUMENTATION] FloatingRightStick pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
 
-    setState(() {
-      _active = false;
-      _currentX = 0;
-      _currentY = 0;
-      _stickOffset = Offset.zero;
-    });
+    if (widget.tapHapticsEnabled) {
+      try {
+        HapticsManager.instance.softTap();
+      } catch (_) {}
+    }
 
-    _appearController.reverse();
+    GamepadInputEngine.instance.handleRightPointerDown(
+      event: event,
+      parentSize: size,
+      layout: 'RS_BUTTON',
+      config: widget.output.config,
+      converter: (globalPos) {
+        if (!mounted) return globalPos;
+        final RenderBox? box = context.findRenderObject() as RenderBox?;
+        if (box != null && box.attached) {
+          return box.globalToLocal(globalPos);
+        }
+        return globalPos;
+      },
+      visualOffset: _visualOffset,
+      active: _active,
+      basePos: _basePos,
+      controlId: 'RS-BUTTON_${identityHashCode(this)}',
+      controlHashCode: identityHashCode(this),
+      baseSize: baseSize,
+      clampBase: _clampBase,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bounds = constraints.biggest;
-        final effectiveBaseOffset =
-            _baseOffset ?? Offset(bounds.width / 2, bounds.height / 2);
+        final cellBounds = constraints.biggest;
 
         return Listener(
           behavior: HitTestBehavior.opaque,
-          onPointerDown: (event) {
-            if (widget.tapHapticsEnabled) {
-              try {
-                HapticsManager.instance.softTap();
-              } catch (_) {}
-            }
+          onPointerDown: _handlePointerDown,
+          child: RepaintBoundary(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Activation Cell (idle button state)
+                ValueListenableBuilder<bool>(
+                  valueListenable: _active,
+                  builder: (context, active, child) {
+                    if (active) return const SizedBox.shrink();
+                    return const RightStickFloatingPreview(faded: true);
+                  },
+                ),
 
-            final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-            final rootBox = _getVirtualRoot(context);
-            Offset initialBase;
+                // Overlay Floating Joystick
+                AnimatedBuilder(
+                  animation: _appearController,
+                  builder: (context, child) {
+                    final showOverlay = _appearController.value > 0;
+                    if (!showOverlay) return const SizedBox.shrink();
 
-            if (renderBox != null && rootBox != null) {
-              final touchPosOverlay = rootBox.globalToLocal(event.position);
-              final double paddingX = baseSize / 2;
-              final double paddingY = baseSize / 2;
-              final clampedOverlay = Offset(
-                touchPosOverlay.dx.clamp(paddingX, rootBox.size.width - paddingX),
-                touchPosOverlay.dy.clamp(paddingY, rootBox.size.height - paddingY),
-              );
-              initialBase = renderBox.globalToLocal(rootBox.localToGlobal(clampedOverlay));
-            } else {
-              initialBase = event.localPosition;
-            }
+                    final scale = (0.8 + (_appearController.value * 0.2)) *
+                        (_active.value ? 0.92 : 1.0);
+                    final opacity = _appearController.value;
 
-            setState(() {
-              _active = true;
-              _baseOffset = initialBase;
-              _stickOffset = Offset.zero;
-              _currentX = 0;
-              _currentY = 0;
-            });
+                    return ValueListenableBuilder<Offset>(
+                      valueListenable: _basePos,
+                      builder: (context, basePos, child) {
+                        final effectiveBaseOffset = basePos == Offset.zero
+                            ? Offset(cellBounds.width / 2, cellBounds.height / 2)
+                            : basePos;
 
-            widget.output.processRawInput(0, 0);
-            _startHeartbeat();
-            _appearController.forward(from: 0.0);
-          },
-          onPointerMove: (event) {
-            if (_active) {
-              final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-              final rootBox = _getVirtualRoot(context);
-              if (renderBox != null && rootBox != null) {
-                final touchPosOverlay = rootBox.globalToLocal(event.position);
-                final baseOffsetOverlay = rootBox.globalToLocal(renderBox.localToGlobal(_baseOffset!));
-
-                var delta = touchPosOverlay - baseOffsetOverlay;
-                double distance = delta.distance;
-                final direction = delta.direction;
-
-                if (distance > maxDistance) {
-                  final proposedBaseOverlay =
-                      touchPosOverlay - Offset.fromDirection(direction, maxDistance);
-                  final double paddingX = baseSize / 2;
-                  final double paddingY = baseSize / 2;
-                  final clampedBaseOverlay = Offset(
-                    proposedBaseOverlay.dx.clamp(paddingX, rootBox.size.width - paddingX),
-                    proposedBaseOverlay.dy.clamp(paddingY, rootBox.size.height - paddingY),
-                  );
-                  _baseOffset = renderBox.globalToLocal(rootBox.localToGlobal(clampedBaseOverlay));
-
-                  final updatedBaseOverlay = rootBox.globalToLocal(renderBox.localToGlobal(_baseOffset!));
-                  delta = touchPosOverlay - updatedBaseOverlay;
-                  distance = delta.distance;
-                }
-
-                final rawDx = delta.dx / maxDistance;
-                final rawDy = delta.dy / maxDistance;
-                _currentX = rawDx.clamp(-1.0, 1.0);
-                _currentY = -rawDy.clamp(-1.0, 1.0);
-
-                final clampedDistance = distance.clamp(0.0, maxDistance);
-                final visualDelta = Offset.fromDirection(delta.direction, clampedDistance);
-
-                setState(() {
-                  _stickOffset = visualDelta;
-                });
-              } else if (renderBox != null) {
-                final touchPos = event.localPosition;
-                var delta = touchPos - _baseOffset!;
-                double distance = delta.distance;
-                final direction = delta.direction;
-
-                if (distance > maxDistance) {
-                  _baseOffset = touchPos - Offset.fromDirection(direction, maxDistance);
-                  delta = touchPos - _baseOffset!;
-                  distance = delta.distance;
-                }
-
-                final rawDx = delta.dx / maxDistance;
-                final rawDy = delta.dy / maxDistance;
-                _currentX = rawDx.clamp(-1.0, 1.0);
-                _currentY = -rawDy.clamp(-1.0, 1.0);
-
-                final clampedDistance = distance.clamp(0.0, maxDistance);
-                final visualDelta = Offset.fromDirection(delta.direction, clampedDistance);
-
-                setState(() {
-                  _stickOffset = visualDelta;
-                });
-              }
-            }
-          },
-          onPointerUp: (_) => _resetStick(),
-          onPointerCancel: (_) => _resetStick(),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Activation Cell (idle button state)
-              RightStickFloatingPreview(faded: !_active),
-
-              // Overlay Floating Joystick
-              AnimatedBuilder(
-                animation: _appearController,
-                builder: (context, child) {
-                  final showOverlay = _active || _appearController.value > 0;
-                  if (!showOverlay) return const SizedBox.shrink();
-
-                  final scale = (0.8 + (_appearController.value * 0.2)) *
-                      (_active ? 0.92 : 1.0);
-                  final opacity = _appearController.value * 0.8;
-
-                  return Positioned(
-                    left: effectiveBaseOffset.dx - baseSize / 2,
-                    top: effectiveBaseOffset.dy - baseSize / 2,
-                    child: Transform.scale(
-                      scale: scale,
-                      child: Opacity(
-                        opacity: opacity,
-                        child: SizedBox(
-                          width: baseSize,
-                          height: baseSize,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            clipBehavior: Clip.none,
-                            children: [
-                              // Joystick Base
-                              Container(
-                                width: baseSize,
-                                height: baseSize,
-                                decoration: BoxDecoration(
-                                  color: AppColors.backgroundColor,
-                                  borderRadius: BorderRadius.circular(36),
-                                  border: Border.all(
-                                    color: AppColors.textPrimary,
-                                    width: AppColors.borderThickness,
-                                  ),
-                                ),
-                              ),
-                              // Joystick Knob
-                              AnimatedPositioned(
-                                duration: _active
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 300),
-                                curve: _active ? Curves.linear : Curves.elasticOut,
-                                left: baseSize / 2 - stickSize / 2 + _stickOffset.dx,
-                                top: baseSize / 2 - stickSize / 2 + _stickOffset.dy,
-                                child: AnimatedScale(
-                                  scale: _active ? 1.25 : 1.0,
-                                  duration: const Duration(milliseconds: 150),
-                                  curve: Curves.easeOutBack,
-                                  child: Container(
-                                    width: stickSize,
-                                    height: stickSize,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.textPrimary,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: AppColors.lightColor,
-                                        width: AppColors.borderThickness,
-                                      ),
+                        return ValueListenableBuilder<Offset>(
+                          valueListenable: _visualOffset,
+                          builder: (context, visualOffset, child) {
+                            return Positioned(
+                              left: effectiveBaseOffset.dx - baseSize / 2,
+                              top: effectiveBaseOffset.dy - baseSize / 2,
+                              child: Transform.scale(
+                                scale: scale,
+                                child: Opacity(
+                                  opacity: opacity,
+                                  child: SizedBox(
+                                    width: baseSize,
+                                    height: baseSize,
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Container(
+                                          width: baseSize,
+                                          height: baseSize,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.backgroundColor,
+                                            borderRadius: BorderRadius.circular(36),
+                                            border: Border.all(
+                                              color: AppColors.textPrimary,
+                                              width: AppColors.borderThickness,
+                                            ),
+                                          ),
+                                        ),
+                                        AnimatedPositioned(
+                                          duration: _active.value
+                                              ? Duration.zero
+                                              : const Duration(milliseconds: 300),
+                                          curve: _active.value
+                                              ? Curves.linear
+                                              : Curves.elasticOut,
+                                          left: baseSize / 2 - stickSize / 2 + visualOffset.dx,
+                                          top: baseSize / 2 - stickSize / 2 + visualOffset.dy,
+                                          child: AnimatedScale(
+                                            scale: _active.value ? 1.25 : 1.0,
+                                            duration: const Duration(milliseconds: 150),
+                                            curve: Curves.easeOutBack,
+                                            child: Container(
+                                              width: stickSize,
+                                              height: stickSize,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.textPrimary,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: AppColors.lightColor,
+                                                  width: AppColors.borderThickness,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -356,97 +297,60 @@ class FixedRightStick extends StatefulWidget {
 }
 
 class _FixedRightStickState extends State<FixedRightStick> {
-  Offset _stickOffset = Offset.zero;
-  bool _active = false;
-  int? _pointerId;
-  double _currentX = 0;
-  double _currentY = 0;
-  Timer? _heartbeatTimer;
+  final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _active = ValueNotifier(false);
+  final ValueNotifier<Offset> _basePos = ValueNotifier(Offset.zero);
 
-  void _startHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
-      if (!_active) return;
-      widget.output.processRawInput(_currentX, _currentY);
-    });
-  }
-
-  void _stopHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-  }
-
-  void _updateStick(Offset localPosition, Size parentSize, double size) {
-    final center = Offset(parentSize.width / 2, parentSize.height / 2);
-    final dx = (localPosition.dx - center.dx) / (size / 2);
-    final dy = (localPosition.dy - center.dy) / (size / 2);
-
-    _currentX = dx.clamp(-1.0, 1.0);
-    _currentY = -dy.clamp(-1.0, 1.0);
-
-    double distance = Offset(dx, dy).distance;
-    double clampedDistance = distance.clamp(0.0, 1.0);
-    final direction = Offset(dx, dy).direction;
-
-    double visualX = math.cos(direction) * clampedDistance;
-    double visualY = math.sin(direction) * clampedDistance;
-
-    setState(() {
-      _stickOffset = Offset(
-        visualX * (size / 2 - 20),
-        visualY * (size / 2 - 20),
-      );
-    });
-  }
-
-  void _resetStick() {
-    _stopHeartbeat();
-    setState(() {
-      _stickOffset = Offset.zero;
-      _active = false;
-      _currentX = 0;
-      _currentY = 0;
-    });
-    widget.output.release();
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('[INSTRUMENTATION] FixedRightStick state created. State Hash: ${identityHashCode(this)}');
   }
 
   @override
   void dispose() {
-    _stopHeartbeat();
+    debugPrint('[INSTRUMENTATION] FixedRightStick state disposed. State Hash: ${identityHashCode(this)}');
+    GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
+    _visualOffset.dispose();
+    _active.dispose();
+    _basePos.dispose();
     super.dispose();
   }
 
-  void _handlePointerDown(PointerDownEvent event, Size bounds, double size) {
-    if (_pointerId != null) return;
-    _pointerId = event.pointer;
+  void _handlePointerDown(PointerDownEvent event) {
+    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+    debugPrint('[INSTRUMENTATION] FixedRightStick pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
+
     if (widget.tapHapticsEnabled) {
-      HapticsManager.instance.softTap();
+      try {
+        HapticsManager.instance.softTap();
+      } catch (_) {}
     }
-    _active = true;
-    _updateStick(event.localPosition, bounds, size);
-    widget.output.processRawInput(_currentX, _currentY);
-    _startHeartbeat();
-  }
 
-  void _handlePointerMove(PointerMoveEvent event, Size bounds, double size) {
-    if (event.pointer != _pointerId) return;
-    if (_active) {
-      _updateStick(event.localPosition, bounds, size);
-    }
-  }
+    final stickSize = math.min(size.width, size.height);
 
-  void _handlePointerUp(PointerUpEvent event) {
-    if (event.pointer == _pointerId) {
-      _pointerId = null;
-      _resetStick();
-    }
-  }
-
-  void _handlePointerCancel(PointerCancelEvent event) {
-    if (event.pointer == _pointerId) {
-      _pointerId = null;
-      _resetStick();
-    }
+    GamepadInputEngine.instance.handleRightPointerDown(
+      event: event,
+      parentSize: size,
+      layout: 'RS_FIXED',
+      config: widget.output.config,
+      converter: (globalPos) {
+        if (!mounted) return globalPos;
+        final RenderBox? box = context.findRenderObject() as RenderBox?;
+        if (box != null && box.attached) {
+          return box.globalToLocal(globalPos);
+        }
+        return globalPos;
+      },
+      visualOffset: _visualOffset,
+      active: _active,
+      basePos: _basePos,
+      controlId: 'RS-FIXED_${identityHashCode(this)}',
+      controlHashCode: identityHashCode(this),
+      baseSize: stickSize,
+    );
   }
 
   @override
@@ -454,61 +358,72 @@ class _FixedRightStickState extends State<FixedRightStick> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = math.min(constraints.maxWidth, constraints.maxHeight);
+        final knobSize = size > 100 ? 40.0 : size * 0.33;
+        final borderRadius = size * 0.3;
         return Listener(
           behavior: HitTestBehavior.opaque,
-          onPointerDown: (event) => _handlePointerDown(event, constraints.biggest, size),
-          onPointerMove: (event) => _handlePointerMove(event, constraints.biggest, size),
-          onPointerUp: _handlePointerUp,
-          onPointerCancel: _handlePointerCancel,
-          child: Center(
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: Stack(
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
-                children: [
-                  AnimatedScale(
-                    scale: _active ? 0.92 : 1.0,
-                    duration: const Duration(milliseconds: 150),
-                    curve: Curves.easeOutBack,
-                    child: Container(
-                      width: size,
-                      height: size,
-                      decoration: BoxDecoration(
-                        color: AppColors.backgroundColor,
-                        borderRadius: BorderRadius.circular(36),
-                        border: Border.all(
-                          color: AppColors.textPrimary,
-                          width: AppColors.borderThickness,
-                        ),
-                      ),
-                    ),
-                  ),
-                  AnimatedPositioned(
-                    duration: _active ? Duration.zero : const Duration(milliseconds: 300),
-                    curve: _active ? Curves.linear : Curves.elasticOut,
-                    left: size / 2 - 20 + _stickOffset.dx,
-                    top: size / 2 - 20 + _stickOffset.dy,
-                    child: AnimatedScale(
-                      scale: _active ? 1.25 : 1.0,
-                      duration: const Duration(milliseconds: 150),
-                      curve: Curves.easeOutBack,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppColors.textPrimary,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.lightColor,
-                            width: AppColors.borderThickness,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+          onPointerDown: _handlePointerDown,
+          child: RepaintBoundary(
+            child: Center(
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _active,
+                  builder: (context, active, child) {
+                    return ValueListenableBuilder<Offset>(
+                      valueListenable: _visualOffset,
+                      builder: (context, visualOffset, child) {
+                        return Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            AnimatedScale(
+                              scale: active ? 0.92 : 1.0,
+                              duration: const Duration(milliseconds: 150),
+                              curve: Curves.easeOutBack,
+                              child: Container(
+                                width: size,
+                                height: size,
+                                decoration: BoxDecoration(
+                                  color: AppColors.backgroundColor,
+                                  borderRadius: BorderRadius.circular(borderRadius),
+                                  border: Border.all(
+                                    color: AppColors.textPrimary,
+                                    width: AppColors.borderThickness,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            AnimatedPositioned(
+                              duration: active ? Duration.zero : const Duration(milliseconds: 300),
+                              curve: active ? Curves.linear : Curves.elasticOut,
+                              left: size / 2 - knobSize / 2 + visualOffset.dx,
+                              top: size / 2 - knobSize / 2 + visualOffset.dy,
+                              child: AnimatedScale(
+                                scale: active ? 1.25 : 1.0,
+                                duration: const Duration(milliseconds: 150),
+                                curve: Curves.easeOutBack,
+                                child: Container(
+                                  width: knobSize,
+                                  height: knobSize,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.textPrimary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: AppColors.lightColor,
+                                      width: AppColors.borderThickness,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -533,169 +448,137 @@ class RightStickSwipePad extends StatefulWidget {
 }
 
 class _RightStickSwipePadState extends State<RightStickSwipePad> {
-  bool _active = false;
-  Offset _lastTickPosition = Offset.zero;
-  Offset _currentPosition = Offset.zero;
-  bool _hasMovedThisTick = false;
-  double _stickX = 0.0;
-  double _stickY = 0.0;
-  Timer? _tickTimer;
+  final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _active = ValueNotifier(false);
+  final ValueNotifier<Offset> _basePos = ValueNotifier(Offset.zero);
 
-  void _startTimer() {
-    _tickTimer?.cancel();
-    _tickTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
-      if (!_active) return;
-
-      if (_hasMovedThisTick) {
-        final delta = _currentPosition - _lastTickPosition;
-        const double fullDeflectionDelta = 25.0;
-
-        double targetX = (delta.dx / fullDeflectionDelta).clamp(-1.0, 1.0);
-        double targetY = (-delta.dy / fullDeflectionDelta).clamp(-1.0, 1.0);
-
-        _stickX = targetX;
-        _stickY = targetY;
-
-        _lastTickPosition = _currentPosition;
-        _hasMovedThisTick = false;
-      } else {
-        final decay = widget.output.config.returnToCenterSpeed;
-        _stickX = _stickX * (1.0 - decay);
-        _stickY = _stickY * (1.0 - decay);
-        _lastTickPosition = _currentPosition;
-      }
-
-      widget.output.processRawInput(_stickX, _stickY);
-    });
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('[INSTRUMENTATION] RightStickSwipePad state created. State Hash: ${identityHashCode(this)}');
   }
 
-  void _stopTimer() {
-    _tickTimer?.cancel();
-    _tickTimer = null;
+  @override
+  void dispose() {
+    debugPrint('[INSTRUMENTATION] RightStickSwipePad state disposed. State Hash: ${identityHashCode(this)}');
+    GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
+    _visualOffset.dispose();
+    _active.dispose();
+    _basePos.dispose();
+    super.dispose();
   }
 
-  void _handlePanDown(DragDownDetails details) {
+  void _handlePointerDown(PointerDownEvent event) {
+    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+    debugPrint('[INSTRUMENTATION] RightStickSwipePad pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
+
     if (widget.tapHapticsEnabled) {
       try {
         HapticsManager.instance.softTap();
       } catch (_) {}
     }
-    setState(() {
-      _active = true;
-      _lastTickPosition = details.localPosition;
-      _currentPosition = details.localPosition;
-      _hasMovedThisTick = false;
-      _stickX = 0.0;
-      _stickY = 0.0;
-    });
-    widget.output.processRawInput(0, 0);
-    _startTimer();
-  }
 
-  void _handlePanUpdate(DragUpdateDetails details) {
-    if (_active) {
-      _currentPosition = details.localPosition;
-      _hasMovedThisTick = true;
-    }
-  }
-
-  void _handlePanEnd() {
-    _stopTimer();
-    setState(() {
-      _active = false;
-      _stickX = 0.0;
-      _stickY = 0.0;
-    });
-    widget.output.release();
-  }
-
-  void _handlePanCancel() {
-    _handlePanEnd();
-  }
-
-  @override
-  void dispose() {
-    _stopTimer();
-    super.dispose();
+    GamepadInputEngine.instance.handleRightPointerDown(
+      event: event,
+      parentSize: size,
+      layout: 'RS_SWIPE',
+      config: widget.output.config,
+      converter: (globalPos) {
+        if (!mounted) return globalPos;
+        final RenderBox? box = context.findRenderObject() as RenderBox?;
+        if (box != null && box.attached) {
+          return box.globalToLocal(globalPos);
+        }
+        return globalPos;
+      },
+      visualOffset: _visualOffset,
+      active: _active,
+      basePos: _basePos,
+      controlId: 'RS-SWIPE_${identityHashCode(this)}',
+      controlHashCode: identityHashCode(this),
+      baseSize: 150.0,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Listener(
       behavior: HitTestBehavior.opaque,
-      onPanDown: _handlePanDown,
-      onPanUpdate: _handlePanUpdate,
-      onPanEnd: (_) => _handlePanEnd(),
-      onPanCancel: _handlePanCancel,
-      child: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          color: _active
-              ? AppColors.highlightColor.withValues(alpha: 0.15)
-              : AppColors.backgroundColor.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: _active ? AppColors.highlightColor : AppColors.textPrimary,
-            width: AppColors.borderThickness,
-          ),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'SWIPE PAD',
-                  style: TextStyle(
-                    fontFamily: 'momo',
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: _active
-                        ? AppColors.highlightColor
-                        : AppColors.textPrimary.withValues(alpha: 0.6),
-                  ),
+      onPointerDown: _handlePointerDown,
+      child: RepaintBoundary(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _active,
+          builder: (context, active, child) {
+            return Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: active
+                    ? AppColors.highlightColor.withValues(alpha: 0.15)
+                    : AppColors.backgroundColor.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: active ? AppColors.highlightColor : AppColors.textPrimary,
+                  width: AppColors.borderThickness,
                 ),
-              ],
-            ),
-            Positioned(
-              left: 10,
-              child: Icon(
-                Icons.keyboard_arrow_left_rounded,
-                color: _active
-                    ? AppColors.highlightColor.withValues(alpha: 0.4)
-                    : AppColors.textPrimary.withValues(alpha: 0.2),
               ),
-            ),
-            Positioned(
-              right: 10,
-              child: Icon(
-                Icons.keyboard_arrow_right_rounded,
-                color: _active
-                    ? AppColors.highlightColor.withValues(alpha: 0.4)
-                    : AppColors.textPrimary.withValues(alpha: 0.2),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.visibility_rounded,
+                        size: 28,
+                        color: active
+                            ? AppColors.highlightColor
+                            : AppColors.textPrimary.withValues(alpha: 0.6),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    left: 10,
+                    child: Icon(
+                      Icons.keyboard_arrow_left_rounded,
+                      color: active
+                          ? AppColors.highlightColor.withValues(alpha: 0.4)
+                          : AppColors.textPrimary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  Positioned(
+                    right: 10,
+                    child: Icon(
+                      Icons.keyboard_arrow_right_rounded,
+                      color: active
+                          ? AppColors.highlightColor.withValues(alpha: 0.4)
+                          : AppColors.textPrimary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  Positioned(
+                    top: 10,
+                    child: Icon(
+                      Icons.keyboard_arrow_up_rounded,
+                      color: active
+                          ? AppColors.highlightColor.withValues(alpha: 0.4)
+                          : AppColors.textPrimary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 10,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: active
+                          ? AppColors.highlightColor.withValues(alpha: 0.4)
+                          : AppColors.textPrimary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            Positioned(
-              top: 10,
-              child: Icon(
-                Icons.keyboard_arrow_up_rounded,
-                color: _active
-                    ? AppColors.highlightColor.withValues(alpha: 0.4)
-                    : AppColors.textPrimary.withValues(alpha: 0.2),
-              ),
-            ),
-            Positioned(
-              bottom: 10,
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: _active
-                    ? AppColors.highlightColor.withValues(alpha: 0.4)
-                    : AppColors.textPrimary.withValues(alpha: 0.2),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -770,37 +653,43 @@ class RightStickFloatingPreview extends StatelessWidget {
         final symbolSize = size * 0.7;
         final knobSize = symbolSize * 0.33;
         final borderRadius = symbolSize * 0.3;
-        final opacity = faded ? 0.3 : 1.0;
         final borderWidth = symbolSize > 60 ? AppColors.borderThickness : 1.5;
 
         return Center(
-          child: SizedBox(
-            width: symbolSize,
-            height: symbolSize,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: symbolSize,
-                  height: symbolSize,
-                  decoration: BoxDecoration(
-                    color: AppColors.backgroundColor.withValues(alpha: opacity * 0.15),
-                    borderRadius: BorderRadius.circular(borderRadius),
-                    border: Border.all(
-                      color: AppColors.textPrimary.withValues(alpha: opacity),
-                      width: borderWidth,
+          child: Opacity(
+            opacity: faded ? 0.35 : 1.0,
+            child: SizedBox(
+              width: symbolSize,
+              height: symbolSize,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: symbolSize,
+                    height: symbolSize,
+                    decoration: BoxDecoration(
+                      color: AppColors.backgroundColor,
+                      borderRadius: BorderRadius.circular(borderRadius),
+                      border: Border.all(
+                        color: AppColors.textPrimary,
+                        width: borderWidth,
+                      ),
                     ),
                   ),
-                ),
-                Container(
-                  width: knobSize,
-                  height: knobSize,
-                  decoration: BoxDecoration(
-                    color: AppColors.textPrimary.withValues(alpha: opacity),
-                    shape: BoxShape.circle,
+                  Container(
+                    width: knobSize,
+                    height: knobSize,
+                    decoration: BoxDecoration(
+                      color: AppColors.textPrimary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.lightColor,
+                        width: borderWidth,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -831,7 +720,6 @@ class RightStickSwipePreview extends StatelessWidget {
         final width = constraints.maxWidth;
         final height = constraints.maxHeight;
         final size = math.min(width, height);
-        final fontSize = size > 80 ? 14.0 : 10.0;
         final iconSize = size > 80 ? 24.0 : 16.0;
 
         return Container(
@@ -850,14 +738,10 @@ class RightStickSwipePreview extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Text(
-                'SWIPE PAD',
-                style: TextStyle(
-                  fontFamily: 'momo',
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
+              Icon(
+                Icons.visibility_rounded,
+                size: size > 80 ? 28.0 : 18.0,
+                color: textColor,
               ),
               Positioned(
                 left: size > 80 ? 10 : 4,

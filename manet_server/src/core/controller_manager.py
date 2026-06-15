@@ -575,6 +575,13 @@ class ControllerManager:
         slot.face_rotation = identity["faceRotation"]
         slot.preset_id = identity.get("presetId")
 
+    def save_settings(self):
+        from src.app.config import save_settings
+        settings = {
+            "controller_type": getattr(self.config, "controller_type", "mixed")
+        }
+        save_settings(settings)
+
     def update_server_settings(self, mode: str | None = None, slots: int | None = None, fixed: bool | None = None, reservation_timeout: int | None = None):
         mode_changed = mode is not None and getattr(self.config, 'controller_type', None) != mode
 
@@ -600,6 +607,7 @@ class ControllerManager:
                 self.config.controller_type = mode
             LOGGER.info("Controller mode changed to %s, recreating gamepads", mode)
             self._recreate_all_gamepads(slots if slots is not None else len(self.slots))
+            self.save_settings()
         elif slots is not None:
             LOGGER.info("Resizing slots to %s", slots)
             self._resize_slots(slots)

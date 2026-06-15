@@ -281,8 +281,11 @@ class HTTPRoutes:
             "cons": data.get("cons"),
             "layout": data.get("layout") or {},
         }
-        preset = self.manager.preset_store.create_custom_preset(payload)
-        return web.json_response({"success": True, "preset": preset})
+        try:
+            preset = self.manager.preset_store.create_custom_preset(payload)
+            return web.json_response({"success": True, "preset": preset})
+        except ValueError as e:
+            return web.json_response({"success": False, "code": str(e)}, status=400)
 
     async def update_preset_handler(self, request):
         preset_id = request.match_info.get("preset_id")
@@ -304,6 +307,11 @@ class HTTPRoutes:
             return web.json_response(
                 {"success": False, "code": "preset_not_found"},
                 status=404,
+            )
+        except ValueError as e:
+            return web.json_response(
+                {"success": False, "code": str(e)},
+                status=400,
             )
 
         return web.json_response({"success": True, "preset": preset})
@@ -409,3 +417,44 @@ class HTTPRoutes:
         except Exception as e:
             LOG.error('Failed to update server settings: %s', e)
             return web.json_response({'success': False, 'code': 'update_failed'}, status=500)
+
+    async def input_mode_handler(self, request):
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response(
+                {"success": False, "error": "Invalid JSON body"},
+                status=400
+            )
+
+        if not isinstance(data, dict):
+            return web.json_response(
+                {"success": False, "error": "Request body must be a JSON object"},
+                status=400
+            )
+
+        mode = data.get("mode")
+        if mode not in ("xinput", "dinput"):
+            return web.json_response(
+                {"success": False, "error": "Invalid input mode"},
+                status=400
+            )
+
+        internal_mode = "x360" if mode == "xinput" else "ds4"
+
+        try:
+            self.manager.update_server_settings(
+                mode=internal_mode,
+            )
+            self.admin_panel.broadcast_update()
+            return web.json_response({
+                "success": True,
+                "mode": mode
+            })
+        except Exception as e:
+            LOG.error("Failed to update input mode: %s", e)
+            return web.json_response(
+                {"success": False, "error": str(e)},
+                status=500
+            )
+

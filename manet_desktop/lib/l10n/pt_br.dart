@@ -322,6 +322,10 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   String get rightLayoutColumnsLabel => 'Colunas';
   @override
   String get rightLayoutRowsLabel => 'Linhas';
+  @override
+  String get duplicateNameError => 'Já existe um layout com este nome';
+  @override
+  String get nameEmptyError => 'O nome do layout não pode ficar vazio';
 }
 
 class PtBrAlertsStrings implements AlertsStrings {

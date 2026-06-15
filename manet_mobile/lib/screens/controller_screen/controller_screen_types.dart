@@ -6,3 +6,5 @@ enum ControllerConnectionState {
 }
 
 enum ControllerScreenMode { gameplay, mouse, edit, face }
+
+enum ControllerPanelMode { use, edit }

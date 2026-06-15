@@ -30,6 +30,12 @@ class EnUsStrings implements AppStrings {
 
   @override
   final joystick = EnUsJoystickStrings();
+
+  @override
+  final disconnect = EnUsDisconnectStrings();
+
+  @override
+  final androidOnboarding = EnUsAndroidOnboardingStrings();
 }
 
 class EnUsCommonStrings implements CommonStrings {
@@ -60,6 +66,38 @@ class EnUsOptionsStrings implements OptionsStrings {
   String get themeColorsTitle => 'ma.net Colors';
   @override
   String get languageTitle => 'Language';
+  @override
+  String get sensitivity => 'Sensitivity';
+  @override
+  String get sensitivityTitle => 'Sensitivity Settings';
+  @override
+  String get leftStickSensitivity => 'Left Stick';
+  @override
+  String get rightStickSensitivity => 'Right Stick';
+  @override
+  String get swipeAcceleration => 'Swipe Acceleration';
+  @override
+  String get secondaryControls => 'Secondary Controls';
+  @override
+  String get collapse => 'Collapse';
+  @override
+  String get antiDeadzone => 'Anti-Deadzone';
+  @override
+  String get responseCurve => 'Response Curve';
+  @override
+  String get responseCurveLinear => 'Linear';
+  @override
+  String get responseCurveMild => 'Mild';
+  @override
+  String get responseCurveMedium => 'Medium';
+  @override
+  String get responseCurveAggressive => 'Aggressive';
+  @override
+  String get secondaryButtonsTitle => 'Secondary Buttons';
+  @override
+  String get movementTitle => 'Movement';
+  @override
+  String get rightStickTitle => 'Right Stick';
 }
 
 class EnUsQuickActionsStrings implements QuickActionsStrings {
@@ -151,6 +189,10 @@ class EnUsEditControlsStrings implements EditControlsStrings {
   String get columnsMode => 'Two columns';
   @override
   String get rowsMode => 'Two rows';
+  @override
+  String get editMode => 'Edit';
+  @override
+  String get useMode => 'Use';
 }
 
 class EnUsEditNameStrings implements EditNameStrings {
@@ -229,4 +271,42 @@ class EnUsJoystickStrings implements JoystickStrings {
   String get scroll => 'scroll';
   @override
   String get mouseModeTitle => 'mouse mode';
+}
+
+class EnUsDisconnectStrings implements DisconnectStrings {
+  @override
+  String get title => 'You were disconnected';
+  @override
+  String get subtitle => 'Could not remain connected to MaNet.';
+  @override
+  String get hostOffline => 'The computer hosting the match was turned off or closed MaNet.';
+  @override
+  String wifiChanged(String expected) => 'It looks like you changed your Wi-Fi network. Go back to "$expected" to continue playing.';
+  @override
+  String get noWifi => 'Make sure you are still connected to the same Wi-Fi network as the hosting computer.';
+  @override
+  String get noInternet => 'Your device seems to be offline at the moment.';
+  @override
+  String get unknown => 'The connection to MaNet was lost. Try closing and reopening the app or reconnecting to the Wi-Fi used during the match.';
+  @override
+  String currentNetwork(String current) => 'Current network: "$current"';
+  @override
+  String expectedNetwork(String expected) => 'Expected network: "$expected"';
+  @override
+  String get tryAgain => 'Try again';
+  @override
+  String get reconnect => 'Reconnect';
+  @override
+  String get diagnosing => 'Analyzing connection...';
+}
+
+class EnUsAndroidOnboardingStrings implements AndroidOnboardingStrings {
+  @override
+  String get title => 'Better experience in the app';
+  @override
+  String get subtitle => 'MaNet has an Android app with a more stable and comfortable experience for playing.\n\nYou can continue using the browser normally or install the app.';
+  @override
+  String get download => 'Download App';
+  @override
+  String get continueInBrowser => 'Continue in browser';
 }

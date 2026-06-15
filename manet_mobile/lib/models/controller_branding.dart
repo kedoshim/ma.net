@@ -38,8 +38,8 @@ class ControllerBranding {
     'RT',
     'LB',
     'LT',
-    'RSB',
-    'LSB',
+    'R',
+    'L',
     'RS_BUTTON',
     'RS_FIXED',
     'RS_SWIPE',
@@ -73,9 +73,9 @@ class ControllerBranding {
       case 'BTNRT':
         return 'RT';
       case 'BTNLSB':
-        return 'LSB';
+        return 'L';
       case 'BTNRSB':
-        return 'RSB';
+        return 'R';
       default:
         return upper;
     }
@@ -188,16 +188,16 @@ class ControllerBranding {
             semanticLabel: 'R2',
             accentColor: AppColors.textPrimary,
           );
-        case 'LSB':
+        case 'L':
           return const ControllerButtonPresentation(
-            canonicalId: 'LSB',
+            canonicalId: 'L',
             shortLabel: 'L3',
             semanticLabel: 'L3',
             accentColor: AppColors.textPrimary,
           );
-        case 'RSB':
+        case 'R':
           return const ControllerButtonPresentation(
-            canonicalId: 'RSB',
+            canonicalId: 'R',
             shortLabel: 'R3',
             semanticLabel: 'R3',
             accentColor: AppColors.textPrimary,
@@ -263,11 +263,8 @@ class ControllerButtonBrand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = textColor ?? AppColors.textPrimary;
     final effectiveFontSize =
         fontSize ?? (presentation.hasSymbol ? size : size * 0.72);
-
-    final makeXInputButtonsColorful = true;
 
     return Semantics(
       label: presentation.semanticLabel,
@@ -282,7 +279,7 @@ class ControllerButtonBrand extends StatelessWidget {
                 style: TextStyle(
                   fontSize: effectiveFontSize,
                   fontWeight: FontWeight.w800,
-                  color: makeXInputButtonsColorful ? presentation.accentColor : foreground,
+                  color: textColor ?? presentation.accentColor,
                   fontFamily: 'momo',
                 ),
               )

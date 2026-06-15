@@ -27,6 +27,10 @@ class ActionButtons extends StatefulWidget {
   final Map<String, int> buttonSizes;
   final void Function(Map<String, int> sizes)? onButtonSizesChanged;
   final String rightLayoutMode;
+  final double rightStickSensitivity;
+  final double swipeAccelerationIntensity;
+  final double rightStickAntiDeadzone;
+  final double rightStickResponseCurve;
 
   const ActionButtons({
     super.key,
@@ -45,6 +49,10 @@ class ActionButtons extends StatefulWidget {
     this.buttonSizes = const {},
     this.onButtonSizesChanged,
     this.rightLayoutMode = 'columns',
+    this.rightStickSensitivity = 1.0,
+    this.swipeAccelerationIntensity = 0.0,
+    this.rightStickAntiDeadzone = 0.10,
+    this.rightStickResponseCurve = 0.5,
   });
 
   @override
@@ -64,8 +72,8 @@ class _ActionButtonsState extends State<ActionButtons> {
     'RT',
     'LB',
     'LT',
-    'RSB',
-    'LSB',
+    'R',
+    'L',
     'RS_BUTTON',
     'RS_FIXED',
     'RS_SWIPE',
@@ -215,7 +223,11 @@ class _ActionButtonsState extends State<ActionButtons> {
   Widget _buildGameButton(String btnId) {
     if (btnId == 'RS_BUTTON') {
       final output = RightStickOutput(
-        config: const RightStickConfig(),
+        config: RightStickConfig(
+          sensitivity: widget.rightStickSensitivity,
+          antiDeadzone: widget.rightStickAntiDeadzone,
+          responseCurve: widget.rightStickResponseCurve,
+        ),
         onSendValue: (x, y) => widget.onRightStickChanged?.call(Offset(x, y)),
         onReleased: () => widget.onRightStickRelease?.call(),
       );
@@ -225,7 +237,11 @@ class _ActionButtonsState extends State<ActionButtons> {
       );
     } else if (btnId == 'RS_FIXED') {
       final output = RightStickOutput(
-        config: const RightStickConfig(),
+        config: RightStickConfig(
+          sensitivity: widget.rightStickSensitivity,
+          antiDeadzone: widget.rightStickAntiDeadzone,
+          responseCurve: widget.rightStickResponseCurve,
+        ),
         onSendValue: (x, y) => widget.onRightStickChanged?.call(Offset(x, y)),
         onReleased: () => widget.onRightStickRelease?.call(),
       );
@@ -235,7 +251,12 @@ class _ActionButtonsState extends State<ActionButtons> {
       );
     } else if (btnId == 'RS_SWIPE') {
       final output = RightStickOutput(
-        config: const RightStickConfig(),
+        config: RightStickConfig(
+          sensitivity: widget.rightStickSensitivity,
+          swipeAccelerationIntensity: widget.swipeAccelerationIntensity,
+          antiDeadzone: widget.rightStickAntiDeadzone,
+          responseCurve: widget.rightStickResponseCurve,
+        ),
         onSendValue: (x, y) => widget.onRightStickChanged?.call(Offset(x, y)),
         onReleased: () => widget.onRightStickRelease?.call(),
       );
@@ -245,13 +266,13 @@ class _ActionButtonsState extends State<ActionButtons> {
       );
     }
 
-    final btnConfig = _getButtonConfig(btnId);
+    final btnConfig = getButtonConfig(btnId);
     final presentation = ControllerBranding.presentationFor(
       btnConfig.xinput,
       widget.brandingMode,
     );
 
-    return _GameButton(
+    return GameButton(
       label: presentation.shortLabel,
       labelWidget: ControllerButtonBrand(presentation: presentation, size: 28),
       onStateChange: (state) =>
@@ -352,7 +373,7 @@ class _ActionButtonsState extends State<ActionButtons> {
         },
       );
     } else {
-      final btnConfig = _getButtonConfig(btnId);
+      final btnConfig = getButtonConfig(btnId);
       final presentation = ControllerBranding.presentationFor(
         btnConfig.xinput,
         widget.brandingMode,
@@ -391,26 +412,7 @@ class _ActionButtonsState extends State<ActionButtons> {
     return child;
   }
 
-  _ButtonConfig _getButtonConfig(String btnId) {
-    const allButtons = [
-      _ButtonConfig('Y', 'Y', 'Y'),
-      _ButtonConfig('B', 'B', 'B'),
-      _ButtonConfig('X', 'X', 'X'),
-      _ButtonConfig('A', 'A', 'A'),
-      _ButtonConfig('RB', 'RB', 'RB'),
-      _ButtonConfig('RT', 'RT', 'RT'),
-      _ButtonConfig('LB', 'LB', 'LB'),
-      _ButtonConfig('LT', 'LT', 'LT'),
-      _ButtonConfig('RSB', 'RSB', 'RSB'),
-      _ButtonConfig('LSB', 'LSB', 'LSB'),
-    ];
-
-    try {
-      return allButtons.firstWhere((btn) => btn.id == btnId);
-    } catch (e) {
-      return const _ButtonConfig('unknown', '?', 'UNKNOWN');
-    }
-  }
+  // Helper method removed and replaced by global getButtonConfig
 
   @override
   Widget build(BuildContext context) {
@@ -468,22 +470,43 @@ class _ActionButtonsState extends State<ActionButtons> {
   }
 }
 
-class _ButtonConfig {
+class ButtonConfig {
   final String id;
   final String label;
   final String xinput;
 
-  const _ButtonConfig(this.id, this.label, this.xinput);
+  const ButtonConfig(this.id, this.label, this.xinput);
 }
 
-class _GameButton extends StatefulWidget {
+ButtonConfig getButtonConfig(String btnId) {
+  const allButtons = [
+    ButtonConfig('Y', 'Y', 'Y'),
+    ButtonConfig('B', 'B', 'B'),
+    ButtonConfig('X', 'X', 'X'),
+    ButtonConfig('A', 'A', 'A'),
+    ButtonConfig('RB', 'RB', 'RB'),
+    ButtonConfig('RT', 'RT', 'RT'),
+    ButtonConfig('LB', 'LB', 'LB'),
+    ButtonConfig('LT', 'LT', 'LT'),
+    ButtonConfig('R', 'R', 'R'),
+    ButtonConfig('L', 'L', 'L'),
+  ];
+
+  try {
+    return allButtons.firstWhere((btn) => btn.id == btnId);
+  } catch (e) {
+    return const ButtonConfig('unknown', '?', 'UNKNOWN');
+  }
+}
+
+class GameButton extends StatefulWidget {
   final String label;
   final Widget? labelWidget;
   final void Function(String state) onStateChange;
   final ValueChanged<bool>? onPressedChanged;
   final bool tapHapticsEnabled;
 
-  const _GameButton({
+  const GameButton({
     required this.label,
     this.labelWidget,
     required this.onStateChange,
@@ -492,10 +515,10 @@ class _GameButton extends StatefulWidget {
   });
 
   @override
-  State<_GameButton> createState() => _GameButtonState();
+  State<GameButton> createState() => _GameButtonState();
 }
 
-class _GameButtonState extends State<_GameButton> with SingleTickerProviderStateMixin {
+class _GameButtonState extends State<GameButton> with SingleTickerProviderStateMixin {
   bool _hovered = false;
   bool _pressed = false;
   int? _pointerId;
@@ -784,7 +807,6 @@ class _DraggableEditButtonState extends State<DraggableEditButton>
           alignment: Alignment.center,
           children: [
             Column(
-              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
@@ -794,11 +816,13 @@ class _DraggableEditButtonState extends State<DraggableEditButton>
                 ),
                 const SizedBox(height: 4),
                 if (widget.labelWidget != null)
-                  DefaultTextStyle.merge(
-                    style: TextStyle(
-                      color: AppColors.textPrimary.withValues(alpha: opacity),
+                  Expanded(
+                    child: DefaultTextStyle.merge(
+                      style: TextStyle(
+                        color: AppColors.textPrimary.withValues(alpha: opacity),
+                      ),
+                      child: widget.labelWidget!,
                     ),
-                    child: widget.labelWidget!,
                   )
                 else
                   Text(

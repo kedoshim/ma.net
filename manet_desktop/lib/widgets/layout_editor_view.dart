@@ -12,6 +12,7 @@ class LayoutEditorView extends StatefulWidget {
     required this.api,
     required this.brandingModeListenable,
     this.preset,
+    required this.existingNames,
     required this.onCancel,
     required this.onSaved,
   });
@@ -19,8 +20,9 @@ class LayoutEditorView extends StatefulWidget {
   final HostApiService api;
   final ValueListenable<ControllerBrandingMode> brandingModeListenable;
   final ControllerPreset? preset;
+  final List<String> existingNames;
   final VoidCallback onCancel;
-  final VoidCallback onSaved;
+  final ValueChanged<ControllerPreset?> onSaved;
 
   @override
   State<LayoutEditorView> createState() => _LayoutEditorViewState();
@@ -36,8 +38,8 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
     'RT',
     'LB',
     'LT',
-    'RSB',
-    'LSB',
+    'R',
+    'L',
   ];
 
   static const List<String> _rightStickButtons = <String>[
@@ -85,16 +87,118 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
     super.didChangeDependencies();
     if (!_nameInitialized) {
       if (_nameController.text.isEmpty && widget.preset == null) {
-        _nameController.text = context.l10n.layoutEditor.defaultNewLayoutName;
+        _nameController.text = _generateNextDefaultName(
+          context.l10n.layoutEditor.defaultNewLayoutName,
+          widget.existingNames,
+        );
       }
       _nameInitialized = true;
     }
+  }
+
+  String _generateNextDefaultName(String baseName, List<String> existingNames) {
+    final regExp = RegExp(r'^(.*?)\s*(\d+)$');
+    final match = regExp.firstMatch(baseName);
+    
+    String base;
+    String numStr;
+    if (match != null) {
+      base = match.group(1)?.trim() ?? baseName;
+      numStr = match.group(2) ?? '001';
+    } else {
+      base = baseName;
+      numStr = '001';
+    }
+    
+    int padding = numStr.length;
+    int num = int.tryParse(numStr) ?? 1;
+    
+    final existingLower = existingNames.map((n) => n.toLowerCase()).toSet();
+    
+    while (true) {
+      final formattedNum = num.toString().padLeft(padding, '0');
+      final candidateName = '$base $formattedNum';
+      if (!existingLower.contains(candidateName.toLowerCase())) {
+        return candidateName;
+      }
+      num++;
+    }
+  }
+
+  void _showValidationError(String message) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.screenBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.textPrimary, width: 4),
+        ),
+        title: Text(
+          context.l10n.common.error,
+          style: const TextStyle(
+            fontFamily: 'momo',
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.highlightColor,
+              foregroundColor: AppColors.textPrimary,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(
+                  color: AppColors.textPrimary,
+                  width: 3,
+                ),
+              ),
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              context.l10n.common.ok,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   static bool _defaultVisible(String id) =>
       const {'LB', 'RB', 'A', 'B', 'X', 'Y'}.contains(id);
 
   Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _showValidationError(context.l10n.layoutEditor.nameEmptyError);
+      return;
+    }
+
+    final lowerName = name.toLowerCase();
+    final isDuplicate = widget.existingNames.any((existing) {
+      if (widget.preset != null &&
+          existing.toLowerCase() == widget.preset!.name.toLowerCase()) {
+        return false;
+      }
+      return existing.toLowerCase() == lowerName;
+    });
+
+    if (isDuplicate) {
+      _showValidationError(context.l10n.layoutEditor.duplicateNameError);
+      return;
+    }
+
     setState(() => _saving = true);
     final layout = ControllerPresetLayout(
       movementMode: _movementMode,
@@ -104,19 +208,24 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
       buttonSizes: _buttonSizes,
     );
     try {
+      ControllerPreset? createdPreset;
       if (widget.preset == null) {
-        await widget.api.createCustomPreset(
-          name: _nameController.text.trim(),
+        createdPreset = await widget.api.createCustomPreset(
+          name: name,
           layout: layout,
         );
       } else {
         await widget.api.updateCustomPreset(
           presetId: widget.preset!.id,
-          name: _nameController.text.trim(),
+          name: name,
           layout: layout,
         );
       }
-      if (mounted) widget.onSaved();
+      if (mounted) widget.onSaved(createdPreset);
+    } catch (exc) {
+      if (mounted) {
+        _showValidationError(exc.toString());
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
