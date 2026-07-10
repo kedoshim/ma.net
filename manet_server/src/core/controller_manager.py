@@ -585,22 +585,29 @@ class ControllerManager:
     def update_server_settings(self, mode: str | None = None, slots: int | None = None, fixed: bool | None = None, reservation_timeout: int | None = None):
         mode_changed = mode is not None and getattr(self.config, 'controller_type', None) != mode
 
+        if getattr(self.config, 'is_demo', False):
+            if slots is not None:
+                slots = min(slots, 2)
+            fixed = True
+
         if reservation_timeout is not None:
             LOGGER.info("Setting slot_reservation_timeout to %s seconds", reservation_timeout)
             self.config.slot_reservation_timeout = reservation_timeout
 
         if fixed is not None:
-            if self.config.auto_expand_slots != (not fixed):
-                LOGGER.info("Setting auto_expand_slots to %s", not fixed)
-            self.config.auto_expand_slots = not fixed
+            new_auto_expand = not fixed if not getattr(self.config, 'is_demo', False) else False
+            if self.config.auto_expand_slots != new_auto_expand:
+                LOGGER.info("Setting auto_expand_slots to %s", new_auto_expand)
+            self.config.auto_expand_slots = new_auto_expand
 
         if slots is not None:
-            slots = min(slots, 16)
+            slots = min(slots, 2 if getattr(self.config, 'is_demo', False) else 16)
             self.config.initial_slots = slots
 
         if slots is not None or fixed is not None:
             current_limit = slots if slots is not None else len(self.slots)
-            self.config.max_slots = min(current_limit if not self.config.auto_expand_slots else 16, 16)
+            limit_cap = 2 if getattr(self.config, 'is_demo', False) else 16
+            self.config.max_slots = min(current_limit if not self.config.auto_expand_slots else limit_cap, limit_cap)
 
         if mode_changed:
             if mode is not None:

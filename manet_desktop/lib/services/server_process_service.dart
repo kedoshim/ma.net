@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../utils/demo_config.dart';
 
 enum ServerStartupStatus {
   success,
@@ -193,9 +194,10 @@ class ServerProcessService {
       port.toString(),
       '--slots',
       slots.toString(),
-      if (!fixed) '--auto-expand',
+      if (!fixed && !isDemoMode) '--auto-expand',
       '--controller-type',
       controllerMode,
+      if (isDemoMode) '--demo',
     ]);
 
     _log('Spawning process with arguments: $arguments');

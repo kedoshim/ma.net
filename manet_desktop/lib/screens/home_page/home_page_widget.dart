@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:manet_desktop/screens/home_page/gamepad_state.dart';
 import 'package:manet_desktop/screens/home_page/gamepad_handler_widget.dart';
+import '../../utils/demo_config.dart';
 import '../../l10n/app_localizations.dart';
 
 import '../../models/controller_branding.dart';
@@ -73,7 +74,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   ColorTheme _currentTheme = ColorTheme.blue;
   PresetCatalog? _presetCatalog;
 
-  int _slots = 4;
+  int _slots = isDemoMode ? 2 : 4;
   bool _locked = true;
   String _controllerMode = 'x360';
   late final ValueNotifier<ControllerBrandingMode> _brandingModeNotifier;

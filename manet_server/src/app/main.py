@@ -1,5 +1,6 @@
 import argparse
 import sys
+import os
 from pathlib import Path
 
 from src.app.config import ServerConfig
@@ -68,6 +69,12 @@ def parse_args():
         help="Probe X360 gamepad creation and exit"
     )
 
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Run in demo mode with a limit of 2 players"
+    )
+
     return parser.parse_args()
 
 
@@ -97,8 +104,14 @@ def main():
     # Initialize logging early so core modules emit structured logs
     setup_logging(logging.DEBUG if args.debug else logging.INFO)
 
-    initial_slots = min(args.slots, 32)
-    max_slots = min(args.max_slots, 32)
+    is_demo = args.demo or os.environ.get("DEMO_MODE", "false").lower() == "true"
+
+    if is_demo:
+        initial_slots = min(args.slots, 2)
+        max_slots = 2
+    else:
+        initial_slots = min(args.slots, 32)
+        max_slots = min(args.max_slots, 32)
 
     # Load persisted settings if any
     from src.app.config import load_settings
@@ -113,8 +126,9 @@ def main():
         initial_slots=initial_slots,
         max_slots=max_slots,
         controller_type=controller_type,
-        auto_expand_slots=args.auto_expand,
-        debug=args.debug
+        auto_expand_slots=False if is_demo else args.auto_expand,
+        debug=args.debug,
+        is_demo=is_demo
     )
 
     run_server(config)

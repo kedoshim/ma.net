@@ -18,6 +18,7 @@ class ServerConfig:
     controller_type: ControllerType = "mixed"
     auto_expand_slots: bool = False
     slot_reservation_timeout: int = 300
+    is_demo: bool = False
 
     DEFAULT_COLORS = [
         "#EF4444",  # vermelho

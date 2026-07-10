@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:manet_desktop/screens/home_page/home_page_widget.dart';
 import 'package:manet_desktop/services/server_process_service.dart';
 import 'package:manet_desktop/services/host_api_service.dart';
+import '../../utils/demo_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -208,7 +209,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         try {
           await api.resetControllers(
             mode: mode,
-            slots: 4,
+            slots: isDemoMode ? 2 : 4,
             fixed: true,
             reservationTimeout: reservationTimeoutSeconds,
           );
@@ -230,7 +231,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
         try {
           await api.resetControllers(
             mode: mode,
-            slots: 4,
+            slots: isDemoMode ? 2 : 4,
             fixed: true,
             reservationTimeout: reservationTimeoutSeconds,
           );
@@ -370,13 +371,19 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                 Positioned(
                   bottom: 16,
                   right: 24,
-                  child: Text(
-                    context.l10n.startPage.version(_appVersion),
-                    style: AppTheme.bodyMedium.copyWith(
-                      fontFamily: 'momo',
-                      fontSize: 14,
-                      color: AppColors.textPrimary.withValues(alpha: 0.3),
-                    ),
+                  child: Builder(
+                    builder: (context) {
+                      final displayVersion = (_appVersion == '1.0.0' || _appVersion.isEmpty) ? '0.2.0' : _appVersion;
+                      final versionText = context.l10n.startPage.version(displayVersion) + (isDemoMode ? ' Demo' : '');
+                      return Text(
+                        versionText,
+                        style: AppTheme.bodyMedium.copyWith(
+                          fontFamily: 'momo',
+                          fontSize: 14,
+                          color: AppColors.textPrimary.withValues(alpha: 0.3),
+                        ),
+                      );
+                    }
                   ),
                 ),
               ],

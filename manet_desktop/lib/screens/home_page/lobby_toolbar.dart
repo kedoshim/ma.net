@@ -7,8 +7,9 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/layout_selector_widget.dart';
 import '../../widgets/juicy_widgets.dart';
-import 'server_alerts.dart';
 import '../../l10n/app_localizations.dart';
+import '../../utils/demo_config.dart';
+import '../../widgets/app_error_widget.dart';
 
 enum ModeChangeState { idle, loading, success }
 
@@ -164,9 +165,21 @@ class _LobbyToolbarState extends State<LobbyToolbar> {
                     iconColor: AppColors.highlightColor,
                     hoverBackgroundColor: AppColors.highlightColor,
                     hoverIconColor: AppColors.textPrimary,
-                    onTap: () => setState(
-                      () => _draftSlots = (_draftSlots + 1).clamp(1, 16),
-                    ),
+                    onTap: () {
+                      if (isDemoMode && _draftSlots >= 2) {
+                        showDialog(
+                          context: context,
+                          builder: (context) => const AppErrorWidget(
+                            title: 'Oops! Limite da Demo :)',
+                            message: 'Na versão de demonstração só é possível conectar até 2 jogadores.\n\nAdquira a versão completa para jogar com mais amigos!',
+                          ),
+                        );
+                        return;
+                      }
+                      setState(
+                        () => _draftSlots = (_draftSlots + 1).clamp(1, 16),
+                      );
+                    },
                   ),
 
                   // O espaço para o botão/loading sempre reservado

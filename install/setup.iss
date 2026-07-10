@@ -1,10 +1,14 @@
+#ifndef MyAppVersionBinary
+  #define MyAppVersionBinary MyAppVersion
+#endif
+
 [Setup]
 AppName=MaNet
 AppId={{A388A7D5-5E82-439B-A908-1F1988B08017}
 UsePreviousAppDir=no
 AppVersion={#MyAppVersion}
-VersionInfoVersion={#MyAppVersion}
-VersionInfoProductVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersionBinary}
+VersionInfoProductVersion={#MyAppVersionBinary}
 DefaultDirName={autopf}\MaNet
 DefaultGroupName=MaNet
 OutputDir=../dist-installer
