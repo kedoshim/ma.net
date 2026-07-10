@@ -410,18 +410,6 @@ class _ControllerScreenState extends State<ControllerScreen>
 
       unawaited(_recordSuccessfulConnection());
 
-      if (_isDisconnectModalOpen) {
-        final dCtx = _disconnectDialogContext;
-        try {
-          if (dCtx != null && dCtx.mounted) {
-            Navigator.of(dCtx).pop();
-          }
-        } catch (_) {}
-        _isDisconnectModalOpen = false;
-        _disconnectDialogContext = null;
-        _stopBackgroundReconnection();
-      }
-
       GamepadInputEngine.instance.init(_send);
 
       ws!.channel.stream.listen(
@@ -644,6 +632,18 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setLastValidCommunicationTimestamp(
       DateTime.now().millisecondsSinceEpoch,
     );
+
+    if (_isDisconnectModalOpen) {
+      final dCtx = _disconnectDialogContext;
+      try {
+        if (dCtx != null && dCtx.mounted) {
+          Navigator.of(dCtx).pop();
+        }
+      } catch (_) {}
+      _isDisconnectModalOpen = false;
+      _disconnectDialogContext = null;
+      _stopBackgroundReconnection();
+    }
 
     if (message is! String) {
       return;

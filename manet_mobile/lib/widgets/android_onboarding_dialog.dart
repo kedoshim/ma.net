@@ -31,9 +31,14 @@ class AndroidOnboardingDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final styleButtonText = const TextStyle(
+    final mediaQuery = MediaQuery.of(context);
+    final isLandscape = mediaQuery.orientation == Orientation.landscape;
+    final isSmallScreen = mediaQuery.size.height < 500;
+    final compact = isLandscape || isSmallScreen;
+
+    final styleButtonText = TextStyle(
       fontFamily: 'momo',
-      fontSize: 14,
+      fontSize: compact ? 13 : 14,
       fontWeight: FontWeight.bold,
       color: AppColors.textPrimary,
     );
@@ -53,8 +58,11 @@ class AndroidOnboardingDialog extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 380),
-          padding: const EdgeInsets.all(24),
+          constraints: BoxConstraints(
+            maxWidth: 380,
+            maxHeight: mediaQuery.size.height - 32,
+          ),
+          padding: compact ? const EdgeInsets.all(16) : const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: AppColors.screenBackground,
             borderRadius: BorderRadius.circular(24),
@@ -70,109 +78,110 @@ class AndroidOnboardingDialog extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Playful Mascot Face Container
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: AppColors.highlightColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Playful Mascot Face Container
+                Container(
+                  width: compact ? 56 : 72,
+                  height: compact ? 56 : 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.androidGreen,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.textPrimary,
+                      width: AppColors.borderThickness,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.android_rounded,
+                    size: compact ? 30 : 38,
                     color: AppColors.textPrimary,
-                    width: AppColors.borderThickness,
                   ),
                 ),
-                alignment: Alignment.center,
-                child: const Text(
-                  ':D', // Excited/Happy Android Face
+                SizedBox(height: compact ? 10 : 18),
+
+                // Title
+                Text(
+                  l10n.androidOnboarding.title,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontFamily: 'monomaniac',
-                    fontSize: 28,
+                    fontFamily: 'momo',
+                    fontSize: compact ? 16 : 18,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
                   ),
                 ),
-              ),
-              const SizedBox(height: 18),
+                SizedBox(height: compact ? 8 : 12),
 
-              // Title
-              Text(
-                l10n.androidOnboarding.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontFamily: 'momo',
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Description Text Box
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.textPrimary,
-                    width: AppColors.borderThickness / 2,
+                // Description Text Box
+                Container(
+                  width: double.infinity,
+                  padding: compact
+                      ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                      : const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.textPrimary,
+                      width: AppColors.borderThickness / 2,
+                    ),
+                  ),
+                  child: Text(
+                    l10n.androidOnboarding.subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: compact ? 12 : 13,
+                      height: 1.4,
+                    ),
                   ),
                 ),
-                child: Text(
-                  l10n.androidOnboarding.subtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 13,
-                    height: 1.45,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 22),
+                SizedBox(height: compact ? 14 : 22),
 
-              // Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: JuicyButton(
-                      onTap: () => _handleDownload(context),
-                      backgroundColor: AppColors.highlightColor,
-                      child: Center(
-                        child: Text(
-                          l10n.androidOnboarding.download,
-                          style: styleButtonText,
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: JuicyButton(
+                        onTap: () => _handleDownload(context),
+                        backgroundColor: AppColors.androidGreen,
+                        child: Center(
+                          child: Text(
+                            l10n.androidOnboarding.download,
+                            style: styleButtonText,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: JuicyButton(
-                      onTap: () {
-                        onDismissClicked?.call();
-                        Navigator.of(context).pop(false);
-                      },
-                      backgroundColor: AppColors.lightColor,
-                      child: Center(
-                        child: Text(
-                          l10n.androidOnboarding.continueInBrowser,
-                          style: styleButtonText,
+                  ],
+                ),
+                SizedBox(height: compact ? 8 : 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: JuicyButton(
+                        onTap: () {
+                          onDismissClicked?.call();
+                          Navigator.of(context).pop(false);
+                        },
+                        backgroundColor: AppColors.lightColor,
+                        child: Center(
+                          child: Text(
+                            l10n.androidOnboarding.continueInBrowser,
+                            style: styleButtonText,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

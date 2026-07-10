@@ -23,6 +23,7 @@ class AppColors {
   // Interactive colors
   static const Color switchActiveThumb = Color.fromARGB(139, 187, 206, 255);
   static const Color dragTargetGreen = Color.fromRGBO(144, 238, 144, 1);
+  static const Color androidGreen = Color(0xFF3DDC84);
   static const Color greyDisabled = Color.fromARGB(255, 200, 200, 200);
 
   // Design system

@@ -281,9 +281,9 @@ class EnUsDisconnectStrings implements DisconnectStrings {
   @override
   String get hostOffline => 'The computer hosting the match was turned off or closed MaNet.';
   @override
-  String wifiChanged(String expected) => 'It looks like you changed your Wi-Fi network. Go back to "$expected" to continue playing.';
+  String wifiChanged(String expected) => 'You changed your Wi-Fi network.';
   @override
-  String get noWifi => 'Make sure you are still connected to the same Wi-Fi network as the hosting computer.';
+  String get noWifi => 'You left the Wi-Fi network used during the match.';
   @override
   String get noInternet => 'Your device seems to be offline at the moment.';
   @override
@@ -291,7 +291,7 @@ class EnUsDisconnectStrings implements DisconnectStrings {
   @override
   String currentNetwork(String current) => 'Current network: "$current"';
   @override
-  String expectedNetwork(String expected) => 'Expected network: "$expected"';
+  String expectedNetwork(String expected) => 'Previous network: "$expected"';
   @override
   String get tryAgain => 'Try again';
   @override
@@ -302,11 +302,11 @@ class EnUsDisconnectStrings implements DisconnectStrings {
 
 class EnUsAndroidOnboardingStrings implements AndroidOnboardingStrings {
   @override
-  String get title => 'Better experience in the app';
+  String get title => 'Android App';
   @override
-  String get subtitle => 'MaNet has an Android app with a more stable and comfortable experience for playing.\n\nYou can continue using the browser normally or install the app.';
+  String get subtitle => 'A more stable and comfortable experience for playing.';
   @override
-  String get download => 'Download App';
+  String get download => 'Download app';
   @override
   String get continueInBrowser => 'Continue in browser';
 }

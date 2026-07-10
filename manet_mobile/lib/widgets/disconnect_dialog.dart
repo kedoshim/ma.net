@@ -50,6 +50,7 @@ class _DisconnectDialogState extends State<DisconnectDialog>
   }
 
   Future<void> _runDiagnostics() async {
+    debugPrint('[DisconnectDialog] Running diagnostics...');
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -62,9 +63,12 @@ class _DisconnectDialogState extends State<DisconnectDialog>
       isHttps: widget.isHttps,
     );
 
+    debugPrint('[DisconnectDialog] Diagnostics result received: $result');
+
     String? currentSsid;
     if (result == ConnectionDiagnosticResult.wifiChanged) {
       currentSsid = await ConnectionDiagnosticsService.instance.getCurrentWifiSsid();
+      debugPrint('[DisconnectDialog] Current SSID: $currentSsid, Expected: ${widget.expectedSsid}');
     }
 
     if (mounted) {
@@ -73,6 +77,7 @@ class _DisconnectDialogState extends State<DisconnectDialog>
         _currentSsid = currentSsid;
         _isLoading = false;
       });
+      debugPrint('[DisconnectDialog] Dialog state updated: result=$_result, ssid=$_currentSsid');
     }
   }
 

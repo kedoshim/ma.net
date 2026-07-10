@@ -24,39 +24,60 @@ class ConnectionDiagnosticsService {
     required String? expectedSsid,
     required bool isHttps,
   }) async {
+    debugPrint('[Diagnostic] Starting diagnosis. Host: $hostIp:$port, Expected SSID: $expectedSsid, HTTPS: $isHttps');
+
     // 1. Check network connectivity status
     final List<ConnectivityResult> connectivity =
         await Connectivity().checkConnectivity();
+    debugPrint('[Diagnostic] Connectivity results: $connectivity');
 
-    if (connectivity.isEmpty || connectivity.contains(ConnectivityResult.none)) {
+    final bool isOffline = connectivity.isEmpty || connectivity.contains(ConnectivityResult.none);
+    final bool hasLocalNetwork = connectivity.contains(ConnectivityResult.wifi) ||
+                                 connectivity.contains(ConnectivityResult.ethernet);
+
+    // If we had an expected SSID and we are no longer on a local network (Wi-Fi/Ethernet)
+    if (expectedSsid != null && expectedSsid.isNotEmpty) {
+      if (isOffline || !hasLocalNetwork) {
+        debugPrint('[Diagnostic] Left expected Wi-Fi network (offline=$isOffline, localNetwork=$hasLocalNetwork) -> returning noWifi');
+        return ConnectionDiagnosticResult.noWifi; // Caso 1
+      }
+    }
+
+    if (isOffline) {
+      debugPrint('[Diagnostic] Device is offline.');
       return ConnectionDiagnosticResult.noInternet; // Caso 4
     }
 
-    // 2. Check if we are on local network (Wi-Fi or Ethernet)
-    if (!connectivity.contains(ConnectivityResult.wifi) &&
-        !connectivity.contains(ConnectivityResult.ethernet)) {
+    if (!hasLocalNetwork) {
+      debugPrint('[Diagnostic] Device connected but not on local network (Wi-Fi/Ethernet) -> returning noWifi');
       return ConnectionDiagnosticResult.noWifi; // Caso 3
     }
 
-    // 3. Check for Wi-Fi SSID change (only on Mobile if SSID is available)
+    // 2. Check for Wi-Fi SSID change (only on Mobile if SSID is available)
     if (!kIsWeb) {
       try {
         final info = NetworkInfo();
         final currentSsidRaw = await info.getWifiName();
+        debugPrint('[Diagnostic] Raw current SSID from NetworkInfo: $currentSsidRaw');
         if (currentSsidRaw != null && currentSsidRaw.isNotEmpty) {
           final currentSsid = currentSsidRaw.replaceAll('"', '');
+          debugPrint('[Diagnostic] Cleaned SSID: current="$currentSsid", expected="$expectedSsid"');
           if (expectedSsid != null &&
               expectedSsid.isNotEmpty &&
               currentSsid != expectedSsid) {
+            debugPrint('[Diagnostic] SSID changed! wifiChanged.');
             return ConnectionDiagnosticResult.wifiChanged; // Caso 2
           }
         }
-      } catch (_) {
+      } catch (e) {
+        debugPrint('[Diagnostic] Error fetching current Wi-Fi name: $e');
         // Location permission not granted or other platform errors, degrade gracefully
       }
+    } else {
+      debugPrint('[Diagnostic] running on Web, skipping SSID check.');
     }
 
-    // 4. Ping the server status endpoint via HTTP
+    // 3. Ping the server status endpoint via HTTP
     try {
       final scheme = isHttps ? 'https' : 'http';
       final url = Uri(
@@ -65,19 +86,23 @@ class ConnectionDiagnosticsService {
         port: port,
         path: '/status',
       );
+      debugPrint('[Diagnostic] Pinging host status endpoint: $url');
       final response = await http.get(url).timeout(const Duration(seconds: 2));
+      debugPrint('[Diagnostic] Host ping response status code: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        debugPrint('[Diagnostic] Host ping response body: $data');
         if (data is Map<String, dynamic> && data['running'] == true) {
-          // The host/server is actively running, so the reason is transient
+          debugPrint('[Diagnostic] Server is up and running. Reason is unknown.');
           return ConnectionDiagnosticResult.unknown; // Caso 5
         }
       }
-    } catch (_) {
-      // HTTP request failed (refused/timeout) -> server is offline or host computer is shutdown
-      return ConnectionDiagnosticResult.hostOffline; // Caso 1
+    } catch (e) {
+      debugPrint('[Diagnostic] Ping to host failed (server offline or host down): $e');
+      return ConnectionDiagnosticResult.hostOffline; // Caso 1 (Host desligado)
     }
 
+    debugPrint('[Diagnostic] Reached end fallback -> unknown');
     return ConnectionDiagnosticResult.unknown; // Caso 5 fallback
   }
 

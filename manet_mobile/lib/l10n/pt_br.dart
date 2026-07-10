@@ -281,9 +281,9 @@ class PtBrDisconnectStrings implements DisconnectStrings {
   @override
   String get hostOffline => 'O computador que estava hospedando a partida foi desligado ou encerrou o MaNet.';
   @override
-  String wifiChanged(String expected) => 'Parece que você mudou de rede Wi-Fi. Volte para a rede "$expected" para continuar jogando.';
+  String wifiChanged(String expected) => 'Você mudou de rede Wi-Fi.';
   @override
-  String get noWifi => 'Verifique se você ainda está conectado à mesma rede Wi-Fi do computador que está hospedando a partida.';
+  String get noWifi => 'Você saiu da rede Wi-Fi utilizada durante a partida.';
   @override
   String get noInternet => 'Seu dispositivo parece estar sem conexão no momento.';
   @override
@@ -291,7 +291,7 @@ class PtBrDisconnectStrings implements DisconnectStrings {
   @override
   String currentNetwork(String current) => 'Rede atual: "$current"';
   @override
-  String expectedNetwork(String expected) => 'Rede esperada: "$expected"';
+  String expectedNetwork(String expected) => 'Rede anterior: "$expected"';
   @override
   String get tryAgain => 'Tentar novamente';
   @override
@@ -302,9 +302,9 @@ class PtBrDisconnectStrings implements DisconnectStrings {
 
 class PtBrAndroidOnboardingStrings implements AndroidOnboardingStrings {
   @override
-  String get title => 'Experiência melhor no aplicativo';
+  String get title => 'Aplicativo Android';
   @override
-  String get subtitle => 'O MaNet possui um aplicativo Android com uma experiência mais estável e confortável para jogar.\n\nVocê pode continuar usando o navegador normalmente ou instalar o aplicativo.';
+  String get subtitle => 'Uma experiência mais estável e confortável para jogar.';
   @override
   String get download => 'Baixar aplicativo';
   @override

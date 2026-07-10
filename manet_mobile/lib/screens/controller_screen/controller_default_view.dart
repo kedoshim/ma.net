@@ -823,10 +823,10 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                       const Spacer(),
                       if (!_showDpadInSecondary)
                         SizedBox(
-                          width: 56,
-                          height: 56,
+                          width: 75,
+                          height: 75,
                           child: Joystick(
-                            size: 56,
+                            size: 75,
                             onChanged: (x, y) => widget.onStickChanged(Offset(x, y)),
                             onReleased: widget.onStickRelease,
                             sensitivity: widget.leftStickSensitivity,
@@ -835,13 +835,13 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                         )
                       else
                         SizedBox(
-                          width: 56,
-                          height: 56,
+                          width: 75,
+                          height: 75,
                           child: FittedBox(
                             fit: BoxFit.contain,
                             child: SizedBox(
-                              width: 240,
-                              height: 258,
+                              width: 250,
+                              height: 268,
                               child: _ControllerDpad(
                                 onButtonStateChanged: widget.onButtonStateChanged,
                                 isMini: true,
@@ -885,8 +885,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                         ),
                         const Spacer(),
                         SizedBox(
-                          width: 68,
-                          height: 68,
+                          width: 75,
+                          height: 75,
                           child: FixedRightStick(
                             output: RightStickOutput(
                               config: RightStickConfig(
