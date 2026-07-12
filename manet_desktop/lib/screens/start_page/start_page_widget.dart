@@ -18,6 +18,7 @@ import '../../widgets/player_face_indicator.dart';
 import '../../models/player_face.dart';
 import '../../widgets/app_error_widget.dart';
 import 'mode_selection_dialog.dart';
+import '../../utils/credits_config.dart';
 import '../../widgets/juicy_widgets.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -38,6 +39,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
   );
   bool _isLoading = false;
   String _appVersion = '';
+  bool _isCreditsHovered = false;
   final ServerProcessService _serverService = ServerProcessService.instance;
 
   @override
@@ -144,6 +146,90 @@ class _StartPageWidgetState extends State<StartPageWidget> {
             ),
         ],
       ),
+    );
+  }
+
+  void _showCreditsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return JuicyDialog(
+          title: context.l10n.credits.title,
+          maxWidth: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${context.l10n.credits.developer}\n\n${context.l10n.credits.description}',
+                style: AppTheme.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                context.l10n.credits.assetsTitle,
+                style: AppTheme.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...CreditsConfig.thirdPartyCredits.map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '• ${item['title']} por ${item['author']}',
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '  Link: ${item['url']}',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppColors.textPrimary.withValues(alpha: 0.6),
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        '  Licença: ${item['license']}',
+                        style: AppTheme.bodySmall.copyWith(
+                          color: AppColors.textPrimary.withValues(alpha: 0.6),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+          actions: [
+            JuicyButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              backgroundColor: AppColors.textPrimary,
+              borderRadius: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Text(
+                context.l10n.common.close,
+                style: TextStyle(
+                  fontFamily: 'momo',
+                  color: AppColors.screenBackground,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -384,6 +470,29 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                         ),
                       );
                     }
+                  ),
+                ),
+                Positioned(
+                  top: 24,
+                  right: 24,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onEnter: (_) => setState(() => _isCreditsHovered = true),
+                    onExit: (_) => setState(() => _isCreditsHovered = false),
+                    child: GestureDetector(
+                      onTap: () => _showCreditsDialog(context),
+                      child: Text(
+                        context.l10n.credits.title,
+                        style: AppTheme.bodyMedium.copyWith(
+                          fontFamily: 'momo',
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: _isCreditsHovered
+                              ? AppColors.highlightColor
+                              : AppColors.textPrimary.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],

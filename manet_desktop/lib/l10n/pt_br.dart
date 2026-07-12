@@ -25,6 +25,8 @@ class PtBrStrings implements AppStrings {
   final AlertsStrings alerts = PtBrAlertsStrings();
   @override
   final QrPanelStrings qrPanel = PtBrQrPanelStrings();
+  @override
+  final CreditsStrings credits = PtBrCreditsStrings();
 }
 
 class PtBrCommonStrings implements CommonStrings {
@@ -477,4 +479,15 @@ class PtBrQrPanelStrings implements QrPanelStrings {
   @override
   String get faqPlayerLimitSolution =>
       '• Sugerimos trocar o modo do servidor para DInput para jogar com mais pessoas';
+}
+
+class PtBrCreditsStrings implements CreditsStrings {
+  @override
+  String get title => 'Créditos';
+  @override
+  String get developer => 'Desenvolvido por @kedoshim.';
+  @override
+  String get description => 'O MaNet foi criado com uma ideia simples em mente: jogar com amigos locais deve ser simples, direto e muito divertido. :)';
+  @override
+  String get assetsTitle => 'Recursos de terceiros:';
 }

@@ -25,6 +25,8 @@ class EnUsStrings implements AppStrings {
   final AlertsStrings alerts = EnUsAlertsStrings();
   @override
   final QrPanelStrings qrPanel = EnUsQrPanelStrings();
+  @override
+  final CreditsStrings credits = EnUsCreditsStrings();
 }
 
 class EnUsCommonStrings implements CommonStrings {
@@ -479,4 +481,15 @@ class EnUsQrPanelStrings implements QrPanelStrings {
   @override
   String get faqPlayerLimitSolution =>
       '• We suggest switching the server mode to DInput to play with more people';
+}
+
+class EnUsCreditsStrings implements CreditsStrings {
+  @override
+  String get title => 'Credits';
+  @override
+  String get developer => 'Developed by @kedoshim.';
+  @override
+  String get description => 'MaNet was built with a simple idea: playing with local friends should require less hassle and bring more fun. :)';
+  @override
+  String get assetsTitle => 'Third-party assets:';
 }

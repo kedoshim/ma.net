@@ -11,6 +11,7 @@ abstract class AppStrings {
   LayoutEditorStrings get layoutEditor;
   AlertsStrings get alerts;
   QrPanelStrings get qrPanel;
+  CreditsStrings get credits;
 }
 
 abstract class CommonStrings {
@@ -233,4 +234,11 @@ abstract class QrPanelStrings {
   String get faqPlayerLimitTitle;
   String get faqPlayerLimitDesc;
   String get faqPlayerLimitSolution;
+}
+
+abstract class CreditsStrings {
+  String get title;
+  String get developer;
+  String get description;
+  String get assetsTitle;
 }
