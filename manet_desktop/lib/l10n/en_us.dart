@@ -487,7 +487,7 @@ class EnUsCreditsStrings implements CreditsStrings {
   @override
   String get title => 'Credits';
   @override
-  String get developer => 'Developed by @kedoshim.';
+  String get developer => 'Developed by kedoshim.';
   @override
   String get description => 'MaNet was built with a simple idea: playing with local friends should require less hassle and bring more fun. :)';
   @override

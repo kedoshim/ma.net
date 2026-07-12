@@ -19,6 +19,7 @@ import '../../models/player_face.dart';
 import '../../widgets/app_error_widget.dart';
 import 'mode_selection_dialog.dart';
 import '../../utils/credits_config.dart';
+import '../../utils/links_config.dart';
 import '../../widgets/juicy_widgets.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -585,13 +586,16 @@ class _StartPageWidgetState extends State<StartPageWidget> {
           Row(
             children: [
               JuicyIconButton(
-                icon: const Icon(FontAwesomeIcons.discord),
-                onTap: () {},
+                icon: Transform.translate(
+                  offset: const Offset(-1.5, 0),
+                  child: const Icon(FontAwesomeIcons.discord),
+                ),
+                onTap: () => LinksConfig.openUrl(LinksConfig.discordUrl),
               ),
               const SizedBox(width: 16),
               JuicyIconButton(
-                icon: const Icon(FontAwesomeIcons.github),
-                onTap: () {},
+                icon: const Icon(FontAwesomeIcons.itchIo),
+                onTap: () => LinksConfig.openUrl(LinksConfig.itchIoUrl),
               ),
             ],
           ),

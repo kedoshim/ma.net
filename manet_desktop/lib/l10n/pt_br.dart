@@ -485,7 +485,7 @@ class PtBrCreditsStrings implements CreditsStrings {
   @override
   String get title => 'Créditos';
   @override
-  String get developer => 'Desenvolvido por @kedoshim.';
+  String get developer => 'Desenvolvido por kedoshim.';
   @override
   String get description => 'O MaNet foi criado com uma ideia simples em mente: jogar com amigos locais deve ser simples, direto e muito divertido. :)';
   @override
