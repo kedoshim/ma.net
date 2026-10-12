@@ -18,6 +18,7 @@ import '../../widgets/player_face_indicator.dart';
 import '../../models/player_face.dart';
 import '../../widgets/app_error_widget.dart';
 import 'mode_selection_dialog.dart';
+import '../../utils/app_preferences.dart';
 import '../../utils/credits_config.dart';
 import '../../utils/links_config.dart';
 import '../../widgets/juicy_widgets.dart';
@@ -48,6 +49,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
     super.initState();
     _model = StartPageModel();
     _loadTheme();
+    _loadControllerMode();
     _initPackageInfo();
   }
 
@@ -74,13 +76,30 @@ class _StartPageWidgetState extends State<StartPageWidget> {
     }
   }
 
+  /// Last controller mode the host picked; the party starts with it
+  /// directly instead of asking every time.
+  String _controllerMode = 'x360';
+
+  Future<void> _loadControllerMode() async {
+    final mode = await AppPreferences.controllerMode();
+    if (mounted) setState(() => _controllerMode = mode);
+  }
+
+  Future<void> _changeControllerMode() async {
+    SoundEffectService.instance.playOptionsButton();
+    final chosen = await _showModeSelectionDialog();
+    if (chosen == null || !mounted) return;
+    setState(() => _controllerMode = chosen);
+    await AppPreferences.setControllerMode(chosen);
+  }
+
   Future<String?> _showModeSelectionDialog() async {
     return await Navigator.push<String>(
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 600),
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const ModeSelectionPage(),
+            ModeSelectionPage(initialMode: _controllerMode, isMandatory: false),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.0, 1.0);
           const end = Offset.zero;
@@ -257,26 +276,19 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       final timeoutMinutes = prefs.getInt('reservation_timeout_minutes') ?? 5;
       final reservationTimeoutSeconds = timeoutMinutes * 60;
 
-      // Pre-heat the server process in the background with 0 slots to avoid allocating virtual gamepads on startup
+      final mode = _controllerMode;
+
+      // Start the server with 0 slots; the gamepads are created right after
+      // in the chosen mode.
       Future<ServerStartupResult>? preheatFuture;
       if (!isDebug) {
         preheatFuture = _serverService.startServer(
           port: port,
           slots: 0,
           fixed: true,
-          controllerMode: 'ds4',
+          controllerMode: mode,
         );
       }
-
-      final chosen = await _showModeSelectionDialog();
-      if (chosen == null) {
-        if (preheatFuture != null) {
-          // User cancelled selection, shut down the pre-heated background server
-          unawaited(_serverService.stopServer());
-        }
-        return;
-      }
-      final mode = (chosen == 'ds4') ? 'ds4' : 'x360';
 
       if (isDebug) {
         final isReady = await _serverService.isServerResponding(port);
@@ -604,10 +616,44 @@ class _StartPageWidgetState extends State<StartPageWidget> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildColorSelectors(),
-              _buildLanguageToggle(),
+              Row(
+                children: [
+                  _buildModeChip(),
+                  const SizedBox(width: 8),
+                  _buildLanguageToggle(),
+                ],
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildModeChip() {
+    return Tooltip(
+      message: context.l10n.modeSelection.title,
+      child: JuicyButton(
+        onPressed: _isLoading ? null : _changeControllerMode,
+        borderRadius: 12,
+        borderThickness: 2.0,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.settings_rounded, size: 16, color: AppColors.textPrimary),
+            const SizedBox(width: 6),
+            Text(
+              _controllerMode == 'ds4' ? context.l10n.lobby.dinput : context.l10n.lobby.xinput,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

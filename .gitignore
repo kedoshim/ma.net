@@ -407,5 +407,6 @@ GEMINI.md
 *.exe
 *.spec
 controller_presets.json
+games.json
 manet_network_service.exe
 release-temp/

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../services/host_api_service.dart';
 
@@ -32,13 +33,29 @@ class DeviceInputState {
   }
 }
 
+/// A phone button press/release, as forwarded by the server.
+class PadButtonEvent {
+  final String deviceId;
+  final String button;
+  final bool pressed;
+
+  const PadButtonEvent(this.deviceId, this.button, this.pressed);
+}
+
 class GamepadState extends ChangeNotifier {
   final HostApiService _api;
   List<DeviceModel> pool = [];
   List<SlotModel> slots = [];
   StreamSubscription? _subscription;
   String? lastErrorMessage;
-  final Map<String, DeviceInputState> _inputStates = {};
+  // Input changes at the phone's frame rate; each device gets its own
+  // notifier so only its indicator repaints, not the whole lobby.
+  final Map<String, ValueNotifier<DeviceInputState>> _inputStates = {};
+  final StreamController<PadButtonEvent> _buttonEvents =
+      StreamController<PadButtonEvent>.broadcast();
+
+  /// Button presses with the button id (A, B, START...), for menus/cursors.
+  Stream<PadButtonEvent> get buttonEvents => _buttonEvents.stream;
   final void Function(int slots)? onSlotsUpdated;
   final void Function(String message)? onGamepadLimitReached;
   final void Function(String mode)? onControllerModeChanged;
@@ -78,10 +95,15 @@ class GamepadState extends ChangeNotifier {
             (data['y'] as num).toDouble(),
           );
         } else if (data['event'] == 'button') {
-          updateButton(deviceId, data['state'] == 'down');
+          final pressed = data['state'] == 'down';
+          updateButton(deviceId, pressed);
+          final button = data['id'];
+          if (button is String) {
+            _buttonEvents.add(PadButtonEvent(deviceId, button, pressed));
+          }
         }
       }
-    });
+    }, onError: (Object e) => debugPrint('[GAMEPAD STATE] admin socket error: $e'));
   }
 
   Future<void> fetchSlots() async {
@@ -90,10 +112,6 @@ class GamepadState extends ChangeNotifier {
 
       pool = state.pool;
       slots = state.slots;
-      for (int i = 0; i < slots.length; i++) {
-        final slot = slots[i];
-        print('Slot ${slot.slot} - ${slot.type}');
-      }
       onSlotsUpdated?.call(slots.length);
       if (slots.isNotEmpty) {
         final firstSlotType = slots.first.type;
@@ -208,31 +226,49 @@ class GamepadState extends ChangeNotifier {
   }
 
   DeviceInputState? getInputState(String deviceId) {
-    return _inputStates[deviceId];
+    return _inputStates[deviceId]?.value;
+  }
+
+  /// Listenable input state for one device; rebuild only what shows it.
+  ValueListenable<DeviceInputState> inputListenable(String deviceId) {
+    return _inputStates.putIfAbsent(
+      deviceId,
+      () => ValueNotifier(DeviceInputState.idle()),
+    );
   }
 
   void updateJoystick(String deviceId, double x, double y) {
-    final current = _inputStates[deviceId] ?? DeviceInputState.idle();
-    _inputStates[deviceId] = current.copyWith(
+    final notifier = inputListenable(deviceId) as ValueNotifier<DeviceInputState>;
+    notifier.value = notifier.value.copyWith(
       stickX: x,
       stickY: -y,
       lastActivity: DateTime.now(),
     );
-    notifyListeners();
   }
 
   void updateButton(String deviceId, bool isPressed) {
-    final current = _inputStates[deviceId] ?? DeviceInputState.idle();
-    _inputStates[deviceId] = current.copyWith(
+    final notifier = inputListenable(deviceId) as ValueNotifier<DeviceInputState>;
+    notifier.value = notifier.value.copyWith(
       buttonPressed: isPressed,
       lastActivity: DateTime.now(),
     );
-    notifyListeners();
+  }
+
+  /// The device model (name, face) of a player in a slot.
+  DeviceModel? deviceById(String deviceId) {
+    for (final slot in slots) {
+      if (slot.device?.id == deviceId) return slot.device;
+    }
+    return null;
   }
 
   @override
   void dispose() {
+    _buttonEvents.close();
     _subscription?.cancel();
+    for (final notifier in _inputStates.values) {
+      notifier.dispose();
+    }
     super.dispose();
   }
 }

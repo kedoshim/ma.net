@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:manet_desktop/models/controller_branding.dart';
 import 'package:manet_desktop/models/player_face.dart';
+import 'package:manet_desktop/models/session_models.dart';
 import 'package:manet_desktop/theme/app_theme.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:manet_desktop/services/admin_socket_service.dart';
 import 'package:flutter/material.dart';
 
 Color colorFromHex(String hex) {
@@ -394,14 +396,105 @@ class PresetCatalog {
   }
 }
 
+class ControllerDeviceInfo {
+  final String name;
+  final String instanceId;
+  final String api; // 'xinput' | 'dinput'
+  final String origin; // 'vigem' | 'steam' | 'physical'
+  final String vendor; // 'xbox' | 'playstation' | 'nintendo' | 'steam' | 'generic'
+  final bool own; // one of this server's virtual pads
+
+  ControllerDeviceInfo.fromJson(Map<String, dynamic> json)
+    : own = json['own'] == true,
+      name = json['name'] as String? ?? '',
+      instanceId = json['instanceId'] as String? ?? '',
+      api = json['api'] as String? ?? 'dinput',
+      origin = json['origin'] as String? ?? 'physical',
+      vendor = json['vendor'] as String? ?? 'generic';
+}
+
+class XinputSlotInfo {
+  final int index;
+  final String owner; // 'manet' | 'other' | 'free'
+  final int? slot;
+
+  XinputSlotInfo.fromJson(Map<String, dynamic> json)
+    : index = json['index'] as int? ?? 0,
+      owner = json['owner'] as String? ?? 'free',
+      slot = json['slot'] as int?;
+}
+
+class OwnPadInfo {
+  final int slot;
+  final String type;
+  final String? playerName;
+  final int? xinputIndex;
+
+  OwnPadInfo.fromJson(Map<String, dynamic> json)
+    : slot = json['slot'] as int? ?? 0,
+      type = json['type'] as String? ?? 'x360',
+      playerName = json['playerName'] as String?,
+      xinputIndex = json['xinputIndex'] as int?;
+}
+
+/// What Windows sees as game controllers, next to what MaNet created.
+class ControllerInventory {
+  final String? controllerMode;
+  final List<OwnPadInfo> ownPads;
+  final List<XinputSlotInfo> xinputSlots;
+  final List<ControllerDeviceInfo> devices;
+  final int foreignVirtual;
+  final int physical;
+  final int steam;
+  final int playersWithoutXinput;
+  final int otherServers;
+
+  ControllerInventory.fromJson(Map<String, dynamic> json)
+    : controllerMode = json['controllerMode'] as String?,
+      ownPads = _list(json['ownPads'], OwnPadInfo.fromJson),
+      xinputSlots = _list(json['xinputSlots'], XinputSlotInfo.fromJson),
+      devices = _list(json['devices'], ControllerDeviceInfo.fromJson),
+      foreignVirtual = _summary(json, 'foreignVirtual'),
+      physical = _summary(json, 'physical'),
+      steam = _summary(json, 'steam'),
+      playersWithoutXinput = _summary(json, 'playersWithoutXinput'),
+      otherServers = (json['otherServers'] as List<dynamic>? ?? const []).length;
+
+  /// Something the host should look at: pads MaNet doesn't control are taking
+  /// XInput slots, or players got no XInput slot at all.
+  bool get hasConflicts =>
+      foreignVirtual > 0 || playersWithoutXinput > 0 || otherServers > 0;
+
+  bool get hasOtherControllers => foreignVirtual + physical + steam > 0;
+
+  static List<T> _list<T>(
+    dynamic raw,
+    T Function(Map<String, dynamic>) parse,
+  ) {
+    return (raw as List<dynamic>? ?? const [])
+        .map((item) => parse(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  static int _summary(Map<String, dynamic> json, String key) {
+    final summary = json['summary'] as Map<String, dynamic>? ?? const {};
+    return summary[key] as int? ?? 0;
+  }
+}
+
 class HostApiService {
+  // Every call has a deadline so a busy/frozen server surfaces as an error
+  // instead of a spinner that never ends.
+  static const Duration _requestTimeout = Duration(seconds: 5);
+  static const Duration _resetTimeout = Duration(seconds: 20);
+
   final String baseUrl;
 
   HostApiService({required String host, required int port})
     : baseUrl = 'http://$host:$port';
 
   Future<AssignementStat> fetchSlots() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/slots'));
+    final response = await http.get(Uri.parse('$baseUrl/api/slots')).timeout(_requestTimeout);
     if (response.statusCode == 200) {
       return AssignementStat.fromJson(json.decode(response.body));
     } else {
@@ -414,7 +507,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/slots/assign'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'deviceId': deviceId, 'slotIndex': slotIndex}),
-    );
+    ).timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to assign device');
     }
@@ -425,7 +518,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/slots/move'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'fromSlot': fromSlot, 'toSlot': toSlot}),
-    );
+    ).timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to move device');
     }
@@ -436,7 +529,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/slots/swap'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'slotA': slotA, 'slotB': slotB}),
-    );
+    ).timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to swap devices');
     }
@@ -447,7 +540,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/slots/unassign'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'slotIndex': slotIndex}),
-    );
+    ).timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw Exception('Failed to unassign device');
     }
@@ -467,7 +560,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/server/reset-controllers'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(body),
-    );
+    ).timeout(_resetTimeout);
     if (response.statusCode != 200) {
       throw Exception(
         'Failed to reset controllers (HTTP ${response.statusCode})',
@@ -475,8 +568,125 @@ class HostApiService {
     }
   }
 
+  // ------------------------------------------------------------- session
+
+  Future<http.Response> _postJson(String path, [Map<String, dynamic>? body]) {
+    return http
+        .post(
+          Uri.parse('$baseUrl$path'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(body ?? const {}),
+        )
+        .timeout(_requestTimeout);
+  }
+
+  Future<SessionSnapshot> fetchSession() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/session')).timeout(_requestTimeout);
+    if (response.statusCode != 200) throw Exception('Failed to fetch session');
+    return SessionSnapshot.fromJson(json.decode(response.body));
+  }
+
+  /// Tells the server whether the MaNet window is in front; while it is,
+  /// phone input drives the menus instead of the virtual gamepads.
+  Future<void> setSessionFocus(bool focused) =>
+      _postJson('/api/session/focus', {'focused': focused});
+
+  Future<void> setSessionPhase(String phase) =>
+      _postJson('/api/session/phase', {'phase': phase});
+
+  Future<void> vote(String deviceId, String? gameId) =>
+      _postJson('/api/session/vote', {'deviceId': deviceId, 'gameId': gameId});
+
+  /// Host confirmation: counts down and starts [gameId] (or the most voted).
+  Future<void> playGame([String? gameId]) =>
+      _postJson('/api/session/play', {'gameId': gameId});
+
+  Future<void> cancelCountdown() => _postJson('/api/session/cancel-countdown');
+
+  Future<void> stopGame() => _postJson('/api/session/stop-game');
+
+  Future<void> returnFromGame() => _postJson('/api/session/return');
+
+  Future<List<DisplayInfo>> fetchDisplays() async {
+    final response = await http
+        .get(Uri.parse('$baseUrl/api/displays'))
+        .timeout(_requestTimeout);
+    if (response.statusCode != 200) throw Exception('Failed to fetch displays');
+    return (json.decode(response.body)['displays'] as List<dynamic>)
+        .map((d) => DisplayInfo.fromJson(d as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<GameEntry>> fetchGames() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/games')).timeout(_requestTimeout);
+    if (response.statusCode != 200) throw Exception('Failed to fetch games');
+    return _parseGames(json.decode(response.body)['games']);
+  }
+
+  static List<GameEntry> _parseGames(dynamic raw) => (raw as List<dynamic>? ?? const [])
+      .map((g) => GameEntry.fromJson(g as Map<String, dynamic>))
+      .toList();
+
+  static List<GameEntry> parseGamesEvent(Map<String, dynamic> event) =>
+      _parseGames(event['games']);
+
+  Future<GameEntry> saveGame(GameEntry game) async {
+    final uri = Uri.parse(
+      game.id.isEmpty ? '$baseUrl/api/games' : '$baseUrl/api/games/${game.id}',
+    );
+    final body = json.encode(game.toJson());
+    const headers = {'Content-Type': 'application/json'};
+    final response = await (game.id.isEmpty
+            ? http.post(uri, headers: headers, body: body)
+            : http.put(uri, headers: headers, body: body))
+        .timeout(_requestTimeout);
+    if (response.statusCode != 200) throw Exception('Failed to save game');
+    return GameEntry.fromJson(json.decode(response.body)['game']);
+  }
+
+  Future<void> deleteGame(String gameId) async {
+    final response = await http
+        .delete(Uri.parse('$baseUrl/api/games/$gameId'))
+        .timeout(_requestTimeout);
+    if (response.statusCode != 200) throw Exception('Failed to delete game');
+  }
+
+  Future<ControllerInventory> fetchControllerInventory() async {
+    final response = await http
+        .get(Uri.parse('$baseUrl/api/controllers/inventory'))
+        .timeout(_requestTimeout);
+    if (response.statusCode == 200) {
+      return ControllerInventory.fromJson(json.decode(response.body));
+    }
+    throw Exception('Failed to fetch controller inventory');
+  }
+
+  /// Unplugs and recreates MaNet's virtual pads; players keep their slots.
+  Future<void> recreateControllers() async {
+    final response = await http
+        .post(Uri.parse('$baseUrl/api/controllers/recreate'))
+        .timeout(_resetTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to recreate controllers');
+    }
+  }
+
+  /// Closes other MaNet server processes; returns how many were closed.
+  Future<int> closeStaleServers() async {
+    final response = await http
+        .post(Uri.parse('$baseUrl/api/controllers/close-stale-servers'))
+        .timeout(_requestTimeout);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to close stale servers');
+    }
+    final body = json.decode(response.body) as Map<String, dynamic>;
+    return body['closed'] as int? ?? 0;
+  }
+
   Future<Map<String, dynamic>> getServerStatus() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/server/status'));
+    final response = await http.get(Uri.parse('$baseUrl/api/server/status')).timeout(_requestTimeout);
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -484,25 +694,15 @@ class HostApiService {
     }
   }
 
+  /// Shared, auto-reconnecting admin event stream for this server.
   Stream<Map<String, dynamic>> connectAdminSocket() {
-    final httpUri = Uri.parse(baseUrl);
-
-    final wsUri = httpUri.replace(
-      scheme: httpUri.scheme == 'https' ? 'wss' : 'ws',
-      path: '/ws/admin',
-    );
-
-    final channel = WebSocketChannel.connect(wsUri);
-
-    return channel.stream.map((message) {
-      return json.decode(message) as Map<String, dynamic>;
-    });
+    return AdminSocketService.forBaseUrl(baseUrl).events;
   }
 
   Future<ConnectionSnapshot> fetchConnections() async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/server/connections'),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       return ConnectionSnapshot.fromJson(json.decode(response.body));
@@ -514,7 +714,7 @@ class HostApiService {
   Future<DiagnosticsSnapshot> fetchDiagnostics() async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/server/diagnostics'),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       return DiagnosticsSnapshot.fromJson(json.decode(response.body));
@@ -528,7 +728,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/server/diagnostics/actions'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'actionId': actionId}),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to run diagnostics action');
@@ -540,7 +740,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/server/connections/select'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'connectionId': connectionId}),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       final body = json.decode(response.body) as Map<String, dynamic>;
@@ -556,7 +756,7 @@ class HostApiService {
   Future<ConnectionInfo> fetchConnectionInfo() async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/server/connection'),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       return ConnectionInfo.fromJson(json.decode(response.body));
@@ -575,7 +775,7 @@ class HostApiService {
 
   Future<PresetCatalog> fetchPresets() async {
     final response =
-        await http.get(Uri.parse('$baseUrl/api/presets?format=catalog'));
+        await http.get(Uri.parse('$baseUrl/api/presets?format=catalog')).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       return PresetCatalog.fromJson(json.decode(response.body));
@@ -588,7 +788,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/presets/select'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'presetId': presetId}),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       final body = json.decode(response.body) as Map<String, dynamic>;
@@ -608,7 +808,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/presets/custom'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'name': name, 'layout': layout.toJson()}),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       final body = json.decode(response.body) as Map<String, dynamic>;
@@ -628,7 +828,7 @@ class HostApiService {
       Uri.parse('$baseUrl/api/presets/custom/$presetId'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'name': name, 'layout': layout.toJson()}),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       final body = json.decode(response.body) as Map<String, dynamic>;
@@ -642,7 +842,7 @@ class HostApiService {
   Future<void> deleteCustomPreset(String presetId) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/api/presets/custom/$presetId'),
-    );
+    ).timeout(_requestTimeout);
 
     if (response.statusCode != 200) {
       throw Exception('Failed to delete preset');

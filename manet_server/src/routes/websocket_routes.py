@@ -11,21 +11,26 @@ from src.input.keyboard_controller import KeyboardController
 from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
 
-logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger("websocket")
+
+# Ping interval; aiohttp drops the socket when no pong arrives within half of
+# it, so a phone that silently left the Wi-Fi is detected in ~15s instead of
+# waiting for the OS TCP timeout.
+WS_HEARTBEAT_SECONDS = 10.0
 
 
 class WebSocketRoutes:
-    def __init__(self, ws_endpoint, manager, admin_panel, connection_service):
+    def __init__(self, ws_endpoint, manager, admin_panel, connection_service, session):
         self.manager = manager
         self.admin_panel = admin_panel
+        self.session = session
         self.ws_endpoint = ws_endpoint
         self.connection_service = connection_service
         self.mouse = MouseController()
         self.keyboard = KeyboardController()
 
     async def websocket_handler(self, request):
-        ws = web.WebSocketResponse()
+        ws = web.WebSocketResponse(heartbeat=WS_HEARTBEAT_SECONDS)
         await ws.prepare(request)
 
         peer = request.remote
@@ -53,7 +58,12 @@ class WebSocketRoutes:
         self.connection_service.mark_success_for_ip(local_ip)
         self.manager.register_device(device_id, player_name, customization, lang=lang)
         resolved_name = self.manager.connected_devices[device_id]["name"]
-        self.manager.register_device_ws(device_id, ws)
+        previous_ws = self.manager.register_device_ws(device_id, ws)
+        if previous_ws is not None:
+            # Same phone reconnected before its old socket noticed it was dead.
+            # Close the stale one; its cleanup will see it is no longer current.
+            LOG.info("Device %s reconnected; closing stale socket", device_id)
+            asyncio.create_task(previous_ws.close())
         slot = self.manager.assign_slot(device_id, resolved_name)
 
         if slot is None:
@@ -112,8 +122,7 @@ class WebSocketRoutes:
                     current_slot = self.manager.get_slot_by_device(device_id)
                     is_mouse_owner = self.manager.is_mouse_mode_owner(device_id)
 
-                    if msg_type in ("stick", "rstick", "button"):
-                        LOG.debug("Received input packet")
+                    to_game = current_slot is not None and self.session.routes_to_game()
 
                     if msg_type == "stick":
                         if is_mouse_owner:
@@ -122,26 +131,19 @@ class WebSocketRoutes:
                         x = float(data.get("x", 0))
                         y = float(data.get("y", 0))
 
-                        if current_slot:
+                        if to_game:
                             current_slot.last_input_at = time.time()
                             current_slot.last_stick_x = x
                             current_slot.last_stick_y = y
-
-                            LOG.debug("Applying controller state")
                             apply_stick(current_slot, x, y)
 
-                        input_msg = {
+                        self.admin_panel.broadcast_input({
                             "type": "input_event",
                             "deviceId": device_id,
                             "event": "stick",
                             "x": x,
                             "y": y
-                        }
-                        for client in list(self.admin_panel.admin_clients):
-                            try:
-                                await client.send_json(input_msg)
-                            except Exception:
-                                pass
+                        })
 
                     elif msg_type == "rstick":
                         if is_mouse_owner:
@@ -150,50 +152,47 @@ class WebSocketRoutes:
                         x = float(data.get("x", 0))
                         y = float(data.get("y", 0))
 
-                        if current_slot:
+                        if to_game:
                             current_slot.last_input_at = time.time()
                             current_slot.last_rstick_x = x
                             current_slot.last_rstick_y = y
-
-                            LOG.debug("Applying right controller state")
                             apply_right_stick(current_slot, x, y)
 
-                        input_msg = {
+                        self.admin_panel.broadcast_input({
                             "type": "input_event",
                             "deviceId": device_id,
                             "event": "rstick",
                             "x": x,
                             "y": y
-                        }
-                        for client in list(self.admin_panel.admin_clients):
-                            try:
-                                await client.send_json(input_msg)
-                            except Exception:
-                                pass
+                        })
 
                     elif msg_type == "button":
                         if is_mouse_owner:
                             continue
 
-                        if current_slot:
-                            LOG.debug("Applying controller state")
+                        if to_game:
                             apply_button(
                                 current_slot,
                                 data.get("id"),
                                 data.get("state"),
                             )
-                        
-                        input_msg = {
+                        elif current_slot is not None:
+                            self.session.handle_menu_button(
+                                device_id,
+                                data.get("id"),
+                                data.get("state"),
+                            )
+
+                        self.admin_panel.broadcast_input({
                             "type": "input_event",
                             "deviceId": device_id,
                             "event": "button",
+                            "id": data.get("id"),
                             "state": data.get("state")
-                        }
-                        for client in list(self.admin_panel.admin_clients):
-                            try:
-                                await client.send_json(input_msg)
-                            except Exception:
-                                pass
+                        })
+
+                    elif msg_type == "home_pressed":
+                        self.session.handle_home_pressed(device_id)
 
                     elif msg_type == "keepalive":
                         pass
@@ -308,6 +307,16 @@ class WebSocketRoutes:
             LOG.debug("Websocket cancelled")
 
         finally:
+            if not self.manager.is_current_device_ws(device_id, ws):
+                # A newer socket from the same phone took over; leave its
+                # slot, registration and mouse mode untouched.
+                LOG.info("Stale socket for device %s closed", device_id)
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+                return ws
+
             current_slot = self.manager.get_slot_by_device(device_id)
             dev_name = self.manager.connected_devices.get(device_id, {}).get("name")
             if current_slot:
@@ -323,7 +332,8 @@ class WebSocketRoutes:
                 LOG.info("Unassigned device %s (%s) disconnected", device_id, dev_name or "unknown")
 
             self.manager.unregister_device(device_id)
-            self.manager.unregister_device_ws(device_id)
+            self.manager.unregister_device_ws(device_id, ws)
+            self.admin_panel.forget_device(device_id)
             self.manager.broadcast_mouse_mode_status()
             self.admin_panel.broadcast_update()
 
@@ -337,13 +347,11 @@ class WebSocketRoutes:
 
 
     async def admin_websocket_handler(self,request):
-        ws = web.WebSocketResponse()
+        ws = web.WebSocketResponse(heartbeat=WS_HEARTBEAT_SECONDS)
         await ws.prepare(request)
 
-        self.admin_panel.admin_clients.add(ws)
-
         try:
-            # send initial state
+            # send initial state before joining broadcasts so ordering holds
             pool = self.manager.get_unassigned_devices()
             slots = self.manager.get_slots_state()
             await ws.send_json({
@@ -353,6 +361,8 @@ class WebSocketRoutes:
                     'slots': slots
                 }
             })
+            await ws.send_json(self.session.to_payload())
+            self.admin_panel.add_client(ws)
 
             async for msg in ws:
                 if msg.type == WSMsgType.ERROR:
@@ -363,6 +373,6 @@ class WebSocketRoutes:
             LOG.debug("Admin websocket cancelled")
 
         finally:
-            self.admin_panel.admin_clients.discard(ws)
+            self.admin_panel.remove_client(ws)
 
         return ws

@@ -43,10 +43,10 @@ dependencies:
   window_manager: ^0.4.3
   url_launcher: ^6.3.0
   shared_preferences: ^2.2.0
-  media_kit: ^1.2.6
-  media_kit_libs_audio: ^1.0.7 
   package_info_plus: ^8.0.0
   path_provider: ^2.1.3
+  flutter_soloud: ^3.5.4
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:
@@ -98,7 +98,6 @@ flutter:
     - assets/
     - assets/icon/
     - assets/fonts/
-    - assets/server/
     - assets/drivers/
     - assets/audio/bubble_pop/
     - assets/audio/

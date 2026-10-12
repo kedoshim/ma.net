@@ -84,7 +84,7 @@ class ConnectionDiagnosticsService {
         scheme: scheme,
         host: hostIp,
         port: port,
-        path: '/status',
+        path: '/api/server/status',
       );
       debugPrint('[Diagnostic] Pinging host status endpoint: $url');
       final response = await http.get(url).timeout(const Duration(seconds: 2));

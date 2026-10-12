@@ -43,7 +43,7 @@ async def network_monitor_task(connection_service: ConnectionService, admin_pane
                 last_signature = current_signature
 
                 # Refresh connection snapshot
-                snapshot = connection_service.refresh_snapshot()
+                snapshot = await asyncio.to_thread(connection_service.refresh_snapshot)
                 selected = snapshot.selected
                 LOG.info("Selected network option updated: %s (%s)", selected.ip, selected.kind)
 

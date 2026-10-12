@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import threading
 import time
 from typing import Any
 
@@ -166,6 +167,9 @@ class ConnectionStateStore:
         return Path.home() / ".ma-net" / "connection_state.json"
 
 
+SNAPSHOT_TTL_SECONDS = 30.0
+
+
 class ConnectionService:
     def __init__(self, port: int, ws_endpoint: str):
         self.port = port
@@ -174,6 +178,9 @@ class ConnectionService:
         self._snapshot_cache: ConnectionSnapshot | None = None
         self._snapshot_cache_at = 0.0
         self._ip_index: dict[str, ConnectionOption] = {}
+        # Discovery shells out to PowerShell/netsh and may run on worker
+        # threads; serialize it so concurrent requests share one scan.
+        self._snapshot_lock = threading.RLock()
 
     def get_connections_payload(self) -> dict[str, Any]:
         snapshot = self.get_snapshot()
@@ -228,8 +235,14 @@ class ConnectionService:
         self._invalidate_cache()
 
     def get_snapshot(self) -> ConnectionSnapshot:
+        with self._snapshot_lock:
+            return self._get_snapshot_locked()
+
+    def _get_snapshot_locked(self) -> ConnectionSnapshot:
+        # The network monitor invalidates the cache as soon as interfaces
+        # change, so a long TTL is safe and avoids re-running PowerShell.
         now = time.monotonic()
-        if self._snapshot_cache is not None and now - self._snapshot_cache_at < 2:
+        if self._snapshot_cache is not None and now - self._snapshot_cache_at < SNAPSHOT_TTL_SECONDS:
             return self._snapshot_cache
 
         state = self._state_store.load()
@@ -271,8 +284,9 @@ class ConnectionService:
         return snapshot
 
     def refresh_snapshot(self) -> ConnectionSnapshot:
-        self._invalidate_cache()
-        return self.get_snapshot()
+        with self._snapshot_lock:
+            self._invalidate_cache()
+            return self._get_snapshot_locked()
 
     def get_connection_by_id(self, connection_id: str | None) -> ConnectionOption:
         snapshot = self.get_snapshot()
@@ -471,6 +485,7 @@ class ConnectionService:
                 capture_output=True,
                 check=False,
                 text=True,
+                timeout=3,
                 creationflags=0x08000000,
             )
             ssids = {}

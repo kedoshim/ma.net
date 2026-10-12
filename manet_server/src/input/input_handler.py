@@ -17,9 +17,7 @@ DS4_DPAD_BUTTONS = {
 
 def _update_gamepad_safe(gp):
     try:
-        LOG.info("Updating virtual gamepad")
         gp.update()
-        LOG.info("Input applied successfully")
     except Exception:
         LOG.exception("Failed to update virtual gamepad")
         raise
@@ -112,14 +110,19 @@ def apply_button(slot, btn, state):
 
         const = DS4_BUTTON_MAP[btn]
 
+        # DS4 triggers have both a digital bit and an analog axis; keep them in sync.
+        if btn == "LT":
+            gp.left_trigger_float(1.0 if state == "down" else 0.0)
+        elif btn == "RT":
+            gp.right_trigger_float(1.0 if state == "down" else 0.0)
+
         if state == "down":
             gp.press_button(button=const)
         else:
             try:
                 gp.release_button(button=const)
             except Exception:
-                pass
-            gp.reset()
+                LOG.debug("Failed to release DS4 button %s", btn)
 
         _update_gamepad_safe(gp)
         return

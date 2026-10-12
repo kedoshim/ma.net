@@ -9,15 +9,16 @@ import '../../l10n/app_localizations.dart';
 
 class ModeSelectionPage extends StatelessWidget {
   final String? initialMode;
+  final bool isMandatory;
 
-  const ModeSelectionPage({super.key, this.initialMode});
+  const ModeSelectionPage({super.key, this.initialMode, this.isMandatory = true});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.screenBackground,
       body: ModeSelectionContent(
-        isMandatory: true,
+        isMandatory: isMandatory,
         initialMode: initialMode,
         showHeader: true,
         showConfirmButton: true,

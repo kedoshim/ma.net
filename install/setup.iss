@@ -19,6 +19,10 @@ WizardStyle=modern
 
 PrivilegesRequired=admin
 
+[InstallDelete]
+; Legacy one-file server bundled inside the Flutter assets (pre one-dir build)
+Type: filesandordirs; Name: "{app}\data\flutter_assets\assets\server"
+
 [Files]
 Source: "../release-temp/*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
@@ -43,7 +47,15 @@ begin
   begin
     Exec(
       'netsh',
-      'advfirewall firewall add rule name="MaNet Controller Server" dir=in action=allow program="' + ExpandConstant('{app}\data\flutter_assets\assets\server\manet_network_service.exe') + '" enable=yes profile=private,public',
+      'advfirewall firewall delete rule name="MaNet Controller Server"',
+      '',
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    );
+    Exec(
+      'netsh',
+      'advfirewall firewall add rule name="MaNet Controller Server" dir=in action=allow program="' + ExpandConstant('{app}\server\manet_network_service.exe') + '" enable=yes profile=private,public',
       '',
       SW_HIDE,
       ewWaitUntilTerminated,

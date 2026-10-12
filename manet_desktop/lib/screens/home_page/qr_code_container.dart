@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -307,8 +308,10 @@ class _QRCodePanelState extends State<QRCodePanel> {
     );
   }
 
-  Widget _buildQR() {
-    final qrSize = widget.scale.slot;
+  /// [maxSize] keeps the code inside narrow/short panels; without it the QR
+  /// kept its full size and pushed the panel content out of bounds.
+  Widget _buildQR(double maxSize) {
+    final qrSize = math.max(0.0, math.min(widget.scale.slot, maxSize));
     return Center(
       child: Container(
         width: qrSize,
@@ -476,7 +479,14 @@ class _QRCodePanelState extends State<QRCodePanel> {
                     flex: 4,
                     child: Padding(
                       padding: EdgeInsets.all(widget.scale.eighth),
-                      child: _buildQR(),
+                      child: _buildQR(
+                        math.min(
+                          // Width share of the flex 4 / 7 split.
+                          (constraints.maxWidth - 1) * 4 / 11 -
+                              widget.scale.eighth * 2,
+                          constraints.maxHeight - widget.scale.eighth * 2,
+                        ),
+                      ),
                     ),
                   ),
                   VerticalDivider(
@@ -491,26 +501,36 @@ class _QRCodePanelState extends State<QRCodePanel> {
                         color: AppColors.textPrimary.withValues(alpha: 0.05),
                       ),
                       padding: EdgeInsets.all(widget.scale.eighth),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildNetworkInfoRow(selectedConnection),
-                          SizedBox(height: widget.scale.eighth),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildLink(
-                                  connectionUrl,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  alignment: MainAxisAlignment.start,
+                      child: LayoutBuilder(
+                        builder: (context, infoConstraints) =>
+                            SingleChildScrollView(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: infoConstraints.maxHeight,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildNetworkInfoRow(selectedConnection),
+                                    SizedBox(height: widget.scale.eighth * 0.5),
+                                    // Link gets the full width; sharing a row
+                                    // with the help button squeezed it into
+                                    // one character per line.
+                                    _buildLink(
+                                      connectionUrl,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      alignment: MainAxisAlignment.start,
+                                    ),
+                                    SizedBox(height: widget.scale.eighth * 0.5),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: _buildHelpButton(isHorizontal: true),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              SizedBox(width: widget.scale.eighth),
-                              _buildHelpButton(isHorizontal: true),
-                            ],
-                          ),
-                        ],
+                            ),
                       ),
                     ),
                   ),
@@ -536,7 +556,9 @@ class _QRCodePanelState extends State<QRCodePanel> {
                             children: [
                               _buildEncoragementText(),
                               SizedBox(height: widget.scale.eighth),
-                              _buildQR(),
+                              _buildQR(
+                                constraints.maxWidth - widget.scale.eighth * 2,
+                              ),
                               SizedBox(height: widget.scale.eighth * 0.25),
                               _buildLink(connectionUrl),
                             ],

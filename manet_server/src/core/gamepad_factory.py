@@ -4,8 +4,10 @@ import ctypes
 from ctypes import wintypes
 import logging
 import subprocess
+import threading
 import time
 import vgamepad as vg
+import vgamepad.win.vigem_client as vcli
 
 LOG = logging.getLogger(__name__)
 
@@ -79,6 +81,76 @@ def probe_gamepad_type(gamepad_type: str, timeout: float = 5.0) -> bool:
     except Exception:
         LOG.exception("Probe subprocess failed for gamepad_type=%s", gamepad_type)
         return False
+
+
+# Gamepads that were unplugged but whose native target is deliberately never
+# freed. ViGEmClient's notification thread keeps using a target after
+# unregister_notification(); freeing it (vgamepad's __del__ calls
+# vigem_target_free) makes that thread touch freed memory, which crashed the
+# whole server with an access violation when switching XInput <-> DInput.
+# Leaking a few hundred bytes per retired pad is the safe trade-off.
+_retired_gamepads: list = []
+_retired_classes: dict[type, type] = {}
+
+
+def _retired_class_for(cls):
+    retired = _retired_classes.get(cls)
+    if retired is None:
+        retired = type(f"Retired{cls.__name__}", (cls,), {"__del__": lambda self: None})
+        _retired_classes[cls] = retired
+    return retired
+
+
+def retire_gamepad(gamepad):
+    """Unplug a virtual gamepad from Windows without freeing its native target."""
+    if gamepad is None or isinstance(gamepad, NullGamepad):
+        return
+    state = getattr(gamepad, "_manet_callback_state", None)
+    if state is not None:
+        state["alive"] = False
+    try:
+        gamepad.unregister_notification()
+    except Exception:
+        LOG.exception("Failed to unregister gamepad notification")
+    try:
+        gamepad.reset()
+        gamepad.update()
+    except Exception:
+        LOG.exception("Failed to reset gamepad before retiring")
+    try:
+        vcli.vigem_target_remove(gamepad._busp, gamepad._devicep)
+    except Exception:
+        LOG.exception("Failed to unplug gamepad target")
+    # Swap in a subclass whose __del__ is a no-op so the target is never freed,
+    # and keep the object (and its ctypes callback thunk) alive.
+    gamepad.__class__ = _retired_class_for(type(gamepad))
+    _retired_gamepads.append(gamepad)
+
+
+_PROBE_FAILURE_TTL = 30.0
+_probe_cache: dict[str, tuple[bool, float]] = {}
+_probe_lock = threading.Lock()
+
+
+def probe_gamepad_type_cached(gamepad_type: str) -> bool:
+    """
+    Run the crash-isolation probe at most once per process for each type.
+
+    The probe launches a whole child process (in the frozen build: the server
+    exe itself), so probing per slot used to cost seconds. Successes are cached
+    forever; failures are retried after a short TTL in case the driver was
+    still warming up.
+    """
+    with _probe_lock:
+        cached = _probe_cache.get(gamepad_type)
+        if cached is not None:
+            ok, at = cached
+            if ok or time.monotonic() - at < _PROBE_FAILURE_TTL:
+                return ok
+        ok = probe_gamepad_type(gamepad_type)
+        _probe_cache[gamepad_type] = (ok, time.monotonic())
+        LOG.info("Gamepad probe for %s: %s", gamepad_type, "ok" if ok else "failed")
+        return ok
 
 
 class NullGamepad:
@@ -173,7 +245,7 @@ async def notify_rumble(manager, slot, large, small):
 
     try:
         await ws.send_json(payload)
-        LOG.info("sent rumble -> device=%s payload=%s", device_id, payload)
+        LOG.debug("sent rumble -> device=%s payload=%s", device_id, payload)
         # update slot state
         slot.last_rumble_sent_at = now
         slot.last_rumble_strong = strong
@@ -191,7 +263,16 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
     LOGGER_CM.info("[GAMEPAD_FACTORY] Request to create gamepad: slot_index=%d, config_type=%s, existing_x360_count=%d", 
                   slot_index, config_type, existing_x360_count)
 
+    callback_state = {"alive": True}
+
     def rumble_callback(client, target, large_motor, small_motor, led_number, user_data):
+        if not callback_state["alive"]:
+            return
+        callback_state["last_large"] = large_motor
+        if callback_state.get("probing"):
+            # The controllers panel is identifying XInput slots with a
+            # signature vibration; don't buzz the phone for it.
+            return
         if slot_index >= len(manager.slots):
             LOG.debug("[GAMEPAD_FACTORY] Rumble callback ignored: slot_index %d is out of bounds (total slots: %d)", slot_index, len(manager.slots))
             return
@@ -227,7 +308,7 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
     if gamepad_type == "ds4":
         # Probe creation in a child process first to avoid native crashes
         LOGGER_CM.info("[GAMEPAD_FACTORY] Probing DS4 gamepad safety...")
-        ok = probe_gamepad_type("ds4")
+        ok = probe_gamepad_type_cached("ds4")
         if not ok:
             LOG.error("[GAMEPAD_FACTORY] Probe failed: DS4 gamepad creation is unsafe on this system. Falling back to NullGamepad.")
             # Return a NullGamepad to keep the server alive; callers should
@@ -252,6 +333,7 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
 
     try:
         LOGGER_CM.info("[GAMEPAD_FACTORY] Registering native rumble callback for slot %d", slot_index)
+        gamepad._manet_callback_state = callback_state
         gamepad.register_notification(
             callback_function=rumble_callback
         )

@@ -38,7 +38,8 @@ def parse_args():
     parser.add_argument(
         "--controller-type",
         choices=["x360", "ds4", "mixed"],
-        default="mixed"
+        default=None,
+        help="Controller type; overrides the persisted setting when given"
     )
 
     parser.add_argument(
@@ -67,6 +68,13 @@ def parse_args():
         "--probe-x360",
         action="store_true",
         help="Probe X360 gamepad creation and exit"
+    )
+
+    parser.add_argument(
+        "--parent-pid",
+        type=int,
+        default=None,
+        help="Exit (releasing the gamepads) when this process ends"
     )
 
     parser.add_argument(
@@ -104,6 +112,9 @@ def main():
     # Initialize logging early so core modules emit structured logs
     setup_logging(logging.DEBUG if args.debug else logging.INFO)
 
+    from src.services.window_placement import enable_dpi_awareness
+    enable_dpi_awareness()
+
     is_demo = args.demo or os.environ.get("DEMO_MODE", "false").lower() == "true"
 
     if is_demo:
@@ -116,9 +127,11 @@ def main():
     # Load persisted settings if any
     from src.app.config import load_settings
     persisted = load_settings()
-    controller_type = persisted.get("controller_type", args.controller_type)
+    # An explicit CLI choice wins: the desktop passes the mode the user is
+    # about to pick, so the gamepads don't have to be recreated right after.
+    controller_type = args.controller_type or persisted.get("controller_type", "mixed")
     if controller_type not in ("x360", "ds4", "mixed"):
-        controller_type = args.controller_type
+        controller_type = "mixed"
 
     config = ServerConfig(
         web_page_static_path=args.static_path,
@@ -128,7 +141,8 @@ def main():
         controller_type=controller_type,
         auto_expand_slots=False if is_demo else args.auto_expand,
         debug=args.debug,
-        is_demo=is_demo
+        is_demo=is_demo,
+        parent_pid=args.parent_pid,
     )
 
     run_server(config)

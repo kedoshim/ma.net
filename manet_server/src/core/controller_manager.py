@@ -1,6 +1,7 @@
+import asyncio
 import time
 from src.models.models import PlayerSlot
-from src.core.gamepad_factory import create_gamepad, NullGamepad
+from src.core.gamepad_factory import create_gamepad, NullGamepad, retire_gamepad
 from src.core.player_identity import normalize_identity
 from src.core.controller_presets import ControllerPresetStore
 
@@ -21,6 +22,10 @@ class ControllerManager:
         self.mouse_mode_owner_device_id: str | None = None
         self.main_loop = None
         self.preset_store = ControllerPresetStore()
+        # Serializes gamepad creation/destruction across awaits.
+        self._slot_lock = asyncio.Lock()
+        self._send_tasks: set[asyncio.Task] = set()
+        self._send_tasks: set[asyncio.Task] = set()
 
     def set_main_loop(self, loop):
         self.main_loop = loop
@@ -34,10 +39,21 @@ class ControllerManager:
                 break
 
     def register_device_ws(self, device_id, ws):
+        """Register `ws` as the live socket for the device; returns the socket
+        it replaced (if any) so the caller can close it."""
         LOGGER.info("WebSocket connected for device %s", device_id)
+        previous = self.device_ws_map.get(device_id)
         self.device_ws_map[device_id] = ws
+        return previous if previous is not ws else None
 
-    def unregister_device_ws(self, device_id):
+    def is_current_device_ws(self, device_id, ws) -> bool:
+        return self.device_ws_map.get(device_id) is ws
+
+    def unregister_device_ws(self, device_id, ws=None):
+        """Drop the device socket. When `ws` is given, only drop it if it is
+        still the current one (a reconnect may have replaced it)."""
+        if ws is not None and not self.is_current_device_ws(device_id, ws):
+            return
         if device_id in self.device_ws_map:
             LOGGER.info("WebSocket disconnected for device %s", device_id)
         self.device_ws_map.pop(device_id, None)
@@ -48,12 +64,38 @@ class ControllerManager:
     def notify_device(self, device_id, payload):
         ws = self.get_ws_by_device(device_id)
         if ws:
-            import asyncio
             try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(ws.send_json(payload))
+                task = asyncio.get_running_loop().create_task(
+                    self._safe_send(device_id, ws, payload)
+                )
             except Exception:
                 LOGGER.exception("Failed to notify device %s", device_id)
+                return
+            # Keep a strong reference until the send finishes.
+            self._send_tasks.add(task)
+            task.add_done_callback(self._send_tasks.discard)
+
+    def pulse_device(self, device_id, strong=0.5, weak=0.3, seconds=0.08):
+        """Short vibration on the phone as feedback for a menu action."""
+        ws = self.get_ws_by_device(device_id)
+        if not ws:
+            return
+
+        async def _pulse():
+            await self._safe_send(device_id, ws, {"type": "rumble", "weak": weak, "strong": strong})
+            await asyncio.sleep(seconds)
+            await self._safe_send(device_id, ws, {"type": "rumble", "weak": 0.0, "strong": 0.0})
+
+        task = asyncio.get_running_loop().create_task(_pulse())
+        self._send_tasks.add(task)
+        task.add_done_callback(self._send_tasks.discard)
+
+    @staticmethod
+    async def _safe_send(device_id, ws, payload):
+        try:
+            await ws.send_json(payload)
+        except Exception as e:
+            LOGGER.debug("Send to device %s failed: %s", device_id, e)
 
     def broadcast_to_devices(self, payload):
         for device_id in list(self.device_ws_map.keys()):
@@ -101,21 +143,11 @@ class ControllerManager:
             controller_type = getattr(slot, 'controller_type', 'unknown')
             LOGGER.info("[LIFECYCLE] Cleaning up slot index=%s, controller_type=%s", slot_id, controller_type)
             try:
-                if hasattr(slot.gamepad, 'unregister_notification'):
-                    LOGGER.info("[LIFECYCLE] Unregistering native notification callback for slot index=%s before deletion", slot_id)
-                    slot.gamepad.unregister_notification()
-                
-                LOGGER.info("[LIFECYCLE] Resetting and updating gamepad for slot index=%s", slot_id)
-                slot.gamepad.reset()
-                slot.gamepad.update()
-            except Exception:
-                LOGGER.exception("[LIFECYCLE] Error resetting/updating/unregistering gamepad for slot index=%s", slot_id)
-
-            try:
-                LOGGER.info("[LIFECYCLE] Deleting gamepad attribute for slot index=%s", slot_id)
+                LOGGER.info("[LIFECYCLE] Retiring gamepad for slot index=%s", slot_id)
+                retire_gamepad(slot.gamepad)
                 del slot.gamepad
             except Exception:
-                LOGGER.exception("[LIFECYCLE] Error deleting gamepad attribute for slot index=%s", slot_id)
+                LOGGER.exception("[LIFECYCLE] Error retiring gamepad for slot index=%s", slot_id)
 
         self.slots.clear()
         LOGGER.info("[LIFECYCLE] Gamepad slots cleared completely.")
@@ -189,7 +221,19 @@ class ControllerManager:
             self.main_loop,
             index,
         )
+        return self._register_created_slot(index, gamepad, gp_type)
 
+    async def _create_empty_slot_async(self, index):
+        # Native creation stays on the event-loop thread: ViGEm crashes
+        # (access violation) when targets are created from worker threads
+        # and later torn down from this one. With the DS4 probe cached it
+        # takes ~20ms per pad, so we just yield to the loop between pads.
+        await asyncio.sleep(0)
+        slot = self._create_empty_slot(index)
+        await asyncio.sleep(0)
+        return slot
+
+    def _register_created_slot(self, index, gamepad, gp_type):
         if isinstance(gamepad, NullGamepad):
             LOGGER.error("[LIFECYCLE] Failed to create physical/virtual gamepad at index=%d (got NullGamepad)", index)
             return None
@@ -237,6 +281,11 @@ class ControllerManager:
     def create_and_assign_new_slot(self, device_id, player_name=None):
         if len(self.slots) >= getattr(self.config, "max_slots", 16):
             return None
+        if self._slot_lock.locked():
+            # A resize/recreate is in flight; creating a slot now would race
+            # with it. The device stays in the pool and can be assigned later.
+            LOGGER.info("Slot resize in progress; leaving device %s in pool", device_id)
+            return None
 
         slot = self._create_empty_slot(len(self.slots))
         if slot is None:
@@ -264,7 +313,6 @@ class ControllerManager:
         slot = self.slots[slot_id]
         slot.connected = False
         if slot.assigned_device_id:
-            self.unregister_device_ws(slot.assigned_device_id)
             LOGGER.info("Disconnected device %s (%s) from slot %s, reservation started until %f", slot.assigned_device_id, slot.player_name, slot_id, time.time() + self.config.slot_reservation_timeout)
         slot.reserved_until = (
             time.time() +
@@ -582,9 +630,7 @@ class ControllerManager:
         }
         save_settings(settings)
 
-    def update_server_settings(self, mode: str | None = None, slots: int | None = None, fixed: bool | None = None, reservation_timeout: int | None = None):
-        mode_changed = mode is not None and getattr(self.config, 'controller_type', None) != mode
-
+    async def update_server_settings(self, mode: str | None = None, slots: int | None = None, fixed: bool | None = None, reservation_timeout: int | None = None):
         if getattr(self.config, 'is_demo', False):
             if slots is not None:
                 slots = min(slots, 2)
@@ -609,18 +655,26 @@ class ControllerManager:
             limit_cap = 2 if getattr(self.config, 'is_demo', False) else 16
             self.config.max_slots = min(current_limit if not self.config.auto_expand_slots else limit_cap, limit_cap)
 
-        if mode_changed:
-            if mode is not None:
+        async with self._slot_lock:
+            mode_changed = mode is not None and getattr(self.config, 'controller_type', None) != mode
+            if mode_changed:
                 self.config.controller_type = mode
-            LOGGER.info("Controller mode changed to %s, recreating gamepads", mode)
-            self._recreate_all_gamepads(slots if slots is not None else len(self.slots))
-            self.save_settings()
-        elif slots is not None:
-            LOGGER.info("Resizing slots to %s", slots)
-            self._resize_slots(slots)
+                LOGGER.info("Controller mode changed to %s, recreating gamepads", mode)
+                await self._recreate_all_gamepads(slots if slots is not None else len(self.slots))
+                self.save_settings()
+            elif slots is not None:
+                LOGGER.info("Resizing slots to %s", slots)
+                await self._resize_slots(slots)
 
 
-    def _recreate_all_gamepads(self, new_slot_count: int):
+    async def recreate_gamepads(self):
+        """Unplug every MaNet pad and plug fresh ones (same mode and count),
+        keeping players in their slots. Fixes pads Windows got confused about."""
+        async with self._slot_lock:
+            LOGGER.info("Recreating all gamepads on request")
+            await self._recreate_all_gamepads(len(self.slots))
+
+    async def _recreate_all_gamepads(self, new_slot_count: int):
 
         LOGGER.info(f"Recreating gamepads to {new_slot_count} slots")
 
@@ -646,7 +700,7 @@ class ControllerManager:
         LOGGER.info(f"Creating first phase of gamepads: 0 to {first_phase - 1}")
         failed = False
         for i in range(first_phase):
-            slot = self._create_empty_slot(i)
+            slot = await self._create_empty_slot_async(i)
             if slot is None:
                 failed = True
                 break
@@ -655,11 +709,8 @@ class ControllerManager:
             # Create remaining slots one-by-one with a short pause to avoid driver stress
             LOGGER.info(f"Creating second phase of gamepads: {first_phase} to {new_slot_count - 1}")
             for i in range(first_phase, new_slot_count):
-                try:
-                    time.sleep(0.35)
-                except Exception:
-                    LOGGER.exception("Sleep interrupted while creating gamepads")
-                slot = self._create_empty_slot(i)
+                await asyncio.sleep(0.35)
+                slot = await self._create_empty_slot_async(i)
                 if slot is None:
                     failed = True
                     break
@@ -691,7 +742,7 @@ class ControllerManager:
         except Exception:
             LOGGER.exception("Failed to broadcast active layout")
 
-    def _resize_slots(self, new_size: int):
+    async def _resize_slots(self, new_size: int):
         new_size = min(new_size, 16)
         current_size = len(self.slots)
         LOGGER.info("[LIFECYCLE] Resizing slots: current_size=%d, target_size=%d", current_size, new_size)
@@ -704,7 +755,7 @@ class ControllerManager:
             failed = False
             # Add new slots dynamically
             for i in range(current_size, new_size):
-                slot = self._create_empty_slot(i)
+                slot = await self._create_empty_slot_async(i)
                 if slot is None:
                     failed = True
                     break
@@ -739,15 +790,11 @@ class ControllerManager:
                 if slot.assigned_device_id:
                     self.unassign_slot(i)
                 try:
-                    if hasattr(slot.gamepad, 'unregister_notification'):
-                        LOGGER.info("[LIFECYCLE] Unregistering native notification callback for slot index=%d", i)
-                        slot.gamepad.unregister_notification()
-                    LOGGER.info("[LIFECYCLE] Resetting and deleting gamepad object for slot index=%d", i)
-                    slot.gamepad.reset()
-                    slot.gamepad.update()
+                    LOGGER.info("[LIFECYCLE] Retiring gamepad for slot index=%d", i)
+                    retire_gamepad(slot.gamepad)
                     del slot.gamepad
                 except Exception:
-                    LOGGER.exception("[LIFECYCLE] Failed to cleanly reset/unregister/delete gamepad for slot index=%d", i)
+                    LOGGER.exception("[LIFECYCLE] Failed to retire gamepad for slot index=%d", i)
             
             self.slots = self.slots[:new_size]
             LOGGER.info("[LIFECYCLE] Slot list sliced to new size: %d", len(self.slots))

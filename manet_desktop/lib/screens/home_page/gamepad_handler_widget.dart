@@ -10,6 +10,9 @@ import 'package:manet_desktop/services/sound_effect_service.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'lobby_ready_banner.dart';
+import 'lobby_toolbar.dart';
+import 'package:manet_desktop/services/session_controller.dart';
 import 'qr_code_container.dart';
 
 class UIScale {
@@ -32,7 +35,8 @@ class DragData {
 }
 
 
-void _playHoverSound() => SoundEffectService.instance.playHover();
+void _playHoverSound([Object? source]) =>
+    SoundEffectService.instance.playHover(source: source);
 
 class DisconnectTimerWidget extends StatefulWidget {
   final double reservedUntil;
@@ -270,6 +274,121 @@ class _Particle {
   });
 }
 
+/// Sizes the lobby stage from real measurements: the bench, toolbar and grid
+/// are stacked, and the largest slot size whose stack fits the available box
+/// wins. (The old fixed factors guessed the bench height and overflowed on
+/// short windows.)
+class StageMetrics {
+  static const double _benchTitleHeight = 24.0;
+  // Inner horizontal padding of LobbyToolbar.
+  static const double _toolbarPadding = 16.0;
+  static const double _toolbarRowHeight = 48.0;
+
+  static double benchBoxHeight(UIScale scale) =>
+      (scale.quarter * 1.4 + 56.0).clamp(96.0, 160.0);
+
+  static double benchHeight(UIScale scale) =>
+      _benchTitleHeight + scale.eighth / 2 + benchBoxHeight(scale);
+
+  static double toolbarHeight(double contentWidth) =>
+      contentWidth - _toolbarPadding >= LobbyToolbar.inlineSelectorMinWidth
+          ? _toolbarRowHeight
+          : _toolbarRowHeight * 2;
+
+  static int columnsFor(int slotCount) => slotCount > 12
+      ? 8
+      : (slotCount > 8 ? 6 : (slotCount > 6 ? 4 : (slotCount > 4 ? 6 : 4)));
+
+  static int rowsFor(int slotCount, int columns) =>
+      (math.max(columns, slotCount) / columns).ceil();
+
+  static double contentWidth(UIScale scale, int columns) =>
+      scale.slot * columns + scale.eighth / 2 * (columns - 1) + 2.0;
+
+  static double gridHeight(UIScale scale, int rows) =>
+      scale.slot * rows + scale.eighth / 2 * (rows - 1) + 2.0;
+
+  /// The toolbar may grow past the grid (up to the column width) so it can
+  /// stay on one row instead of wrapping and eating vertical space.
+  static double toolbarWidth(UIScale scale, int columns, double maxWidth) =>
+      math.max(
+        contentWidth(scale, columns),
+        math.min(maxWidth, LobbyToolbar.inlineSelectorMinWidth + _toolbarPadding),
+      );
+
+  /// Total height of bench + toolbar + grid. [gapFactor] is the gap around
+  /// the toolbar as a fraction of `scale.eighth`.
+  static double stackHeight(
+    UIScale scale, {
+    required int columns,
+    required int rows,
+    required bool hasToolbar,
+    required double gapFactor,
+    required double maxWidth,
+  }) {
+    final toolbar = hasToolbar
+        ? toolbarHeight(toolbarWidth(scale, columns, maxWidth)) +
+              scale.eighth * gapFactor * 2
+        : scale.eighth;
+    return benchHeight(scale) + toolbar + gridHeight(scale, rows);
+  }
+
+  static double fitSlotSize({
+    required double maxWidth,
+    required double maxHeight,
+    required int columns,
+    required int rows,
+    required bool hasToolbar,
+    required double gapFactor,
+  }) {
+    bool fits(double size) {
+      final scale = UIScale(size);
+      return contentWidth(scale, columns) <= maxWidth &&
+          stackHeight(
+                scale,
+                columns: columns,
+                rows: rows,
+                hasToolbar: hasToolbar,
+                gapFactor: gapFactor,
+                maxWidth: maxWidth,
+              ) <=
+              maxHeight;
+    }
+
+    double low = 40.0;
+    double high = 400.0;
+    if (!fits(low)) return low;
+    for (var i = 0; i < 20; i++) {
+      final mid = (low + high) / 2;
+      if (fits(mid)) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+}
+
+/// Keeps the stage centered and, if it is ever taller than the space
+/// (estimates off by a few pixels, or a window below the minimum sizes),
+/// shrinks it proportionally. The lobby is driven by controllers, so it must
+/// never need a scrollbar.
+class _OverflowSafe extends StatelessWidget {
+  final Widget child;
+  const _OverflowSafe({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => FittedBox(
+        fit: BoxFit.scaleDown,
+        child: SizedBox(width: constraints.maxWidth, child: child),
+      ),
+    );
+  }
+}
+
 class AdaptiveStageLayout extends StatelessWidget {
   final ConnectionSnapshot? connectionSnapshot;
   final DiagnosticsSnapshot? diagnosticsSnapshot;
@@ -373,54 +492,59 @@ class WideStageLayout extends StatelessWidget {
         final totalWidth = constraints.maxWidth;
         final totalHeight = constraints.maxHeight;
 
-        final leftWidth = totalWidth * 0.75;
-        final rightWidth = totalWidth * 0.25;
+        // The QR column keeps a usable width instead of a flat 25%, which
+        // was too narrow for its content on ~800px windows.
+        const qrGap = 24.0;
+        final rightWidth = (totalWidth * 0.26)
+            .clamp(230.0, math.max(230.0, totalWidth * 0.4))
+            .toDouble();
+        final leftWidth = totalWidth - rightWidth;
 
-        final columns = state.slots.length > 12
-            ? 8
-            : (state.slots.length > 8 ? 6 : (state.slots.length > 6 ? 4 : (state.slots.length > 4 ? 6 : 4)));
-        final rows = (math.max(columns, state.slots.length) / columns).ceil();
-
-        final widthFactor = columns + (columns - 1) / 8.0;
-        // +1.35 logic reserves ample room vertically for the DevicePoolArea and toolbar
-        // and prevents small vertical overflows at the bottom.
-        final heightFactor = rows + (rows - 1) / 8.0 + 1.35;
-
-        final slotSize = math
-            .min(leftWidth / widthFactor, totalHeight / heightFactor)
-            .clamp(40.0, 400.0);
-        final scale = UIScale(slotSize);
+        const gapFactor = 1 / 3;
+        final columns = StageMetrics.columnsFor(state.slots.length);
+        final rows = StageMetrics.rowsFor(state.slots.length, columns);
+        final scale = UIScale(
+          StageMetrics.fitSlotSize(
+            maxWidth: leftWidth,
+            maxHeight: totalHeight,
+            columns: columns,
+            rows: rows,
+            hasToolbar: lobbyToolbar != null,
+            gapFactor: gapFactor,
+          ),
+        );
 
         // Stable, independent scale for the QR panel, decoupled from slot counts
         final qrScaleSize = math
-            .min(rightWidth, totalHeight * 0.4)
-            .clamp(180.0, 260.0);
+            .min(rightWidth - qrGap, totalHeight * 0.36)
+            .clamp(150.0, 260.0);
         final qrScale = UIScale(qrScaleSize);
 
-        // Add a 2.0px epsilon to prevent premature wrapping due to float rounding
-        final contentWidth =
-            scale.slot * columns + scale.eighth / 2 * (columns - 1) + 2.0;
-        final gridHeight =
-            scale.slot * rows + scale.eighth / 2 * (rows - 1) + 2.0;
+        final contentWidth = StageMetrics.contentWidth(scale, columns);
+        final gridHeight = StageMetrics.gridHeight(scale, rows);
 
         return Row(
           children: [
             SizedBox(
               width: leftWidth,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: _OverflowSafe(
+                child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: (state.slots.length == 7 || state.slots.length == 8)
                     ? CrossAxisAlignment.center
                     : CrossAxisAlignment.start,
                 children: [
                   SizedBox(
                     width: contentWidth,
-                    child: DevicePoolArea(scale: scale),
+                    child: DevicePoolArea(
+                      scale: scale,
+                      boxHeight: StageMetrics.benchBoxHeight(scale),
+                    ),
                   ),
                   if (lobbyToolbar != null) ...[
                     SizedBox(height: scale.eighth / 3),
                     SizedBox(
-                      width: contentWidth,
+                      width: StageMetrics.toolbarWidth(scale, columns, leftWidth),
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: lobbyToolbar!,
@@ -436,11 +560,12 @@ class WideStageLayout extends StatelessWidget {
                   ),
                 ],
               ),
+              ),
             ),
             SizedBox(
               width: rightWidth,
               child: Padding(
-                padding: const EdgeInsets.only(left: 24.0),
+                padding: const EdgeInsets.only(left: qrGap),
                 child: QRCodePanel(
                   connectionSnapshot: connectionSnapshot,
                   diagnosticsSnapshot: diagnosticsSnapshot,
@@ -499,42 +624,42 @@ class CompactStageLayout extends StatelessWidget {
         final totalWidth = constraints.maxWidth;
         final totalHeight = constraints.maxHeight;
 
-        final columns = state.slots.length > 12
-            ? 8
-            : (state.slots.length > 8 ? 6 : (state.slots.length > 6 ? 4 : (state.slots.length > 4 ? 6 : 4)));
-        final rows = (math.max(columns, state.slots.length) / columns).ceil();
+        // The QR card gets the height its content needs; the players area
+        // takes whatever is left.
+        const qrGap = 24.0;
+        final qrPanelHeight = (totalHeight * 0.28).clamp(190.0, 260.0);
 
-        final widthFactor = columns + (columns - 1) / 8.0;
-        // +1.75 logic reserves ample room vertically for the DevicePoolArea and toolbar
-        // and prevents small vertical overflows at the bottom.
-        final heightFactor = rows + (rows - 1) / 8.0 + 1.75;
-
-        final availableHeight =
-            totalHeight * 0.7; // Lower 70% available for interactive slots/pool
-        final slotSize = math
-            .min(totalWidth / widthFactor, availableHeight / heightFactor)
-            .clamp(40.0, 400.0);
-        final scale = UIScale(slotSize);
+        const gapFactor = 1 / 2;
+        final columns = StageMetrics.columnsFor(state.slots.length);
+        final rows = StageMetrics.rowsFor(state.slots.length, columns);
+        final scale = UIScale(
+          StageMetrics.fitSlotSize(
+            maxWidth: totalWidth,
+            maxHeight: totalHeight - qrPanelHeight,
+            columns: columns,
+            rows: rows,
+            hasToolbar: lobbyToolbar != null,
+            gapFactor: gapFactor,
+          ),
+        );
 
         // Stable, independent scale for the QR panel, decoupled from slot counts
         final qrScaleSize = math
-            .min(totalWidth, totalHeight * 0.3)
-            .clamp(160.0, 240.0);
+            .min(totalWidth, qrPanelHeight - qrGap)
+            .clamp(150.0, 240.0);
         final qrScale = UIScale(qrScaleSize);
 
-        // Add a 2.0px epsilon to prevent premature wrapping due to float rounding
-        final contentWidth =
-            scale.slot * columns + scale.eighth / 2 * (columns - 1) + 2.0;
-        final gridHeight =
-            scale.slot * rows + scale.eighth / 2 * (rows - 1) + 2.0;
+        final contentWidth = StageMetrics.contentWidth(scale, columns);
+        final gridHeight = StageMetrics.gridHeight(scale, rows);
 
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        return _OverflowSafe(
+          child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              height: totalHeight * 0.3,
+              height: qrPanelHeight,
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 24.0),
+                padding: const EdgeInsets.only(bottom: qrGap),
                 child: QRCodePanel(
                   connectionSnapshot: connectionSnapshot,
                   diagnosticsSnapshot: diagnosticsSnapshot,
@@ -552,12 +677,15 @@ class CompactStageLayout extends StatelessWidget {
             ),
             SizedBox(
               width: contentWidth,
-              child: DevicePoolArea(scale: scale),
+              child: DevicePoolArea(
+                scale: scale,
+                boxHeight: StageMetrics.benchBoxHeight(scale),
+              ),
             ),
             if (lobbyToolbar != null) ...[
               SizedBox(height: scale.eighth / 2),
               SizedBox(
-                width: contentWidth,
+                width: StageMetrics.toolbarWidth(scale, columns, totalWidth),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: lobbyToolbar!,
@@ -572,6 +700,7 @@ class CompactStageLayout extends StatelessWidget {
               child: ControllerSlotsGrid(scale: scale),
             ),
           ],
+        ),
         );
       },
     );
@@ -635,10 +764,14 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
   @override
   Widget build(BuildContext context) {
     final state = Provider.of<GamepadState>(context, listen: false);
+    final deviceId = widget.slotModel.device?.id;
+    final isReady = context.select<SessionController, bool>(
+      (session) => deviceId != null && session.isReady(deviceId),
+    );
 
     return DragTarget<DragData>(
       onWillAcceptWithDetails: (details) {
-        _playHoverSound();
+        _playHoverSound(this);
         return true;
       },
       onAcceptWithDetails: (details) {
@@ -731,15 +864,16 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                                   device: widget.slotModel.device!,
                                   child: DropBounceEffect(
                                     key: ValueKey('drop_${widget.slotModel.device!.id}'),
-                                    child: DeviceInputIndicator(
-                                      device: widget.slotModel.device!,
-                                      input:
-                                          state.getInputState(
-                                            widget.slotModel.device!.id,
-                                          ) ??
-                                          DeviceInputState.idle(),
-                                      size: widget.scale.half,
-                                      isOnPool: false,
+                                    child: ValueListenableBuilder<DeviceInputState>(
+                                      valueListenable: state.inputListenable(
+                                        widget.slotModel.device!.id,
+                                      ),
+                                      builder: (context, input, _) => DeviceInputIndicator(
+                                        device: widget.slotModel.device!,
+                                        input: input,
+                                        size: widget.scale.half,
+                                        isOnPool: false,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -751,13 +885,16 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                               device: widget.slotModel.device!,
                               child: DropBounceEffect(
                                 key: ValueKey('drop_${widget.slotModel.device!.id}'),
-                                child: DeviceInputIndicator(
-                                  device: widget.slotModel.device!,
-                                  input:
-                                      state.getInputState(widget.slotModel.device!.id) ??
-                                      DeviceInputState.idle(),
-                                  size: widget.scale.half,
-                                  isOnPool: false,
+                                child: ValueListenableBuilder<DeviceInputState>(
+                                  valueListenable: state.inputListenable(
+                                    widget.slotModel.device!.id,
+                                  ),
+                                  builder: (context, input, _) => DeviceInputIndicator(
+                                    device: widget.slotModel.device!,
+                                    input: input,
+                                    size: widget.scale.half,
+                                    isOnPool: false,
+                                  ),
                                 ),
                               ),
                             ),
@@ -787,6 +924,8 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                           reservedUntil: widget.slotModel.device!.reservedUntil!,
                           scale: widget.scale,
                         )
+                      else if (isReady)
+                        ReadyBadge(fontSize: math.max(9.0, widget.scale.eighth * 0.45))
                       else
                         const SizedBox.shrink(),
                     ],
@@ -803,7 +942,8 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
 
 class DevicePoolArea extends StatefulWidget {
   final UIScale scale;
-  const DevicePoolArea({super.key, required this.scale});
+  final double boxHeight;
+  const DevicePoolArea({super.key, required this.scale, this.boxHeight = 160.0});
 
   @override
   State<DevicePoolArea> createState() => _DevicePoolAreaState();
@@ -830,7 +970,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
 
     return DragTarget<DragData>(
       onWillAcceptWithDetails: (details) {
-        _playHoverSound();
+        _playHoverSound(this);
         return true;
       },
       onAcceptWithDetails: (details) {
@@ -877,7 +1017,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                 ),
               ),
               Container(
-                height: 160.0,
+                height: widget.boxHeight,
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: widget.scale.eighth, vertical: 10.0),
                 decoration: BoxDecoration(
@@ -921,9 +1061,8 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                   const SizedBox(width: 12.0),
                               itemBuilder: (context, index) {
                                 final device = state.pool[index];
-                                final inputState =
-                                    state.getInputState(device.id) ??
-                                    DeviceInputState.idle();
+                                final inputListenable =
+                                    state.inputListenable(device.id);
 
                                 return Draggable<DragData>(
                                   dragAnchorStrategy:
@@ -942,11 +1081,14 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                   ),
                                   childWhenDragging: Opacity(
                                     opacity: 0.5,
-                                    child: DeviceInputIndicator(
-                                      device: device,
-                                      input: inputState,
-                                      size: widget.scale.quarter,
-                                      isOnPool: true,
+                                    child: ValueListenableBuilder<DeviceInputState>(
+                                      valueListenable: inputListenable,
+                                      builder: (context, input, _) => DeviceInputIndicator(
+                                        device: device,
+                                        input: input,
+                                        size: widget.scale.quarter,
+                                        isOnPool: true,
+                                      ),
                                     ),
                                   ),
                                   child: MouseRegion(
@@ -955,11 +1097,14 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                       device: device,
                                       child: DropBounceEffect(
                                         key: ValueKey('drop_${device.id}'),
-                                        child: DeviceInputIndicator(
-                                          device: device,
-                                          input: inputState,
-                                          size: widget.scale.quarter,
-                                          isOnPool: true,
+                                        child: ValueListenableBuilder<DeviceInputState>(
+                                          valueListenable: inputListenable,
+                                          builder: (context, input, _) => DeviceInputIndicator(
+                                            device: device,
+                                            input: input,
+                                            size: widget.scale.quarter,
+                                            isOnPool: true,
+                                          ),
                                         ),
                                       ),
                                     ),

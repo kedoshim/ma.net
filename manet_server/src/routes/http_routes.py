@@ -1,17 +1,46 @@
 
+import asyncio
 from io import BytesIO
 import uuid
 
 from aiohttp import web
 
 from src.services.qr_service import generate_qr_code_image
+from src.lifecycle.process_exit import exit_process
+from src.core.game_library import GameValidationError
+from src.services.window_placement import list_displays
+from src.services.controller_inventory import build_inventory, close_other_servers, snapshot_own_pads
 from src.services.connection_service import ConnectionService
 from src.services.network_diagnostics_service import NetworkDiagnosticsService
 from src.core.slot_handler import notify_device_slot, notify_device_unassigned
 
 import logging
-logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger("http_routes")
+
+
+class BadRequest(Exception):
+    pass
+
+
+async def _read_json_object(request) -> dict:
+    try:
+        data = await request.json()
+    except Exception:
+        raise BadRequest("invalid_json")
+    if not isinstance(data, dict):
+        raise BadRequest("invalid_body")
+    return data
+
+
+def _bad_request(code: str):
+    return web.json_response({"success": False, "code": code}, status=400)
+
+
+def _render_qr_png(url: str) -> bytes:
+    img = generate_qr_code_image(url)
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class HTTPRoutes:
@@ -30,10 +59,21 @@ class HTTPRoutes:
         self.ws_endpoint = ws_endpoint
         self.connection_service = connection_service
         self.diagnostics_service = diagnostics_service
+        self.session = manager.session
+        # QR rendering is CPU-bound; the URL rarely changes.
+        self._qr_cache: dict[str, bytes] = {}
+
+    def _slot_index(self, data: dict, key: str) -> int:
+        value = data.get(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise BadRequest(f"invalid_{key}")
+        if not 0 <= value < len(self.manager.slots):
+            raise BadRequest("slot_out_of_range")
+        return value
 
 
     async def server_status_handler(self, request):
-        info = self.connection_service.get_connection_info_payload()
+        info = await asyncio.to_thread(self.connection_service.get_connection_info_payload)
         return web.json_response({
             'running': True,
             'ip': info['ip'],
@@ -51,8 +91,16 @@ class HTTPRoutes:
         return web.json_response({'success': True})
 
 
+    async def server_shutdown_handler(self, request):
+        """Release the virtual gamepads and exit right after replying, so the
+        desktop doesn't have to kill the process (and no ghost controllers
+        are left behind in Windows)."""
+        exit_process(self.manager, asyncio.get_running_loop(), "requested by host")
+        return web.json_response({'success': True})
+
+
     async def connection_info_handler(self, request):
-        payload = self.connection_service.get_connection_info_payload()
+        payload = await asyncio.to_thread(self.connection_service.get_connection_info_payload)
         return web.json_response({
             "success": True,
             "url": payload["url"],
@@ -63,11 +111,13 @@ class HTTPRoutes:
 
 
     async def connections_handler(self, request):
-        return web.json_response(self.connection_service.get_connections_payload())
+        payload = await asyncio.to_thread(self.connection_service.get_connections_payload)
+        return web.json_response(payload)
 
 
     async def diagnostics_handler(self, request):
-        return web.json_response(self.diagnostics_service.build_payload())
+        payload = await asyncio.to_thread(self.diagnostics_service.build_payload)
+        return web.json_response(payload)
 
 
     async def diagnostics_action_handler(self, request):
@@ -79,7 +129,7 @@ class HTTPRoutes:
                 status=400,
             )
 
-        result = self.diagnostics_service.run_action(action_id)
+        result = await asyncio.to_thread(self.diagnostics_service.run_action, action_id)
         status = 200 if result.success else 400
         return web.json_response(result.to_payload(), status=status)
 
@@ -94,7 +144,7 @@ class HTTPRoutes:
             )
 
         try:
-            option = self.connection_service.set_preferred_connection(connection_id)
+            option = await asyncio.to_thread(self.connection_service.set_preferred_connection, connection_id)
         except Exception as exc:
             LOG.error("Failed to select connection: %s", exc)
             return web.json_response(
@@ -110,17 +160,16 @@ class HTTPRoutes:
 
     async def qr_code_handler(self, request):
         connection_id = request.query.get("id")
-        url = self.connection_service.get_qr_url_for_id(connection_id)
+        url = await asyncio.to_thread(self.connection_service.get_qr_url_for_id, connection_id)
 
         try:
-            img = generate_qr_code_image(url)
-
-            buffer = BytesIO()
-            img.save(buffer, format="PNG")
-            buffer.seek(0)
+            png = self._qr_cache.get(url)
+            if png is None:
+                png = await asyncio.to_thread(_render_qr_png, url)
+                self._qr_cache[url] = png
 
             return web.Response(
-                body=buffer.getvalue(),
+                body=png,
                 content_type="image/png"
             )
         except Exception as e:
@@ -343,9 +392,14 @@ class HTTPRoutes:
 
 
     async def assign_handler(self, request):
-        data = await request.json()
-        device_id = data['deviceId']
-        slot_index = data['slotIndex']
+        try:
+            data = await _read_json_object(request)
+            device_id = data.get('deviceId')
+            if not isinstance(device_id, str) or not device_id:
+                raise BadRequest("invalid_deviceId")
+            slot_index = self._slot_index(data, 'slotIndex')
+        except BadRequest as e:
+            return _bad_request(str(e))
         slot = self.manager.assign_to_slot(device_id, slot_index)
         if slot:
             self.admin_panel.broadcast_update()
@@ -355,9 +409,12 @@ class HTTPRoutes:
 
 
     async def move_handler(self, request):
-        data = await request.json()
-        from_slot = data['fromSlot']
-        to_slot = data['toSlot']
+        try:
+            data = await _read_json_object(request)
+            from_slot = self._slot_index(data, 'fromSlot')
+            to_slot = self._slot_index(data, 'toSlot')
+        except BadRequest as e:
+            return _bad_request(str(e))
         old_device = self.manager.slots[from_slot].assigned_device_id
         self.manager.move_slot(from_slot, to_slot)
         if old_device:
@@ -367,9 +424,12 @@ class HTTPRoutes:
 
 
     async def swap_handler(self, request):
-        data = await request.json()
-        slot_a = data['slotA']
-        slot_b = data['slotB']
+        try:
+            data = await _read_json_object(request)
+            slot_a = self._slot_index(data, 'slotA')
+            slot_b = self._slot_index(data, 'slotB')
+        except BadRequest as e:
+            return _bad_request(str(e))
         device_a = self.manager.slots[slot_a].assigned_device_id
         device_b = self.manager.slots[slot_b].assigned_device_id
         self.manager.swap_slots(slot_a, slot_b)
@@ -382,8 +442,11 @@ class HTTPRoutes:
 
 
     async def unassign_handler(self, request):
-        data = await request.json()
-        slot_index = data['slotIndex']
+        try:
+            data = await _read_json_object(request)
+            slot_index = self._slot_index(data, 'slotIndex')
+        except BadRequest as e:
+            return _bad_request(str(e))
         device_id = self.manager.slots[slot_index].assigned_device_id
         self.manager.unassign_slot(slot_index)
         await notify_device_unassigned(self.manager, device_id)
@@ -391,7 +454,10 @@ class HTTPRoutes:
         return web.json_response({'success': True})
 
     async def reset_controllers_handler(self, request):
-        data = await request.json()
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
         mode = data.get('mode')
         slots = data.get('slots')
         fixed = data.get('fixed')
@@ -405,7 +471,7 @@ class HTTPRoutes:
         # perform staged creation to reduce driver stress.
 
         try:
-            self.manager.update_server_settings(
+            await self.manager.update_server_settings(
                 mode=mode,
                 slots=slots,
                 fixed=fixed,
@@ -417,6 +483,129 @@ class HTTPRoutes:
         except Exception as e:
             LOG.error('Failed to update server settings: %s', e)
             return web.json_response({'success': False, 'code': 'update_failed'}, status=500)
+
+    async def controllers_inventory_handler(self, request):
+        own_pads, callback_states = snapshot_own_pads(self.manager)
+        payload = await asyncio.to_thread(
+            build_inventory,
+            own_pads,
+            callback_states,
+            getattr(self.manager.config, "controller_type", None),
+        )
+        return web.json_response(payload)
+
+    async def controllers_recreate_handler(self, request):
+        try:
+            await self.manager.recreate_gamepads()
+        except Exception:
+            LOG.exception("Failed to recreate gamepads")
+            return web.json_response({'success': False, 'code': 'recreate_failed'}, status=500)
+        self.admin_panel.broadcast_update()
+        return web.json_response({'success': True})
+
+    async def close_stale_servers_handler(self, request):
+        closed = await asyncio.to_thread(close_other_servers)
+        LOG.info("Closed %d stale MaNet server process(es)", closed)
+        return web.json_response({'success': True, 'closed': closed})
+
+    # ------------------------------------------------------------ session
+
+    async def session_handler(self, request):
+        return web.json_response(self.session.to_payload())
+
+    async def session_focus_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        self.session.set_focus(bool(data.get("focused")))
+        return web.json_response({"success": True})
+
+    async def session_phase_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        phase = data.get("phase")
+        if phase == "library":
+            self.session.enter_library()
+        elif phase == "lobby":
+            self.session.back_to_lobby()
+        else:
+            return _bad_request("invalid_phase")
+        return web.json_response({"success": True})
+
+    async def session_vote_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        ok = self.session.vote(str(data.get("deviceId") or ""), data.get("gameId"))
+        return web.json_response({"success": ok}, status=200 if ok else 409)
+
+    async def session_play_handler(self, request):
+        """Host confirms a game (or the most voted one when none is given)."""
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        game_id = data.get("gameId") or self.session.leading_game_id()
+        ok = bool(game_id) and self.session.start_countdown(game_id)
+        return web.json_response({"success": ok}, status=200 if ok else 409)
+
+    async def session_cancel_countdown_handler(self, request):
+        self.session.cancel_countdown()
+        return web.json_response({"success": True})
+
+    async def session_stop_game_handler(self, request):
+        self.session.stop_game()
+        return web.json_response({"success": True})
+
+    async def session_return_handler(self, request):
+        """Host is back from an untracked game."""
+        self.session.return_from_game()
+        return web.json_response({"success": True})
+
+    # -------------------------------------------------------------- games
+
+    def _games_changed(self):
+        self.admin_panel.broadcast_event({"type": "games_update", "games": self.session.library.list()})
+
+    async def displays_handler(self, request):
+        return web.json_response({"displays": await asyncio.to_thread(list_displays)})
+
+    async def games_handler(self, request):
+        return web.json_response({"games": self.session.library.list()})
+
+    async def create_game_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+            game = self.session.library.add(data)
+        except (BadRequest, GameValidationError) as e:
+            return _bad_request(str(e))
+        self._games_changed()
+        return web.json_response({"success": True, "game": game})
+
+    async def update_game_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+            game = self.session.library.update(request.match_info["game_id"], data)
+        except (BadRequest, GameValidationError) as e:
+            return _bad_request(str(e))
+        if game is None:
+            return web.json_response({"success": False, "code": "not_found"}, status=404)
+        self._games_changed()
+        return web.json_response({"success": True, "game": game})
+
+    async def delete_game_handler(self, request):
+        game_id = request.match_info["game_id"]
+        if not self.session.library.delete(game_id):
+            return web.json_response({"success": False, "code": "not_found"}, status=404)
+        for device_id, voted in list(self.session.votes.items()):
+            if voted == game_id:
+                self.session.vote(device_id, None)
+        self._games_changed()
+        return web.json_response({"success": True})
 
     async def input_mode_handler(self, request):
         try:
@@ -443,7 +632,7 @@ class HTTPRoutes:
         internal_mode = "x360" if mode == "xinput" else "ds4"
 
         try:
-            self.manager.update_server_settings(
+            await self.manager.update_server_settings(
                 mode=internal_mode,
             )
             self.admin_panel.broadcast_update()

@@ -153,6 +153,10 @@ class _ControllerScreenState extends State<ControllerScreen>
   BuildContext? _disconnectDialogContext;
   bool _intentionalDisconnect = false;
   Timer? _backgroundReconnectTimer;
+  // Fails the attempt if the host accepts the socket but never says hello.
+  Timer? _handshakeTimer;
+  // Completes with whether the current attempt reached the host.
+  Completer<bool>? _handshakeCompleter;
   bool _pulseOptionsButton = false;
 
   bool get _isTemporaryModeActive =>
@@ -186,6 +190,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   void dispose() {
     _backgroundReconnectTimer?.cancel();
+    _handshakeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _faceController.dispose();
     ControllerConnectionManager.instance.disconnect();
@@ -220,9 +225,24 @@ class _ControllerScreenState extends State<ControllerScreen>
     }
 
     final host = await PreferencesService.instance.getServerHost();
-    if (host != null) {
-      await _connectWebSocket();
-    } else {
+    if (host == null) {
+      _startDiscovery();
+      return;
+    }
+
+    // The saved host may be stale (the PC got a new IP, or it's another
+    // network). If it doesn't answer, look for hosts on this network
+    // instead of retrying a dead address forever.
+    _handshakeCompleter = Completer<bool>();
+    final handshake = _handshakeCompleter!.future;
+    await _connectWebSocket();
+    final reached = await handshake.timeout(
+      const Duration(seconds: 7),
+      onTimeout: () => false,
+    );
+    if (!reached && mounted && _connectionState != ControllerConnectionState.connected) {
+      debugPrint('[CONNECTION] Saved host $host unreachable; searching the network.');
+      _autoConnectEnabled = true;
       _startDiscovery();
     }
   }
@@ -404,24 +424,22 @@ class _ControllerScreenState extends State<ControllerScreen>
         const Duration(seconds: 4),
       );
 
-      setState(() {
-        _connectionState = ControllerConnectionState.connected;
-      });
-
-      unawaited(_recordSuccessfulConnection());
-
-      GamepadInputEngine.instance.init(_send);
-
+      // Stay in "searching" until the host's first message (assigned /
+      // unassigned) arrives: an open socket alone does not mean the host
+      // registered us.
       ws!.channel.stream.listen(
         _handleWebSocketMessage,
         onDone: _handleDisconnect,
         onError: (_) => _handleDisconnect(),
       );
 
-      _send({'type': 'face_update', ..._playerFace.toJson()});
-      if (_isMouseModeVisible) {
-        _send({'type': 'set_mouse_mode', 'active': true});
-      }
+      _handshakeTimer?.cancel();
+      _handshakeTimer = Timer(const Duration(seconds: 5), () {
+        if (!_hasReceivedMessage && ws != null) {
+          debugPrint('[CONNECTION] Host did not respond after connect; giving up.');
+          _handleDisconnect();
+        }
+      });
       return true;
     } catch (_) {
       _handleDisconnect();
@@ -439,6 +457,9 @@ class _ControllerScreenState extends State<ControllerScreen>
     bool shouldShowDialog = _showDialogOnFail;
     _showDialogOnFail = false;
 
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
+    _completeHandshake(false);
     ControllerConnectionManager.instance.disconnect();
     _listenerAttached = false;
     ws = null;
@@ -624,7 +645,36 @@ class _ControllerScreenState extends State<ControllerScreen>
     _send({'type': 'quick_action', 'action': actionId});
   }
 
+  void _onHandshakeComplete() {
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
+    _completeHandshake(true);
+
+    setState(() {
+      _connectionState = ControllerConnectionState.connected;
+    });
+
+    unawaited(_recordSuccessfulConnection());
+
+    GamepadInputEngine.instance.init(_send);
+
+    _send({'type': 'face_update', ..._playerFace.toJson()});
+    if (_isMouseModeVisible) {
+      _send({'type': 'set_mouse_mode', 'active': true});
+    }
+  }
+
+  void _completeHandshake(bool reached) {
+    final completer = _handshakeCompleter;
+    _handshakeCompleter = null;
+    if (completer != null && !completer.isCompleted) completer.complete(reached);
+  }
+
   void _handleWebSocketMessage(dynamic message) {
+    if (!_hasReceivedMessage && mounted) {
+      _hasReceivedMessage = true;
+      _onHandshakeComplete();
+    }
     _hasReceivedMessage = true;
     _connectionFailedCount = 0;
     _showDialogOnFail = false;

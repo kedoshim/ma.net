@@ -12,6 +12,8 @@ abstract class AppStrings {
   AlertsStrings get alerts;
   QrPanelStrings get qrPanel;
   CreditsStrings get credits;
+  ControllersStrings get controllers;
+  SessionStrings get session;
 }
 
 abstract class CommonStrings {
@@ -77,6 +79,106 @@ abstract class LobbyStrings {
   String get dinput;
 }
 
+abstract class SessionStrings {
+  String readyPrompt(int ready, int total);
+  String get allReady;
+  String get controlsInBackground;
+  String get chooseGame;
+  String get ready;
+  String get libraryTitle;
+  String get libraryHint;
+  String get backToLobby;
+  String get manageGames;
+  String get emptyLibrary;
+  String get addFirstGame;
+  String playersRange(int min, int max);
+  String doesNotFit(int players);
+  String get clickToPlay;
+  String startingIn(String game);
+  String get cancel;
+  String launchError(String code);
+  String playing(String game);
+  String get playingHint;
+  String get untrackedHint;
+  String get closeGame;
+  String get returnToLobby;
+  String get gamesTitle;
+  String get addGame;
+  String get editGame;
+  String get gameName;
+  String get gamePath;
+  String get gamePathHint;
+  String get chooseFile;
+  String get gameArguments;
+  String get gameCover;
+  String get chooseCover;
+  String get removeCover;
+  String get minPlayers;
+  String get maxPlayers;
+  String get gameLayout;
+  String get noLayout;
+  String get gameMode;
+  String get keepMode;
+  String get saveGame;
+  String get deleteGame;
+  String deleteGameConfirm(String game);
+  String get saveError;
+  String get findCover;
+  String get coverSearchTitle;
+  String get coverSearch;
+  String get coverSteamHint;
+  String get coverNoResults;
+  String get coverSearchError;
+  String get coverDownloadError;
+  String get coverOtherSources;
+  String get coverGoogle;
+  String get coverGoogleSuffix;
+  String get coverPasteLink;
+  String get coverUseLink;
+  String get createLayout;
+  String get rulesTitle;
+  String get rulesHint;
+  String get addRule;
+  String get suggestXinputRule;
+  String get ruleFrom;
+  String get ruleTo;
+  String get displayTitle;
+  String get displayAuto;
+  String displayLabel(int number, bool primary, int width, int height);
+  String get fullscreenGame;
+  String get fullscreenGameHint;
+}
+
+abstract class ControllersStrings {
+  String get title;
+  String get tooltip;
+  String summary(int total, int own);
+  String get xinputTitle;
+  String get xinputSubtitle;
+  String get xinputFree;
+  String get xinputOther;
+  String xinputPlayer(int player);
+  String noXinputWarning(int count);
+  String foreignWarning(int count);
+  String get devicesTitle;
+  String get devicesEmpty;
+  String get originVirtual;
+  String get originSteam;
+  String get originPhysical;
+  String deviceLabel(String vendor);
+  String staleServersWarning(int count);
+  String get closeStaleServers;
+  String closedServers(int count);
+  String get recreate;
+  String get recreateHint;
+  String get recreated;
+  String get refresh;
+  String get loadError;
+  String get actionError;
+  String playerMapping(int player, int windowsIndex);
+  String playerNoXinput(int player);
+}
+
 abstract class AlertsStrings {
   String get title;
   String get noAlerts;
@@ -125,6 +227,7 @@ abstract class SettingsStrings {
   String get timeoutTitle;
   String timeoutValue(int minutes);
   String get languageTitle;
+  String get fullScreenTitle;
 }
 
 abstract class SlotsStrings {

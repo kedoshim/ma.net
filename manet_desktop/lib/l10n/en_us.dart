@@ -27,6 +27,234 @@ class EnUsStrings implements AppStrings {
   final QrPanelStrings qrPanel = EnUsQrPanelStrings();
   @override
   final CreditsStrings credits = EnUsCreditsStrings();
+  @override
+  final ControllersStrings controllers = EnUsControllersStrings();
+  @override
+  final SessionStrings session = EnUsSessionStrings();
+}
+
+class EnUsSessionStrings implements SessionStrings {
+  @override
+  String readyPrompt(int ready, int total) => 'Press START when you are ready · $ready/$total';
+  @override
+  String get allReady => 'Everyone is ready! Press START to pick a game';
+  @override
+  String get controlsInBackground =>
+      'Controllers are going to games. Click this window to use them in ma•net.';
+  @override
+  String get chooseGame => 'Pick a game';
+  @override
+  String get ready => 'READY';
+  @override
+  String get libraryTitle => 'Pick a game';
+  @override
+  String get libraryHint =>
+      'Stick moves · A votes · B removes vote · START plays the top pick · SELECT goes back';
+  @override
+  String get backToLobby => 'Lobby';
+  @override
+  String get manageGames => 'Manage games';
+  @override
+  String get emptyLibrary => 'No games yet.';
+  @override
+  String get addFirstGame => 'Add your first game';
+  @override
+  String playersRange(int min, int max) => min == max
+      ? '$min ${min == 1 ? 'player' : 'players'}'
+      : '$min–$max players';
+  @override
+  String doesNotFit(int players) => 'Doesn\'t fit $players ${players == 1 ? 'player' : 'players'}';
+  @override
+  String get clickToPlay => 'Click to play now';
+  @override
+  String startingIn(String game) => 'Starting $game in';
+  @override
+  String get cancel => 'Cancel';
+  @override
+  String launchError(String code) => switch (code) {
+        'path_not_found' => 'Couldn\'t find the game file. Check its path in Manage games.',
+        _ => 'Couldn\'t start the game.',
+      };
+  @override
+  String playing(String game) => 'Playing $game';
+  @override
+  String get playingHint => 'When the game closes, ma•net goes back to the lobby by itself.';
+  @override
+  String get untrackedHint =>
+      'This game started through a shortcut or launcher, so ma•net can\'t tell when it closes.';
+  @override
+  String get closeGame => 'Close game';
+  @override
+  String get returnToLobby => 'Back to lobby';
+  @override
+  String get gamesTitle => 'Games';
+  @override
+  String get addGame => 'Add game';
+  @override
+  String get editGame => 'Edit game';
+  @override
+  String get gameName => 'Name';
+  @override
+  String get gamePath => 'Executable or shortcut';
+  @override
+  String get gamePathHint => '.exe, .lnk, .url or steam://...';
+  @override
+  String get chooseFile => 'Choose file';
+  @override
+  String get gameArguments => 'Arguments (optional)';
+  @override
+  String get gameCover => 'Cover';
+  @override
+  String get chooseCover => 'Choose image';
+  @override
+  String get removeCover => 'Remove';
+  @override
+  String get minPlayers => 'Minimum players';
+  @override
+  String get maxPlayers => 'Maximum players';
+  @override
+  String get gameLayout => 'Controller layout';
+  @override
+  String get noLayout => 'Keep current';
+  @override
+  String get gameMode => 'Controller type';
+  @override
+  String get keepMode => 'Keep current';
+  @override
+  String get saveGame => 'Save';
+  @override
+  String get deleteGame => 'Delete';
+  @override
+  String deleteGameConfirm(String game) => 'Remove "$game" from the library?';
+  @override
+  String get saveError => 'Couldn\'t save. Check the name and path.';
+  @override
+  String get findCover => 'Find cover';
+  @override
+  String get coverSearchTitle => 'Find a cover';
+  @override
+  String get coverSearch => 'Search';
+  @override
+  String get coverSteamHint => 'Official covers from the Steam store. Click one to use it.';
+  @override
+  String get coverNoResults => 'Nothing found with that name.';
+  @override
+  String get coverSearchError => 'Couldn\'t search right now. Check the internet.';
+  @override
+  String get coverDownloadError => 'Couldn\'t download that image.';
+  @override
+  String get coverOtherSources => 'Or look somewhere else';
+  @override
+  String get coverGoogle => 'Google Images';
+  @override
+  String get coverGoogleSuffix => 'game cover';
+  @override
+  String get coverPasteLink => 'Paste an image link here';
+  @override
+  String get coverUseLink => 'Use';
+  @override
+  String get createLayout => 'Create a new layout';
+  @override
+  String get rulesTitle => 'By player count';
+  @override
+  String get rulesHint =>
+      'Switch controller type or layout depending on how many people play. The first matching rule wins.';
+  @override
+  String get addRule => '+ Rule';
+  @override
+  String get suggestXinputRule => 'x•input up to 4, d•input above';
+  @override
+  String get ruleFrom => 'From';
+  @override
+  String get ruleTo => 'to';
+  @override
+  String get displayTitle => 'Game screen';
+  @override
+  String get displayAuto => 'Let the game decide';
+  @override
+  String displayLabel(int number, bool primary, int width, int height) =>
+      'Screen $number${primary ? ' (main)' : ''} · $width×$height';
+  @override
+  String get fullscreenGame => 'Open full screen';
+  @override
+  String get fullscreenGameHint => 'If the game opens in a window, ma•net stretches it over the whole screen, borderless.';
+}
+
+class EnUsControllersStrings implements ControllersStrings {
+  @override
+  String get title => 'Controllers in Windows';
+  @override
+  String get tooltip => 'Connected controllers';
+  @override
+  String summary(int total, int own) =>
+      'Windows sees $total ${total == 1 ? 'controller' : 'controllers'}. '
+      '$own ${own == 1 ? 'is' : 'are'} from ma•net.';
+  @override
+  String get xinputTitle => 'x•input slots';
+  @override
+  String get xinputSubtitle =>
+      'Windows only has 4 x•input slots. The order matches the controller light.';
+  @override
+  String get xinputFree => 'Free';
+  @override
+  String get xinputOther => 'Other controller';
+  @override
+  String xinputPlayer(int player) => 'Player $player';
+  @override
+  String noXinputWarning(int count) =>
+      '$count ma•net ${count == 1 ? 'player has' : 'players have'} no x•input slot, '
+      'so x•input games won\'t see ${count == 1 ? 'them' : 'them'}. '
+      'Disconnect the other controllers or use d•input.';
+  @override
+  String foreignWarning(int count) =>
+      '$count virtual ${count == 1 ? 'controller is' : 'controllers are'} not from this ma•net: '
+      'another app owns them, or they got stuck in the driver after a session crashed '
+      '(those go away after restarting the PC).';
+  @override
+  String get devicesTitle => 'Detected devices';
+  @override
+  String get devicesEmpty => 'No controllers detected.';
+  @override
+  String get originVirtual => 'Virtual';
+  @override
+  String get originSteam => 'Steam';
+  @override
+  String get originPhysical => 'Physical';
+  @override
+  String deviceLabel(String vendor) => switch (vendor) {
+        'xbox' => 'Xbox controller',
+        'playstation' => 'PlayStation controller',
+        'nintendo' => 'Nintendo controller',
+        'steam' => 'Steam controller',
+        _ => 'Generic controller',
+      };
+  @override
+  String staleServersWarning(int count) =>
+      '${count == 1 ? 'An old ma•net server is' : '$count old ma•net servers are'} still running '
+      'and keeping controllers plugged in.';
+  @override
+  String get closeStaleServers => 'Close old servers';
+  @override
+  String closedServers(int count) =>
+      count == 0 ? 'No old servers found.' : '$count ${count == 1 ? 'server' : 'servers'} closed.';
+  @override
+  String get recreate => 'Recreate controllers';
+  @override
+  String get recreateHint =>
+      'Unplugs and recreates ma•net\'s controllers. Players stay in the same slots.';
+  @override
+  String get recreated => 'Controllers recreated.';
+  @override
+  String get refresh => 'Refresh';
+  @override
+  String get loadError => 'Couldn\'t read the controllers from Windows.';
+  @override
+  String get actionError => 'That didn\'t work. Try again.';
+  @override
+  String playerMapping(int player, int windowsIndex) =>
+      'Player $player is controller $windowsIndex in Windows';
+  @override
+  String playerNoXinput(int player) => 'Player $player has no x•input slot';
 }
 
 class EnUsCommonStrings implements CommonStrings {
@@ -210,6 +438,8 @@ class EnUsSettingsStrings implements SettingsStrings {
   String timeoutValue(int minutes) => '$minutes min';
   @override
   String get languageTitle => 'Language';
+  @override
+  String get fullScreenTitle => 'Full screen (F11)';
 }
 
 

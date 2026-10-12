@@ -56,6 +56,7 @@ def create_app(config):
         manager,
         admin_panel,
         connection_service,
+        manager.session,
     )
 
     file_routes = FileRoutes()
@@ -92,10 +93,11 @@ def log_startup_diagnostics(config):
     working_dir = os.getcwd()
     meipass = getattr(sys, '_MEIPASS', None)
     
-    vigem_installed = False
-    if sys.platform == "win32":
+    def log_driver_status():
+        # `sc query` takes a noticeable moment and is informational only,
+        # so it runs off the startup path.
+        vigem_installed = False
         try:
-            # Check ViGEmBus service via sc query
             res = subprocess.run(["sc", "query", "ViGEmBus"], capture_output=True, text=True, timeout=2.0)
             if "1060" not in res.stdout and res.returncode == 0:
                 vigem_installed = True
@@ -103,7 +105,11 @@ def log_startup_diagnostics(config):
                 vigem_installed = Path(r"C:\Windows\System32\drivers\ViGEmBus.sys").exists()
         except Exception:
             vigem_installed = Path(r"C:\Windows\System32\drivers\ViGEmBus.sys").exists()
-            
+        LOG.info(f"ViGEm Driver Detected: {vigem_installed}")
+
+    if sys.platform == "win32":
+        threading.Thread(target=log_driver_status, daemon=True).start()
+
     LOG.info("=== STARTUP DIAGNOSTICS ===")
     LOG.info(f"Application Version: {app_version}")
     LOG.info(f"Server Version: {server_version}")
@@ -113,7 +119,6 @@ def log_startup_diagnostics(config):
     if meipass:
         LOG.info(f"PyInstaller MEIPASS: {meipass}")
     LOG.info(f"Python version: {sys.version}")
-    LOG.info(f"ViGEm Driver Detected: {vigem_installed}")
     LOG.info(f"Config - Controller Mode: {config.controller_type}")
     LOG.info(f"Config - Slots: {config.initial_slots} (Max: {config.max_slots})")
     LOG.info(f"Config - Auto Expand: {config.auto_expand_slots}")

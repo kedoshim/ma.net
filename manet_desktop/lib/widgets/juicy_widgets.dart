@@ -93,7 +93,7 @@ class _JuicyButtonState extends State<JuicyButton>
         setState(() => _isHovered = true);
         if (widget.playSounds) {
           try {
-            SoundEffectService.instance.playHover();
+            SoundEffectService.instance.playHover(source: this);
           } catch (_) {}
         }
       },
@@ -247,7 +247,7 @@ class _JuicyIconButtonState extends State<JuicyIconButton>
         setState(() => _isHovered = true);
         if (widget.playSounds) {
           try {
-            SoundEffectService.instance.playHover();
+            SoundEffectService.instance.playHover(source: this);
           } catch (_) {}
         }
       },
@@ -386,7 +386,7 @@ class _JuicyCardState extends State<JuicyCard>
         setState(() => _isHovered = true);
         _wiggle();
         try {
-          SoundEffectService.instance.playHover();
+          SoundEffectService.instance.playHover(source: this);
         } catch (_) {}
       },
       onExit: (_) => setState(() => _isHovered = false),

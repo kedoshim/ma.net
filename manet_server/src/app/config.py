@@ -19,6 +19,8 @@ class ServerConfig:
     auto_expand_slots: bool = False
     slot_reservation_timeout: int = 300
     is_demo: bool = False
+    # Desktop app process that owns this server; the server exits with it.
+    parent_pid: int | None = None
 
     DEFAULT_COLORS = [
         "#EF4444",  # vermelho

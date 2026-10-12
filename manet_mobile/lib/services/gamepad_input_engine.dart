@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/gestures.dart';
@@ -85,6 +86,27 @@ class GamepadInputEngine {
   int _leftZeroSendsLeft = 0;
   int _rightZeroSendsLeft = 0;
 
+  // Stick packets are capped at ~60/s (120 Hz phones used to send 120/s).
+  // An unchanged value is still resent every 50ms because the host zeroes a
+  // stick it has not heard from in 150ms.
+  static const Duration _minSendInterval = Duration(milliseconds: 16);
+  static const Duration _keepAliveInterval = Duration(milliseconds: 50);
+  Duration _lastLeftSendAt = Duration.zero;
+  Duration _lastRightSendAt = Duration.zero;
+
+  bool _shouldSendStick(
+    Duration elapsed,
+    Duration lastSentAt,
+    double x,
+    double y,
+    double lastX,
+    double lastY,
+  ) {
+    final sinceLast = elapsed - lastSentAt;
+    if (sinceLast < _minSendInterval) return false;
+    return x != lastX || y != lastY || sinceLast >= _keepAliveInterval;
+  }
+
   // Last sent values to avoid duplicate payloads
   double _lastSentLeftX = 0.0;
   double _lastSentLeftY = 0.0;
@@ -99,6 +121,8 @@ class GamepadInputEngine {
     _sendFn = sendFn;
     _ticker?.dispose();
     _lastTickElapsed = Duration.zero;
+    _lastLeftSendAt = Duration.zero;
+    _lastRightSendAt = Duration.zero;
     _ticker = Ticker(_onTick);
     _ticker!.start();
   }
@@ -150,9 +174,12 @@ class GamepadInputEngine {
       final sx = (_leftX * _leftSensitivity).clamp(-1.0, 1.0);
       final sy = (_leftY * _leftSensitivity).clamp(-1.0, 1.0);
 
-      _lastSentLeftX = sx;
-      _lastSentLeftY = sy;
-      _sendFn!({'type': 'stick', 'x': sx, 'y': sy});
+      if (_shouldSendStick(elapsed, _lastLeftSendAt, sx, sy, _lastSentLeftX, _lastSentLeftY)) {
+        _lastSentLeftX = sx;
+        _lastSentLeftY = sy;
+        _lastLeftSendAt = elapsed;
+        _sendFn!({'type': 'stick', 'x': sx, 'y': sy});
+      }
     } else {
       if (_lastSentLeftX != 0.0 || _lastSentLeftY != 0.0 || _leftZeroSendsLeft > 0) {
         if (_lastSentLeftX != 0.0 || _lastSentLeftY != 0.0) {
@@ -201,8 +228,8 @@ class GamepadInputEngine {
         _rightX = _swipeStickX;
         _rightY = _swipeStickY;
 
-        // Diagnostic log for Swipe Pad
-        debugPrint('[INPUT ENGINE] Swipe Pad:\n'
+        // Diagnostic log for Swipe Pad (debugPrint is not stripped in release)
+        if (kDebugMode) debugPrint('[INPUT ENGINE] Swipe Pad:\n'
             '  Pointer ID: ${_activeRight!.pointerId}\n'
             '  Global Position: $_rightTouchCurrentGlobal\n'
             '  Local Position: $_swipeCurrentPos\n'
@@ -211,9 +238,12 @@ class GamepadInputEngine {
 
       final processed = _processRightStickOutput(_rightX, _rightY);
 
-      _lastSentRightX = processed.dx;
-      _lastSentRightY = processed.dy;
-      _sendFn!({'type': 'rstick', 'x': processed.dx, 'y': processed.dy});
+      if (_shouldSendStick(elapsed, _lastRightSendAt, processed.dx, processed.dy, _lastSentRightX, _lastSentRightY)) {
+        _lastSentRightX = processed.dx;
+        _lastSentRightY = processed.dy;
+        _lastRightSendAt = elapsed;
+        _sendFn!({'type': 'rstick', 'x': processed.dx, 'y': processed.dy});
+      }
     } else {
       if (_lastSentRightX != 0.0 || _lastSentRightY != 0.0 || _rightZeroSendsLeft > 0) {
         if (_lastSentRightX != 0.0 || _lastSentRightY != 0.0) {

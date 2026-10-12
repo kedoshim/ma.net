@@ -3,6 +3,7 @@ import '../services/sound_effect_service.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
 import 'juicy_widgets.dart';
+import '../utils/app_preferences.dart';
 
 class ServerOptionsPopup extends StatefulWidget {
   final ColorTheme currentTheme;
@@ -25,12 +26,16 @@ class ServerOptionsPopup extends StatefulWidget {
 class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
   late ColorTheme _selectedTheme;
   late int _selectedTimeoutMinutes;
+  bool _fullScreen = true;
 
   @override
   void initState() {
     super.initState();
     _selectedTheme = widget.currentTheme;
     _selectedTimeoutMinutes = widget.currentTimeoutMinutes;
+    AppPreferences.fullScreen().then((value) {
+      if (mounted) setState(() => _fullScreen = value);
+    });
   }
 
   Widget _buildLanguageButton(BuildContext context, Locale locale, String label) {
@@ -159,6 +164,30 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
                     ),
                   ),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.l10n.settings.fullScreenTitle,
+                  style: const TextStyle(
+                    fontFamily: 'momo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              JuicyToggle(
+                value: _fullScreen,
+                onChanged: (value) {
+                  SoundEffectService.instance.playThemeSelect();
+                  setState(() => _fullScreen = value);
+                  AppPreferences.setFullScreen(value);
+                },
               ),
             ],
           ),

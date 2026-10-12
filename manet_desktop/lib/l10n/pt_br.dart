@@ -27,6 +27,236 @@ class PtBrStrings implements AppStrings {
   final QrPanelStrings qrPanel = PtBrQrPanelStrings();
   @override
   final CreditsStrings credits = PtBrCreditsStrings();
+  @override
+  final ControllersStrings controllers = PtBrControllersStrings();
+  @override
+  final SessionStrings session = PtBrSessionStrings();
+}
+
+class PtBrSessionStrings implements SessionStrings {
+  @override
+  String readyPrompt(int ready, int total) =>
+      'Apertem START quando estiverem prontos · $ready/$total';
+  @override
+  String get allReady => 'Todo mundo pronto! Aperte START para escolher o jogo';
+  @override
+  String get controlsInBackground =>
+      'Os controles estão indo para os jogos. Clique nesta janela para usá-los no ma•net.';
+  @override
+  String get chooseGame => 'Escolher jogo';
+  @override
+  String get ready => 'PRONTO';
+  @override
+  String get libraryTitle => 'Escolham o jogo';
+  @override
+  String get libraryHint =>
+      'Analógico move · A vota · B tira o voto · START joga o mais votado · SELECT volta';
+  @override
+  String get backToLobby => 'Lobby';
+  @override
+  String get manageGames => 'Gerenciar jogos';
+  @override
+  String get emptyLibrary => 'Nenhum jogo cadastrado ainda.';
+  @override
+  String get addFirstGame => 'Adicionar o primeiro jogo';
+  @override
+  String playersRange(int min, int max) => min == max
+      ? '$min ${min == 1 ? 'jogador' : 'jogadores'}'
+      : '$min–$max jogadores';
+  @override
+  String doesNotFit(int players) =>
+      'Não comporta $players ${players == 1 ? 'jogador' : 'jogadores'}';
+  @override
+  String get clickToPlay => 'Clique para jogar agora';
+  @override
+  String startingIn(String game) => 'Abrindo $game em';
+  @override
+  String get cancel => 'Cancelar';
+  @override
+  String launchError(String code) => switch (code) {
+        'path_not_found' => 'Não encontrei o arquivo do jogo. Confira o caminho em Gerenciar jogos.',
+        _ => 'Não consegui abrir o jogo.',
+      };
+  @override
+  String playing(String game) => 'Jogando $game';
+  @override
+  String get playingHint => 'Quando o jogo fechar, o ma•net volta para o lobby sozinho.';
+  @override
+  String get untrackedHint =>
+      'Esse jogo abriu por um atalho ou launcher, então o ma•net não sabe quando ele fecha.';
+  @override
+  String get closeGame => 'Fechar jogo';
+  @override
+  String get returnToLobby => 'Voltar ao lobby';
+  @override
+  String get gamesTitle => 'Jogos';
+  @override
+  String get addGame => 'Adicionar jogo';
+  @override
+  String get editGame => 'Editar jogo';
+  @override
+  String get gameName => 'Nome';
+  @override
+  String get gamePath => 'Executável ou atalho';
+  @override
+  String get gamePathHint => '.exe, .lnk, .url ou steam://...';
+  @override
+  String get chooseFile => 'Escolher arquivo';
+  @override
+  String get gameArguments => 'Argumentos (opcional)';
+  @override
+  String get gameCover => 'Capa';
+  @override
+  String get chooseCover => 'Escolher imagem';
+  @override
+  String get removeCover => 'Remover';
+  @override
+  String get minPlayers => 'Mínimo de jogadores';
+  @override
+  String get maxPlayers => 'Máximo de jogadores';
+  @override
+  String get gameLayout => 'Layout do controle';
+  @override
+  String get noLayout => 'Manter o atual';
+  @override
+  String get gameMode => 'Tipo de controle';
+  @override
+  String get keepMode => 'Manter o atual';
+  @override
+  String get saveGame => 'Salvar';
+  @override
+  String get deleteGame => 'Excluir';
+  @override
+  String deleteGameConfirm(String game) => 'Excluir "$game" da biblioteca?';
+  @override
+  String get saveError => 'Não deu para salvar. Confira nome e caminho.';
+  @override
+  String get findCover => 'Buscar capa';
+  @override
+  String get coverSearchTitle => 'Buscar capa';
+  @override
+  String get coverSearch => 'Buscar';
+  @override
+  String get coverSteamHint => 'Capas oficiais da loja Steam. Clique em uma para usar.';
+  @override
+  String get coverNoResults => 'Nada encontrado com esse nome.';
+  @override
+  String get coverSearchError => 'Não consegui buscar agora. Confira a internet.';
+  @override
+  String get coverDownloadError => 'Não consegui baixar essa imagem.';
+  @override
+  String get coverOtherSources => 'Ou procure em outro lugar';
+  @override
+  String get coverGoogle => 'Google Imagens';
+  @override
+  String get coverGoogleSuffix => 'capa jogo';
+  @override
+  String get coverPasteLink => 'Cole aqui o link de uma imagem';
+  @override
+  String get coverUseLink => 'Usar';
+  @override
+  String get createLayout => 'Criar layout novo';
+  @override
+  String get rulesTitle => 'Por número de jogadores';
+  @override
+  String get rulesHint =>
+      'Troque o tipo de controle ou o layout conforme quantas pessoas vão jogar. A primeira regra que servir vale.';
+  @override
+  String get addRule => '+ Regra';
+  @override
+  String get suggestXinputRule => 'x•input até 4, d•input acima';
+  @override
+  String get ruleFrom => 'De';
+  @override
+  String get ruleTo => 'a';
+  @override
+  String get displayTitle => 'Tela do jogo';
+  @override
+  String get displayAuto => 'Deixar o jogo escolher';
+  @override
+  String displayLabel(int number, bool primary, int width, int height) =>
+      'Tela $number${primary ? ' (principal)' : ''} · $width×$height';
+  @override
+  String get fullscreenGame => 'Abrir em tela cheia';
+  @override
+  String get fullscreenGameHint => 'Se o jogo abrir em janela, o ma•net estica ela na tela inteira, sem bordas.';
+}
+
+class PtBrControllersStrings implements ControllersStrings {
+  @override
+  String get title => 'Controles no Windows';
+  @override
+  String get tooltip => 'Controles conectados';
+  @override
+  String summary(int total, int own) =>
+      'O Windows está vendo $total ${total == 1 ? 'controle' : 'controles'}. '
+      '$own ${own == 1 ? 'é' : 'são'} do ma•net.';
+  @override
+  String get xinputTitle => 'Vagas x•input';
+  @override
+  String get xinputSubtitle =>
+      'O Windows só tem 4 vagas x•input. A ordem aqui é a mesma da luz do controle.';
+  @override
+  String get xinputFree => 'Livre';
+  @override
+  String get xinputOther => 'Outro controle';
+  @override
+  String xinputPlayer(int player) => 'Jogador $player';
+  @override
+  String noXinputWarning(int count) =>
+      '$count ${count == 1 ? 'jogador do ma•net ficou' : 'jogadores do ma•net ficaram'} '
+      'sem vaga x•input: jogos x•input não vão enxergá-${count == 1 ? 'lo' : 'los'}. '
+      'Desconecte os outros controles ou use d•input.';
+  @override
+  String foreignWarning(int count) =>
+      '$count ${count == 1 ? 'controle virtual não é' : 'controles virtuais não são'} deste ma•net: '
+      'de outro programa, ou presos no driver depois de uma sessão que travou '
+      '(esses somem ao reiniciar o PC).';
+  @override
+  String get devicesTitle => 'Dispositivos detectados';
+  @override
+  String get devicesEmpty => 'Nenhum controle detectado.';
+  @override
+  String get originVirtual => 'Virtual';
+  @override
+  String get originSteam => 'Steam';
+  @override
+  String get originPhysical => 'Físico';
+  @override
+  String deviceLabel(String vendor) => switch (vendor) {
+        'xbox' => 'Controle Xbox',
+        'playstation' => 'Controle PlayStation',
+        'nintendo' => 'Controle Nintendo',
+        'steam' => 'Controle Steam',
+        _ => 'Controle genérico',
+      };
+  @override
+  String staleServersWarning(int count) =>
+      '${count == 1 ? 'Um servidor antigo' : '$count servidores antigos'} do ma•net '
+      '${count == 1 ? 'continua aberto e mantém' : 'continuam abertos e mantêm'} controles conectados.';
+  @override
+  String get closeStaleServers => 'Fechar servidores antigos';
+  @override
+  String closedServers(int count) =>
+      count == 0 ? 'Nenhum servidor antigo encontrado.' : '$count ${count == 1 ? 'servidor fechado' : 'servidores fechados'}.';
+  @override
+  String get recreate => 'Recriar controles';
+  @override
+  String get recreateHint =>
+      'Desconecta e cria de novo os controles do ma•net. Os jogadores continuam nos mesmos lugares.';
+  @override
+  String get recreated => 'Controles recriados.';
+  @override
+  String get refresh => 'Atualizar';
+  @override
+  String get loadError => 'Não foi possível ler os controles do Windows.';
+  @override
+  String get actionError => 'Não deu certo. Tente de novo.';
+  @override
+  String playerMapping(int player, int windowsIndex) =>
+      'Jogador $player é o controle $windowsIndex no Windows';
+  @override
+  String playerNoXinput(int player) => 'Jogador $player está sem vaga x•input';
 }
 
 class PtBrCommonStrings implements CommonStrings {
@@ -210,6 +440,8 @@ class PtBrSettingsStrings implements SettingsStrings {
   String timeoutValue(int minutes) => '$minutes min';
   @override
   String get languageTitle => 'Idioma';
+  @override
+  String get fullScreenTitle => 'Tela cheia (F11)';
 }
 
 class PtBrSlotsStrings implements SlotsStrings {
