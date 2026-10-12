@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/session_models.dart';
@@ -176,6 +177,10 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
   late final TextEditingController _name;
   late final TextEditingController _path;
   late final TextEditingController _arguments;
+  late final TextEditingController _description;
+  late final TextEditingController _tags;
+  late final TextEditingController _trailer;
+  bool _fetchingSteam = false;
   late String _coverPath;
   late int _minPlayers;
   late int _maxPlayers;
@@ -196,6 +201,9 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _name = TextEditingController(text: game?.name ?? '');
     _path = TextEditingController(text: game?.path ?? '');
     _arguments = TextEditingController(text: game?.arguments ?? '');
+    _description = TextEditingController(text: game?.description ?? '');
+    _tags = TextEditingController(text: game?.tags.join(', ') ?? '');
+    _trailer = TextEditingController(text: game?.trailerUrl ?? '');
     _coverPath = game?.coverPath ?? '';
     _minPlayers = game?.minPlayers ?? 1;
     _maxPlayers = game?.maxPlayers ?? 4;
@@ -230,6 +238,9 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _name.dispose();
     _path.dispose();
     _arguments.dispose();
+    _description.dispose();
+    _tags.dispose();
+    _trailer.dispose();
     super.dispose();
   }
 
@@ -261,11 +272,41 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
   }
 
   Future<void> _searchCover() async {
-    final path = await showDialog<String>(
+    final pick = await showDialog<CoverPick>(
       context: context,
       builder: (_) => CoverSearchDialog(initialQuery: _name.text.trim()),
     );
-    if (path != null && mounted) setState(() => _coverPath = path);
+    if (pick == null || !mounted) return;
+    setState(() => _coverPath = pick.path);
+    if (pick.steamAppId != null) await _fillFromSteam(pick.steamAppId!);
+  }
+
+  /// A Steam cover also brings the store's description, genres and trailer;
+  /// only empty fields are filled so nothing typed gets lost.
+  Future<void> _fillFromSteam(int appId) async {
+    setState(() => _fetchingSteam = true);
+    final details = await SteamDetails.fetch(appId);
+    if (!mounted) return;
+    setState(() {
+      _fetchingSteam = false;
+      if (details == null) return;
+      if (_description.text.trim().isEmpty) {
+        _description.text = details.description;
+      }
+      if (_tags.text.trim().isEmpty) _tags.text = details.tags.join(', ');
+      if (_trailer.text.trim().isEmpty) _trailer.text = details.trailerUrl;
+    });
+  }
+
+  void _searchTrailer() {
+    final name = _name.text.trim();
+    if (name.isEmpty) return;
+    launchUrl(
+      Uri.https('www.youtube.com', '/results', {
+        'search_query': '$name trailer',
+      }),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   /// Opens the controller layout creator; the new layout gets selected.
@@ -335,6 +376,13 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
       rules: _rules,
       display: _display,
       fullscreen: _fullscreen,
+      description: _description.text.trim(),
+      tags: [
+        for (final tag in _tags.text.split(','))
+          if (tag.trim().isNotEmpty) tag.trim(),
+      ],
+      trailerUrl: _trailer.text.trim(),
+      addedAt: widget.game?.addedAt ?? 0,
     );
     try {
       await context.read<SessionController>().saveGame(game);
@@ -421,6 +469,32 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
                   ],
                 ),
               ),
+            ],
+          ),
+          if (_fetchingSteam) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(strings.steamInfoLoading, style: _captionStyle),
+              ],
+            ),
+          ],
+          _label(strings.gameDescription),
+          _field(_description, hint: strings.gameDescriptionHint, lines: 3),
+          _label(strings.gameTags),
+          _field(_tags, hint: strings.gameTagsHint),
+          _label(strings.gameTrailer),
+          Row(
+            children: [
+              Expanded(child: _field(_trailer, hint: strings.gameTrailerHint)),
+              const SizedBox(width: 8),
+              _smallButton(strings.searchTrailer, _searchTrailer),
             ],
           ),
           Row(
@@ -676,7 +750,11 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     child: Text(text, style: _bodyStyle.copyWith(fontWeight: FontWeight.bold)),
   );
 
-  Widget _field(TextEditingController controller, {String? hint}) {
+  Widget _field(
+    TextEditingController controller, {
+    String? hint,
+    int lines = 1,
+  }) {
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: const BorderSide(color: AppColors.textPrimary, width: 2),
@@ -684,6 +762,8 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     return TextField(
       controller: controller,
       style: _bodyStyle,
+      minLines: lines,
+      maxLines: lines == 1 ? 1 : lines + 3,
       decoration: InputDecoration(
         hintText: hint,
         isDense: true,

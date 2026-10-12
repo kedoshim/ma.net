@@ -19,28 +19,206 @@ class CoverStore {
     return Directory(p.join(base, 'MaNet', 'covers'));
   }
 
-  static Future<String> download(String url, String nameHint) async {
-    final response = await http
-        .get(Uri.parse(url))
-        .timeout(const Duration(seconds: 20));
-    final type = response.headers['content-type'] ?? '';
-    if (response.statusCode != 200 || !type.startsWith('image/')) {
-      throw Exception('not an image');
+  /// Accepts what people actually paste from a browser: direct image links,
+  /// Google's redirect/preview links (imgres?imgurl=, url?url=) and the
+  /// inline `data:image/...;base64,...` that "Copy image address" gives for
+  /// Google Images thumbnails.
+  static Future<String> download(String link, String nameHint) async {
+    final source = link.trim();
+    List<int> bytes;
+    if (source.startsWith('data:')) {
+      final comma = source.indexOf(',');
+      if (comma < 0 || !source.substring(0, comma).contains('base64')) {
+        throw const CoverDownloadError(CoverError.invalidLink);
+      }
+      try {
+        bytes = base64Decode(source.substring(comma + 1));
+      } on FormatException {
+        throw const CoverDownloadError(CoverError.invalidLink);
+      }
+    } else {
+      final uri = _unwrap(Uri.tryParse(source));
+      if (uri == null || !uri.hasScheme || !uri.scheme.startsWith('http')) {
+        throw const CoverDownloadError(CoverError.invalidLink);
+      }
+      final http.Response response;
+      try {
+        response = await http.get(uri, headers: const {
+          // Some image hosts refuse requests that don't look like a browser.
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8',
+        }).timeout(const Duration(seconds: 20));
+      } catch (_) {
+        throw const CoverDownloadError(CoverError.unreachable);
+      }
+      if (response.statusCode != 200) {
+        throw const CoverDownloadError(CoverError.unreachable);
+      }
+      bytes = response.bodyBytes;
     }
-    final ext = switch (type) {
-      'image/png' => 'png',
-      'image/webp' => 'webp',
-      'image/gif' => 'gif',
-      _ => 'jpg',
-    };
+
+    final ext = _imageExtension(bytes);
+    if (ext == null) {
+      // Usually the link of a web page (search result), not of the image.
+      throw const CoverDownloadError(CoverError.notAnImage);
+    }
     final slug = nameHint.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
     final file = File(
-      p.join(_dir.path, '$slug-${url.hashCode.toUnsigned(32)}.$ext'),
+      p.join(_dir.path, '$slug-${source.hashCode.toUnsigned(32)}.$ext'),
     );
     await file.parent.create(recursive: true);
-    await file.writeAsBytes(response.bodyBytes);
+    await file.writeAsBytes(bytes);
     return file.path;
   }
+
+  /// Google wraps the real image link in its own URLs.
+  static Uri? _unwrap(Uri? uri) {
+    if (uri == null) return null;
+    final host = uri.host.toLowerCase();
+    if (host.contains('google.')) {
+      for (final key in const ['imgurl', 'url', 'q']) {
+        final inner = uri.queryParameters[key];
+        if (inner != null && inner.startsWith('http')) return Uri.tryParse(inner);
+      }
+    }
+    return uri;
+  }
+
+  /// Detects the format from the file's first bytes (servers often send a
+  /// wrong or missing content type).
+  static String? _imageExtension(List<int> b) {
+    bool startsWith(List<int> sig, [int offset = 0]) =>
+        b.length >= offset + sig.length &&
+        List.generate(sig.length, (i) => b[offset + i] == sig[i]).every((ok) => ok);
+    if (startsWith(const [0xFF, 0xD8, 0xFF])) return 'jpg';
+    if (startsWith(const [0x89, 0x50, 0x4E, 0x47])) return 'png';
+    if (startsWith(const [0x47, 0x49, 0x46, 0x38])) return 'gif';
+    if (startsWith(const [0x52, 0x49, 0x46, 0x46]) && startsWith(const [0x57, 0x45, 0x42, 0x50], 8)) {
+      return 'webp';
+    }
+    if (startsWith(const [0x42, 0x4D])) return 'bmp';
+    return null;
+  }
+}
+
+enum CoverError { invalidLink, unreachable, notAnImage }
+
+/// What the cover search returns: the downloaded file, plus the Steam app
+/// when the cover came from the Steam search (to fill in the game's info).
+class CoverPick {
+  final String path;
+  final int? steamAppId;
+
+  const CoverPick(this.path, {this.steamAppId});
+}
+
+/// Store info for a Steam app (public store API, no key needed).
+class SteamDetails {
+  final String description;
+  final List<String> tags;
+  final String trailerUrl;
+
+  const SteamDetails({
+    required this.description,
+    required this.tags,
+    required this.trailerUrl,
+  });
+
+  /// Steam's play-mode categories are long ("Co-op, tela dividida/
+  /// compartilhada", "PvP online"...); keep the couch-relevant ones as
+  /// short tags.
+  static List<String> couchTags(Iterable<String> categories) {
+    final tags = <String>[];
+    void add(String tag) {
+      if (!tags.contains(tag)) tags.add(tag);
+    }
+
+    for (final category in categories) {
+      final c = category.toLowerCase();
+      if (c.contains('online') || c.contains('on-line') || c.contains('remote')) {
+        continue;
+      }
+      if (c.contains('tela') || c.contains('ecrã') || c.contains('split')) {
+        add('Tela dividida');
+      } else if (c.contains('co-op') || c.contains('coop')) {
+        add('Co-op');
+      } else if (c.contains('pvp') || c.contains('jxj')) {
+        add('PvP');
+      } else if (c.contains('multijogador') || c.contains('multi-player')) {
+        add('Multijogador');
+      }
+    }
+    return tags;
+  }
+
+  static Future<SteamDetails?> fetch(int appId) async {
+    try {
+      final uri = Uri.https('store.steampowered.com', '/api/appdetails', {
+        'appids': '$appId',
+        'l': 'brazilian',
+        'cc': 'BR',
+      });
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final entry = body['$appId'] as Map<String, dynamic>?;
+      if (entry == null || entry['success'] != true) return null;
+      return fromAppData(appId, entry['data'] as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static SteamDetails fromAppData(int appId, Map<String, dynamic> data) {
+    final genres = [
+      for (final g in data['genres'] as List<dynamic>? ?? const [])
+        (g as Map<String, dynamic>)['description'] as String? ?? '',
+    ].where((g) => g.isNotEmpty).take(4);
+    final couch = couchTags([
+      for (final c in data['categories'] as List<dynamic>? ?? const [])
+        (c as Map<String, dynamic>)['description'] as String? ?? '',
+    ]);
+
+    String trailer = '';
+    for (final movie in data['movies'] as List<dynamic>? ?? const []) {
+      final m = movie as Map<String, dynamic>;
+      final url =
+          (m['mp4'] as Map<String, dynamic>?)?['max'] ??
+          (m['webm'] as Map<String, dynamic>?)?['max'];
+      if (url is String && url.isNotEmpty) {
+        trailer = url;
+        break;
+      }
+    }
+    if (trailer.isEmpty && (data['movies'] as List<dynamic>? ?? const []).isNotEmpty) {
+      // Newer apps only list streaming formats: the store page plays them.
+      trailer = 'https://store.steampowered.com/app/$appId';
+    }
+
+    return SteamDetails(
+      description: cleanHtml(data['short_description'] as String? ?? ''),
+      tags: [...genres, ...couch],
+      trailerUrl: trailer,
+    );
+  }
+
+  /// Steam descriptions come as HTML snippets.
+  static String cleanHtml(String html) => html
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<[^>]+>'), '')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&nbsp;', ' ')
+      .trim();
+}
+
+class CoverDownloadError implements Exception {
+  final CoverError reason;
+  const CoverDownloadError(this.reason);
 }
 
 class _SteamResult {
@@ -101,7 +279,7 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
     try {
       final uri = Uri.https('store.steampowered.com', '/api/storesearch/', {
         'term': term,
-        'l': 'portuguese',
+        'l': 'brazilian',
         'cc': 'BR',
       });
       final response = await http.get(uri).timeout(const Duration(seconds: 10));
@@ -126,7 +304,7 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
     }
   }
 
-  Future<void> _use(String url, [String? fallbackUrl]) async {
+  Future<void> _use(String url, [String? fallbackUrl, int? steamAppId]) async {
     setState(() {
       _downloading = true;
       _message = null;
@@ -139,10 +317,22 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
         if (fallbackUrl == null) rethrow;
         path = await CoverStore.download(fallbackUrl, _query.text);
       }
-      if (mounted) Navigator.of(context).pop(path);
+      if (mounted) {
+        Navigator.of(context).pop(CoverPick(path, steamAppId: steamAppId));
+      }
+    } on CoverDownloadError catch (e) {
+      if (mounted) {
+        final strings = context.l10n.session;
+        setState(() => _message = switch (e.reason) {
+          CoverError.invalidLink => strings.coverInvalidLink,
+          CoverError.notAnImage => strings.coverNotAnImage,
+          CoverError.unreachable => strings.coverDownloadError,
+        });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _message = context.l10n.session.coverDownloadError);
+      }
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
@@ -204,7 +394,8 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
                 for (final result in _results)
                   _CoverOption(
                     result: result,
-                    onTap: () => _use(result.coverUrl, result.headerUrl),
+                    onTap: () =>
+                        _use(result.coverUrl, result.headerUrl, result.appId),
                   ),
               ],
             ),
@@ -265,7 +456,7 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
 
   void _useLink() {
     final link = _link.text.trim();
-    if (link.startsWith('http')) _use(link);
+    if (link.isNotEmpty) _use(link);
   }
 
   Widget _field(

@@ -10,6 +10,7 @@ class ServerOptionsPopup extends StatefulWidget {
   final ValueChanged<ColorTheme> onThemeChanged;
   final int currentTimeoutMinutes;
   final ValueChanged<int> onTimeoutChanged;
+  final ValueChanged<int>? onMatchSecondsChanged;
 
   const ServerOptionsPopup({
     super.key,
@@ -17,6 +18,7 @@ class ServerOptionsPopup extends StatefulWidget {
     required this.onThemeChanged,
     required this.currentTimeoutMinutes,
     required this.onTimeoutChanged,
+    this.onMatchSecondsChanged,
   });
 
   @override
@@ -27,6 +29,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
   late ColorTheme _selectedTheme;
   late int _selectedTimeoutMinutes;
   bool _fullScreen = true;
+  int _matchSeconds = 10;
 
   @override
   void initState() {
@@ -35,6 +38,9 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
     _selectedTimeoutMinutes = widget.currentTimeoutMinutes;
     AppPreferences.fullScreen().then((value) {
       if (mounted) setState(() => _fullScreen = value);
+    });
+    AppPreferences.matchSeconds().then((value) {
+      if (mounted) setState(() => _matchSeconds = value);
     });
   }
 
@@ -167,6 +173,50 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
               ),
             ],
           ),
+          if (widget.onMatchSecondsChanged != null) ...[
+            const SizedBox(height: 24),
+            Text(
+              context.l10n.settings.matchSecondsTitle,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    value: _matchSeconds.toDouble(),
+                    min: 5,
+                    max: 30,
+                    divisions: 25,
+                    activeColor: AppColors.highlightColor,
+                    label: context.l10n.settings.matchSecondsValue(_matchSeconds),
+                    onChanged: (value) =>
+                        setState(() => _matchSeconds = value.round()),
+                    onChangeEnd: (value) =>
+                        widget.onMatchSecondsChanged!(value.round()),
+                  ),
+                ),
+                SizedBox(
+                  width: 70,
+                  child: Center(
+                    child: Text(
+                      context.l10n.settings.matchSecondsValue(_matchSeconds),
+                      style: const TextStyle(
+                        fontFamily: 'momo',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 24),
           Row(
             children: [

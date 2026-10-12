@@ -29,6 +29,8 @@ class ControllerDefaultView extends StatefulWidget {
     required this.onButtonStateChanged,
     required this.onOpenOptions,
     required this.onOpenFaceEditor,
+    this.showHomeButton = false,
+    this.overlayOpen = false,
     required this.onOpenEditControls,
     required this.onRetryConnection,
     required this.onOpenQrScanner,
@@ -101,6 +103,8 @@ class ControllerDefaultView extends StatefulWidget {
   final ControllerButtonStateCallback onButtonStateChanged;
   final VoidCallback onOpenOptions;
   final VoidCallback onOpenFaceEditor;
+  final bool showHomeButton;
+  final bool overlayOpen;
   final VoidCallback onOpenEditControls;
   final VoidCallback onRetryConnection;
   final VoidCallback? onOpenQrScanner;
@@ -350,12 +354,17 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                                     InkWell(
                                       onTap: widget.onOpenFaceEditor,
                                       borderRadius: BorderRadius.circular(24),
-                                      child: PlayerFaceIndicator(
-                                        face: widget.playerFace,
-                                        size: 64,
-                                        roundedSquare: true,
-                                        borderColor: AppColors.textPrimary,
-                                      ),
+                                      child: widget.showHomeButton
+                                          ? _HomeButton(
+                                              color: widget.playerFace.color,
+                                              overlayOpen: widget.overlayOpen,
+                                            )
+                                          : PlayerFaceIndicator(
+                                              face: widget.playerFace,
+                                              size: 64,
+                                              roundedSquare: true,
+                                              borderColor: AppColors.textPrimary,
+                                            ),
                                     ),
                                     const SizedBox(height: 6),
                                     _PlayerNameWidget(
@@ -1964,6 +1973,35 @@ class _AvailableButtonsPanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+
+/// Takes the face button's place while a game runs: opens/closes the
+/// in-game overlay on the PC, like a console's guide button.
+class _HomeButton extends StatelessWidget {
+  final Color color;
+  final bool overlayOpen;
+
+  const _HomeButton({required this.color, required this.overlayOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: overlayOpen ? AppColors.textPrimary : color,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.textPrimary, width: AppColors.borderThickness),
+      ),
+      child: Icon(
+        overlayOpen ? Icons.close_rounded : Icons.home_rounded,
+        size: 34,
+        color: overlayOpen ? color : AppColors.textPrimary,
+      ),
     );
   }
 }

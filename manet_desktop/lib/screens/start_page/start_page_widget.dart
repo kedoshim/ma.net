@@ -612,11 +612,16 @@ class _StartPageWidgetState extends State<StartPageWidget> {
             ],
           ),
           const Spacer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Wraps instead of overflowing when the left column is narrow.
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
               _buildColorSelectors(),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildModeChip(),
                   const SizedBox(width: 8),

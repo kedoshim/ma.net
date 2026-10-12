@@ -96,6 +96,9 @@ class WebSocketRoutes:
 
         await ws.send_json(self.manager.build_mouse_mode_payload(device_id))
         await ws.send_json(self.manager.build_active_layout_payload())
+        phone_state = self.session.phone_payload(device_id)
+        self.session._last_phone_payloads[device_id] = phone_state
+        await ws.send_json(phone_state)
         await ws.send_json({
             "type": "slot_status",
             "has_vacant_slot": self.manager.has_vacant_slot(),
@@ -279,6 +282,16 @@ class WebSocketRoutes:
 
                         asyncio.create_task(_send_pulse())
 
+                    elif msg_type == "seat_bench":
+                        self.session.go_to_bench(device_id)
+                    elif msg_type == "seat_join":
+                        self.session.join_from_bench(device_id)
+                    elif msg_type == "swap_request":
+                        self.session.request_swap(device_id, str(data.get("target") or ""))
+                    elif msg_type == "swap_answer":
+                        self.session.answer_swap(
+                            device_id, str(data.get("from") or ""), data.get("accept") is True
+                        )
                     elif msg_type == "request_slot":
                         dev_name = self.manager.connected_devices.get(device_id, {}).get("name", player_name)
                         LOG.info("Device %s (%s) requested slot", device_id, dev_name)

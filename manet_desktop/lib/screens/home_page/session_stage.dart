@@ -6,6 +6,7 @@ import '../../services/host_api_service.dart';
 import '../../services/session_controller.dart';
 import '../library/in_game_view.dart';
 import '../library/library_view.dart';
+import '../library/tournament_view.dart';
 import 'lobby_ready_banner.dart';
 
 /// Swaps the main area by session phase, sliding sideways like moving
@@ -29,6 +30,7 @@ class SessionStage extends StatelessWidget {
         ],
       ),
       SessionPhase.library => LibraryView(presetCatalog: presetCatalog),
+      SessionPhase.tournament => const TournamentView(),
       SessionPhase.inGame => const InGameView(),
     };
 

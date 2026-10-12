@@ -36,6 +36,62 @@ class EnUsStrings implements AppStrings {
 
   @override
   final androidOnboarding = EnUsAndroidOnboardingStrings();
+
+  @override
+  final menu = EnUsMenuStrings();
+}
+
+class EnUsMenuStrings implements MenuStrings {
+  @override
+  String get select => 'Select';
+  @override
+  String get back => 'Back';
+  @override
+  String get avatar => 'Avatar';
+  @override
+  String get lobbyHint => 'Select when you are ready';
+  @override
+  String get libraryHint => 'Move the cursor and select a game';
+  @override
+  String get overlayHint => 'Pick an option on the TV menu';
+  @override
+  String playgroundHint(String owner) => '$owner is in the menu. Play around: move and jump!';
+  @override
+  String get someone => 'Someone';
+  @override
+  String get jump => 'Jump';
+  @override
+  String get seat => 'Seat';
+  @override
+  String get seatsTitle => 'Seats';
+  @override
+  String get seatsHint => 'Each seat is a controller in the game (P1 is player 1).';
+  @override
+  String get bench => 'Bench';
+  @override
+  String you(String name) => '$name (you)';
+  @override
+  String get swap => 'Swap';
+  @override
+  String get freeSeat => 'Free';
+  @override
+  String get goToBench => 'Go to the bench';
+  @override
+  String get joinGame => 'Join the game';
+  @override
+  String swapOffer(String name, String fromSeat, String toSeat) =>
+      '$name wants to trade places with you.\nYou go to $fromSeat and $name goes to $toSeat.';
+  @override
+  String get accept => 'Accept';
+  @override
+  String get decline => 'Decline';
+  @override
+  String swapAccepted(String name) => '$name agreed to trade places!';
+  @override
+  String swapDeclined(String name) => '$name prefers to stay put.';
+  @override
+  String get tournamentHint =>
+      'Tournament! Move your face to the side of the game you want to play.';
 }
 
 class EnUsCommonStrings implements CommonStrings {

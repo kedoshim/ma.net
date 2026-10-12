@@ -18,6 +18,7 @@ import '../theme/app_colors.dart';
 import '../widgets/options_popup.dart';
 import '../widgets/player_face_indicator.dart';
 import 'controller_screen/controller_default_view.dart';
+import 'controller_screen/controller_menu_view.dart';
 import 'controller_screen/controller_face_view.dart';
 import 'controller_screen/controller_mouse_view.dart';
 import 'controller_screen/controller_screen_types.dart';
@@ -139,6 +140,20 @@ class _ControllerScreenState extends State<ControllerScreen>
   PlayerFaceData _playerFace = PlayerFaceData.random();
   ControllerBrandingMode _brandingMode = ControllerBrandingMode.xinput;
   bool _hasVacantSlot = false;
+  // While a game launched by MaNet runs, the face button becomes Home
+  // (opens the in-game overlay on the PC).
+  bool _gameRunning = false;
+  bool _overlayOpen = false;
+  // The server tells each phone when its input drives MaNet's menus; the
+  // phone then shows menu controls (Select / Back / Avatar) instead of the
+  // game layout.
+  bool _menuMode = false;
+  bool _overlayMine = false;
+  String? _overlayOwnerName;
+  String _sessionPhase = 'lobby';
+  // Who sits where (from the server) and this phone's device id.
+  Map<String, dynamic> _seats = const {};
+  String? _me;
   String? playerName;
   double leftStickSensitivity = 1.0;
   double rightStickSensitivity = 1.0;
@@ -473,6 +488,12 @@ class _ControllerScreenState extends State<ControllerScreen>
       _mouseModeOwned = false;
       _mouseModeOwnerName = null;
       _hasVacantSlot = false;
+      _gameRunning = false;
+      _overlayOpen = false;
+      _menuMode = false;
+      _overlayMine = false;
+      _overlayOwnerName = null;
+      _sessionPhase = 'lobby';
     });
 
     _clearPlayerSlot();
@@ -723,6 +744,24 @@ class _ControllerScreenState extends State<ControllerScreen>
           _ingestFaceData(data);
           _ingestNameData(data['name']);
           break;
+        case 'session_phase':
+          setState(() {
+            _sessionPhase = data['phase'] as String? ?? 'lobby';
+            _gameRunning = _sessionPhase == 'in_game';
+            _overlayOpen = data['overlayOpen'] == true;
+            _overlayMine = data['overlayMine'] == true;
+            _overlayOwnerName = data['overlayOwnerName'] as String?;
+            _menuMode = data['menu'] == true;
+            _seats = (data['seats'] as Map<String, dynamic>?) ?? const {};
+            _me = data['me'] as String?;
+          });
+          break;
+        case 'swap_offer':
+          unawaited(_showSwapOffer(data));
+          break;
+        case 'swap_result':
+          _showSwapResult(data);
+          break;
         case 'slot_status':
           setState(() {
             _hasVacantSlot = data['has_vacant_slot'] == true;
@@ -953,6 +992,48 @@ class _ControllerScreenState extends State<ControllerScreen>
       _mouseModeOwnerName = null;
     });
     _send({'type': 'set_mouse_mode', 'active': false});
+  }
+
+  void _openSeats() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.screenBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SeatsSheet(seats: _seats, me: _me, onAction: _send),
+    );
+  }
+
+  Future<void> _showSwapOffer(Map<String, dynamic> data) async {
+    HapticsManager.instance.connectionPulse();
+    final from = (data['from'] as Map<String, dynamic>?) ?? const {};
+    final accept = await showDialog<bool>(
+      context: context,
+      builder: (_) => SwapOfferDialog(
+        from: from,
+        fromSlot: data['fromSlot'] as int?,
+        toSlot: data['toSlot'] as int?,
+      ),
+    );
+    _send({'type': 'swap_answer', 'from': from['deviceId'], 'accept': accept == true});
+  }
+
+  void _showSwapResult(Map<String, dynamic> data) {
+    final strings = context.l10n.menu;
+    final name = (data['by'] as Map<String, dynamic>?)?['name'] as String? ?? '';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        data['accepted'] == true ? strings.swapAccepted(name) : strings.swapDeclined(name),
+        style: const TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold),
+      ),
+    ));
+  }
+
+  void _pressHome() {
+    HapticsManager.instance.softTap();
+    _send({'type': 'home_pressed'});
   }
 
   void _enterFaceMode() {
@@ -1503,6 +1584,26 @@ class _ControllerScreenState extends State<ControllerScreen>
           onPulseCycleEnd: _toggleCenterPulse,
         );
       case ControllerScreenMode.gameplay:
+        if (_connectionState == ControllerConnectionState.connected) {
+          if (_menuMode) {
+            return ControllerMenuView(
+              menuContext: _overlayOpen
+                  ? (_overlayMine ? MenuContext.overlay : MenuContext.playground)
+                  : switch (_sessionPhase) {
+                      'library' => MenuContext.library,
+                      'tournament' => MenuContext.tournament,
+                      _ => MenuContext.lobby,
+                    },
+              ownerName: _overlayOwnerName,
+              playerFace: _playerFace,
+              onStickChanged: _onStickChanged,
+              onStickRelease: _onStickRelease,
+              onButtonStateChanged: _sendButton,
+              onOpenAvatar: _enterFaceMode,
+              onOpenSeats: _openSeats,
+            );
+          }
+        }
         return ControllerDefaultView(
           brandingMode: _brandingMode,
           movementMode: _movementMode,
@@ -1513,7 +1614,9 @@ class _ControllerScreenState extends State<ControllerScreen>
           onStickRelease: _onStickRelease,
           onButtonStateChanged: _sendButton,
           onOpenOptions: _showOptionsDialog,
-          onOpenFaceEditor: _enterFaceMode,
+          onOpenFaceEditor: _gameRunning ? _pressHome : _enterFaceMode,
+          showHomeButton: _gameRunning,
+          overlayOpen: _overlayOpen,
           onOpenEditControls: _enterEditMode,
           onRetryConnection: _retryConnection,
           onOpenQrScanner: kIsWeb ? null : _openQRScanner,

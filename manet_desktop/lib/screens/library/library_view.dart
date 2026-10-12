@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -11,15 +10,22 @@ import '../../l10n/app_localizations.dart';
 import '../../models/session_models.dart';
 import '../../services/host_api_service.dart';
 import '../../services/session_controller.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../theme/app_colors.dart';
 import '../../widgets/juicy_widgets.dart';
+import '../../widgets/comic_burst.dart';
 import '../../widgets/player_face_indicator.dart';
+import '../../services/sound_effect_service.dart';
 import '../home_page/gamepad_state.dart';
+import 'library_browser.dart';
 import 'manage_games_dialog.dart';
 
 /// Game library: every player steers a cursor with their own face using the
-/// left stick, A votes for the game under it, B removes the vote. When all
-/// players voted the server counts down and starts the most voted game.
+/// left stick. Select (A) presses what is under it: a game votes for it, the
+/// "i" opens its details, chips filter/sort. Back (B) closes the details the
+/// player opened, otherwise removes their vote. When all players voted the
+/// server counts down (one game) or starts a tournament (several).
 class LibraryView extends StatefulWidget {
   final PresetCatalog? presetCatalog;
 
@@ -34,16 +40,27 @@ class _LibraryViewState extends State<LibraryView>
   // Full stick deflection crosses ~900 px per second.
   static const double _cursorSpeed = 900;
   static const double _deadZone = 0.12;
-  static const double _cursorSize = 46;
+  static const double _cursorSize = 58;
 
   late final Ticker _ticker;
+  // Cursors near the top/bottom of the grid scroll it.
+  static const double _edgeZone = 70;
+  static const double _edgeScrollSpeed = 700;
+
   final GlobalKey _stackKey = GlobalKey();
-  final Map<String, GlobalKey> _cardKeys = {};
+  final GlobalKey _gridKey = GlobalKey();
+  final ScrollController _scroll = ScrollController();
+  // Everything a cursor can press (see LibraryTargets).
+  final Map<String, GlobalKey> _targetKeys = {};
   final ValueNotifier<Map<String, Offset>> _cursors = ValueNotifier(const {});
-  final ValueNotifier<Map<String, String>> _hoveredGame = ValueNotifier(
-    const {},
-  );
+  // deviceId -> target under that player's cursor.
+  final ValueNotifier<Map<String, String>> _hovered = ValueNotifier(const {});
+  LibraryFilter _filter = const LibraryFilter();
+  String? _detailsGameId;
+  String? _detailsOwner;
   final ValueNotifier<int> _countdownLeft = ValueNotifier(0);
+  final ValueNotifier<Map<String, int>> _bopTriggers = ValueNotifier(const {});
+  final Map<String, String?> _lastVotes = {};
   StreamSubscription<PadButtonEvent>? _buttons;
   Duration _lastTick = Duration.zero;
 
@@ -59,8 +76,10 @@ class _LibraryViewState extends State<LibraryView>
     _ticker.dispose();
     _buttons?.cancel();
     _cursors.dispose();
-    _hoveredGame.dispose();
+    _hovered.dispose();
+    _scroll.dispose();
     _countdownLeft.dispose();
+    _bopTriggers.dispose();
     super.dispose();
   }
 
@@ -88,6 +107,14 @@ class _LibraryViewState extends State<LibraryView>
           );
 
     final players = session.snapshot.players;
+    for (final player in players) {
+      final prevVote = _lastVotes[player.deviceId];
+      if (player.vote != null && player.vote != prevVote) {
+        _triggerBop(player.deviceId);
+      }
+      _lastVotes[player.deviceId] = player.vote;
+    }
+
     final next = <String, Offset>{};
     for (var i = 0; i < players.length; i++) {
       final id = players[i].deviceId;
@@ -102,13 +129,59 @@ class _LibraryViewState extends State<LibraryView>
         position.dy.clamp(0.0, size.height),
       );
     }
-    if (!_sameCursors(next, _cursors.value)) {
-      _cursors.value = next;
-      _hoveredGame.value = {
-        for (final entry in next.entries)
-          if (_gameAt(entry.value) case final gameId?) entry.key: gameId,
-      };
+    _edgeScroll(next.values, dt);
+    // Hover is recomputed every frame: the grid can scroll under a still
+    // cursor.
+    final hovered = {
+      for (final entry in next.entries)
+        if (_targetAt(entry.value) case final target?) entry.key: target,
+    };
+    if (!_sameCursors(next, _cursors.value)) _cursors.value = next;
+    if (!mapEquals(hovered, _hovered.value)) _hovered.value = hovered;
+  }
+
+  Rect? _rectOf(GlobalKey key) {
+    final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    if (stackBox == null || box == null || !box.attached || !box.hasSize) {
+      return null;
     }
+    return box.localToGlobal(Offset.zero, ancestor: stackBox) & box.size;
+  }
+
+  void _edgeScroll(Iterable<Offset> cursors, double dt) {
+    final grid = _rectOf(_gridKey);
+    if (grid == null || !_scroll.hasClients) return;
+    var speed = 0.0;
+    for (final c in cursors) {
+      if (c.dx < grid.left || c.dx > grid.right) continue;
+      if (_detailsGameId != null &&
+          (_rectOf(_keyFor(LibraryTargets.panel))?.contains(c) ?? false)) {
+        continue;
+      }
+      if (c.dy > grid.bottom - _edgeZone && c.dy <= grid.bottom + 4) {
+        speed += (c.dy - (grid.bottom - _edgeZone)) / _edgeZone;
+      } else if (c.dy < grid.top + _edgeZone && c.dy >= grid.top - 4) {
+        speed -= ((grid.top + _edgeZone) - c.dy) / _edgeZone;
+      }
+    }
+    if (speed == 0) return;
+    final position = _scroll.position;
+    final target =
+        (position.pixels + speed.clamp(-1.5, 1.5) * _edgeScrollSpeed * dt)
+            .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (target != position.pixels) _scroll.jumpTo(target);
+  }
+
+  GlobalKey _keyFor(String target) =>
+      _targetKeys.putIfAbsent(target, GlobalKey.new);
+
+  static int _priority(String target) {
+    if (target.startsWith('panel:')) return 0;
+    if (target == LibraryTargets.panel) return 1;
+    if (target.startsWith('info:')) return 2;
+    if (target.startsWith('filter:') || target.startsWith('tag:')) return 3;
+    return 4;
   }
 
   Offset _stickVelocity(double x, double y) {
@@ -131,26 +204,128 @@ class _LibraryViewState extends State<LibraryView>
     return true;
   }
 
-  String? _gameAt(Offset point) {
-    final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
-    if (stackBox == null) return null;
-    for (final entry in _cardKeys.entries) {
-      final box = entry.value.currentContext?.findRenderObject() as RenderBox?;
-      if (box == null || !box.attached) continue;
-      final topLeft = box.localToGlobal(Offset.zero, ancestor: stackBox);
-      if ((topLeft & box.size).contains(point)) return entry.key;
+  /// What a cursor at [point] would press: panel buttons first, then the
+  /// panel itself (it covers the grid), "i" buttons, chips and games.
+  String? _targetAt(Offset point) {
+    final grid = _rectOf(_gridKey);
+    String? best;
+    var bestPriority = 99;
+    for (final entry in _targetKeys.entries) {
+      final target = entry.key;
+      final priority = _priority(target);
+      if (priority >= bestPriority) continue;
+      if (target.startsWith('panel') && _detailsGameId == null) continue;
+      final rect = _rectOf(entry.value);
+      if (rect == null || !rect.contains(point)) continue;
+      // Cards scrolled out of the grid's viewport can't be pressed.
+      if (priority >= 2 && priority != 3 && !(grid?.contains(point) ?? false)) {
+        continue;
+      }
+      best = target;
+      bestPriority = priority;
     }
-    return null;
+    return best;
   }
 
   void _onButton(PadButtonEvent event) {
-    if (!event.pressed || event.button != 'A') return;
-    final cursor = _cursors.value[event.deviceId];
-    if (cursor == null) return;
-    final gameId = _gameAt(cursor);
-    if (gameId != null) {
-      unawaited(context.read<SessionController>().vote(event.deviceId, gameId));
+    if (!event.pressed) return;
+    if (event.button == 'A' || event.button == 'START') {
+      final cursor = _cursors.value[event.deviceId];
+      if (cursor == null) return;
+      final target = _targetAt(cursor);
+      if (target != null) _press(target, event.deviceId);
+    } else if (event.button == 'B') {
+      _back(event.deviceId);
     }
+  }
+
+  /// Back: closes the details this player opened (or the cursor is on),
+  /// otherwise removes their vote; with no votes at all, leaves the library.
+  void _back(String deviceId) {
+    final session = context.read<SessionController>();
+    final onPanel =
+        _hovered.value[deviceId]?.startsWith(LibraryTargets.panel) ?? false;
+    if (_detailsGameId != null && (_detailsOwner == deviceId || onPanel)) {
+      _closeDetails();
+      return;
+    }
+    final players = session.snapshot.players;
+    final mine = players.where((p) => p.deviceId == deviceId).firstOrNull;
+    if (mine?.vote != null) {
+      unawaited(session.vote(deviceId, null));
+    } else if (players.every((p) => p.vote == null)) {
+      unawaited(session.backToLobby());
+    }
+  }
+
+  /// A cursor ([deviceId]) or the mouse (null) pressed [target].
+  void _press(String target, String? deviceId) {
+    final session = context.read<SessionController>();
+    void pop() {
+      if (deviceId != null) _triggerBop(deviceId);
+      try {
+        SoundEffectService.instance.playPlayerJoinPop();
+      } catch (_) {}
+    }
+
+    if (target.startsWith('game:')) {
+      final gameId = target.substring(5);
+      if (deviceId == null) {
+        unawaited(session.play(gameId));
+      } else {
+        pop();
+        unawaited(session.vote(deviceId, gameId));
+      }
+    } else if (target.startsWith('info:')) {
+      pop();
+      setState(() {
+        _detailsGameId = target.substring(5);
+        _detailsOwner = deviceId;
+      });
+    } else if (target.startsWith('tag:')) {
+      pop();
+      setState(() => _filter = _filter.toggleTag(target.substring(4)));
+    } else if (target == LibraryTargets.fitsOnly) {
+      pop();
+      setState(() => _filter = _filter.copyWith(fitsOnly: !_filter.fitsOnly));
+    } else if (target == LibraryTargets.sort) {
+      pop();
+      setState(() => _filter = _filter.nextSort());
+    } else if (target == LibraryTargets.clear) {
+      pop();
+      setState(() => _filter = LibraryFilter(sort: _filter.sort));
+    } else if (target == LibraryTargets.panelClose) {
+      _closeDetails();
+    } else if (target == LibraryTargets.panelVote) {
+      final gameId = _detailsGameId;
+      if (gameId == null) return;
+      pop();
+      if (deviceId == null) {
+        unawaited(session.play(gameId));
+      } else {
+        unawaited(session.vote(deviceId, gameId));
+      }
+    } else if (target == LibraryTargets.panelTrailer) {
+      final url = session.gameById(_detailsGameId)?.trailerUrl ?? '';
+      final uri = Uri.tryParse(url);
+      if (uri != null && uri.hasScheme) {
+        unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+      }
+    }
+  }
+
+  void _closeDetails() {
+    if (_detailsGameId == null) return;
+    setState(() {
+      _detailsGameId = null;
+      _detailsOwner = null;
+    });
+  }
+
+  void _triggerBop(String deviceId) {
+    final next = Map<String, int>.from(_bopTriggers.value);
+    next[deviceId] = (next[deviceId] ?? 0) + 1;
+    _bopTriggers.value = next;
   }
 
   void _openManageGames() {
@@ -171,14 +346,29 @@ class _LibraryViewState extends State<LibraryView>
     final snapshot = session.snapshot;
     final playerCount = snapshot.players.length;
 
-    final games = [...session.games]
-      ..sort((a, b) {
-        final fitA = a.fits(playerCount) ? 0 : 1;
-        final fitB = b.fits(playerCount) ? 0 : 1;
-        if (fitA != fitB) return fitA - fitB;
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-      });
-    _cardKeys.removeWhere((id, _) => games.every((g) => g.id != id));
+    final tags = LibraryFilter.topTags(session.games);
+    // Tags that disappeared from the library can't stay selected.
+    if (_filter.tags.any((t) => !tags.containsKey(t))) {
+      _filter = _filter.copyWith(
+        tags: _filter.tags.where(tags.containsKey).toSet(),
+      );
+    }
+    final games = _filter.apply(session.games, playerCount);
+    final details = session.gameById(_detailsGameId);
+    if (_detailsGameId != null && details == null) {
+      _detailsGameId = null;
+      _detailsOwner = null;
+    }
+    List<DeviceModel> devices(Iterable<String> ids) => [
+      for (final id in ids)
+        if (gamepads.deviceById(id) case final device?) device,
+    ];
+    List<DeviceModel> hoveredBy(Map<String, String> hovered, String target) =>
+        devices([
+          for (final entry in hovered.entries)
+            if (entry.value == target) entry.key,
+        ]);
+    final players = devices(snapshot.players.map((p) => p.deviceId));
 
     return Stack(
       key: _stackKey,
@@ -186,72 +376,153 @@ class _LibraryViewState extends State<LibraryView>
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _LibraryHeader(onManageGames: _openManageGames),
+            _LibraryHeader(onManageGames: _openManageGames, players: players),
             if (snapshot.lastError != null) ...[
               const SizedBox(height: 8),
               _ErrorStrip(text: strings.launchError(snapshot.lastError!)),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            if (session.games.isNotEmpty)
+              ValueListenableBuilder<Map<String, String>>(
+                valueListenable: _hovered,
+                builder: (context, hovered, _) => LibraryFilterBar(
+                  filter: _filter,
+                  tags: tags,
+                  playerCount: playerCount,
+                  keyFor: _keyFor,
+                  hoveredBy: (target) => hoveredBy(hovered, target),
+                  onPress: (target) => _press(target, null),
+                ),
+              ),
+            const SizedBox(height: 12),
             Expanded(
-              child: games.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(strings.emptyLibrary, style: _titleStyle),
-                          const SizedBox(height: 16),
-                          JuicyButton(
-                            onPressed: _openManageGames,
-                            backgroundColor: AppColors.highlightColor,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: session.games.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(strings.emptyLibrary, style: _titleStyle),
+                                const SizedBox(height: 16),
+                                JuicyButton(
+                                  onPressed: _openManageGames,
+                                  backgroundColor: AppColors.highlightColor,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12,
+                                  ),
+                                  child: Text(
+                                    strings.addFirstGame,
+                                    style: _buttonStyle,
+                                  ),
+                                ),
+                              ],
                             ),
+                          )
+                        : games.isEmpty
+                        ? Center(
                             child: Text(
-                              strings.addFirstGame,
-                              style: _buttonStyle,
+                              strings.noGamesMatch,
+                              style: _bodyStyle,
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            key: _gridKey,
+                            controller: _scroll,
+                            padding: const EdgeInsets.all(8),
+                            child: ValueListenableBuilder<Map<String, String>>(
+                              valueListenable: _hovered,
+                              builder: (context, hovered, _) => Wrap(
+                                spacing: 18,
+                                runSpacing: 18,
+                                children: [
+                                  for (final game in games)
+                                    LibraryGameCard(
+                                      key: _keyFor(
+                                        LibraryTargets.game(game.id),
+                                      ),
+                                      infoKey: _keyFor(
+                                        LibraryTargets.info(game.id),
+                                      ),
+                                      game: game,
+                                      playerCount: playerCount,
+                                      voters: devices(
+                                        session.votersFor(game.id),
+                                      ),
+                                      hoveredBy: hoveredBy(
+                                        hovered,
+                                        LibraryTargets.game(game.id),
+                                      ),
+                                      infoHoveredBy: hoveredBy(
+                                        hovered,
+                                        LibraryTargets.info(game.id),
+                                      ),
+                                      isCountdownTarget:
+                                          snapshot.countdown?.gameId == game.id,
+                                      onTap: () => _press(
+                                        LibraryTargets.game(game.id),
+                                        null,
+                                      ),
+                                      onInfo: () => _press(
+                                        LibraryTargets.info(game.id),
+                                        null,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        ],
+                  ),
+                  // Details slide in from the right, over the grid.
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => SlideTransition(
+                        position: Tween(
+                          begin: const Offset(1.1, 0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
                       ),
-                    )
-                  : SingleChildScrollView(
-                      child: ValueListenableBuilder<Map<String, String>>(
-                        valueListenable: _hoveredGame,
-                        builder: (context, hovered, _) => Wrap(
-                          spacing: 18,
-                          runSpacing: 18,
-                          children: [
-                            for (final game in games)
-                              _GameCard(
-                                key: _cardKeys.putIfAbsent(
-                                  game.id,
-                                  GlobalKey.new,
-                                ),
-                                game: game,
-                                fits: game.fits(playerCount),
-                                playerCount: playerCount,
-                                voters: [
-                                  for (final id in session.votersFor(game.id))
-                                    if (gamepads.deviceById(id)
-                                        case final device?)
-                                      device,
-                                ],
-                                hoveredBy: [
-                                  for (final entry in hovered.entries)
-                                    if (entry.value == game.id)
-                                      if (gamepads.deviceById(entry.key)
-                                          case final device?)
-                                        device,
-                                ],
-                                isCountdownTarget:
-                                    snapshot.countdown?.gameId == game.id,
-                                onTap: () => session.play(game.id),
-                              ),
-                          ],
-                        ),
-                      ),
+                      child: details == null
+                          ? const SizedBox.shrink()
+                          : SizedBox(
+                              key: ValueKey(details.id),
+                              width: 420,
+                              child:
+                                  ValueListenableBuilder<Map<String, String>>(
+                                    valueListenable: _hovered,
+                                    builder: (context, hovered, _) =>
+                                        GameDetailsPanel(
+                                          game: details,
+                                          playerCount: playerCount,
+                                          openedBy: _detailsOwner == null
+                                              ? null
+                                              : gamepads.deviceById(
+                                                  _detailsOwner!,
+                                                ),
+                                          voters: devices(
+                                            session.votersFor(details.id),
+                                          ),
+                                          keyFor: _keyFor,
+                                          hoveredBy: (target) =>
+                                              hoveredBy(hovered, target),
+                                          onPress: (target) =>
+                                              _press(target, null),
+                                        ),
+                                  ),
+                            ),
                     ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -268,17 +539,25 @@ class _LibraryViewState extends State<LibraryView>
           child: IgnorePointer(
             child: ValueListenableBuilder<Map<String, Offset>>(
               valueListenable: _cursors,
-              builder: (context, cursors, _) => Stack(
-                children: [
-                  for (final entry in cursors.entries)
-                    if (gamepads.deviceById(entry.key) case final device?)
-                      Positioned(
-                        left: entry.value.dx - _cursorSize / 2,
-                        top: entry.value.dy - _cursorSize / 2,
-                        child: _PlayerCursor(device: device, size: _cursorSize),
-                      ),
-                ],
-              ),
+              builder: (context, cursors, _) =>
+                  ValueListenableBuilder<Map<String, int>>(
+                    valueListenable: _bopTriggers,
+                    builder: (context, bops, _) => Stack(
+                      children: [
+                        for (final entry in cursors.entries)
+                          if (gamepads.deviceById(entry.key) case final device?)
+                            Positioned(
+                              left: entry.value.dx - _cursorSize / 2,
+                              top: entry.value.dy - _cursorSize / 2,
+                              child: PlayerCursor(
+                                device: device,
+                                size: _cursorSize,
+                                bopTrigger: bops[entry.key] ?? 0,
+                              ),
+                            ),
+                      ],
+                    ),
+                  ),
             ),
           ),
         ),
@@ -289,8 +568,9 @@ class _LibraryViewState extends State<LibraryView>
 
 class _LibraryHeader extends StatelessWidget {
   final VoidCallback onManageGames;
+  final List<DeviceModel> players;
 
-  const _LibraryHeader({required this.onManageGames});
+  const _LibraryHeader({required this.onManageGames, required this.players});
 
   @override
   Widget build(BuildContext context) {
@@ -332,6 +612,8 @@ class _LibraryHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 16),
+        PlayerCountBadge(players: players),
+        const SizedBox(width: 12),
         JuicyButton(
           onPressed: onManageGames,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -353,230 +635,114 @@ class _LibraryHeader extends StatelessWidget {
   }
 }
 
-class _GameCard extends StatelessWidget {
-  static const double width = 190;
-  static const double coverHeight = 200;
-  static const double borderWidth = 4;
-  static const double radius = 18;
+class PlayerCursor extends StatelessWidget {
+  final DeviceModel device;
+  final double size;
+  final int bopTrigger;
 
-  final GameEntry game;
-  final bool fits;
-  final int playerCount;
-  final List<DeviceModel> voters;
-  final List<DeviceModel> hoveredBy;
-  final bool isCountdownTarget;
-  final VoidCallback onTap;
-
-  const _GameCard({
+  const PlayerCursor({
     super.key,
-    required this.game,
-    required this.fits,
-    required this.playerCount,
-    required this.voters,
-    required this.hoveredBy,
-    required this.isCountdownTarget,
-    required this.onTap,
+    required this.device,
+    required this.size,
+    this.bopTrigger = 0,
   });
 
   @override
   Widget build(BuildContext context) {
-    final strings = context.l10n.session;
-    final highlighted = hoveredBy.isNotEmpty || isCountdownTarget;
-    final borderColor = isCountdownTarget
-        ? AppColors.highlightColor
-        : (hoveredBy.isNotEmpty
-              ? hoveredBy.first.color
-              : AppColors.textPrimary);
+    final gamepads = context.read<GamepadState>();
 
-    return Tooltip(
-      message: strings.clickToPlay,
-      waitDuration: const Duration(milliseconds: 600),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedScale(
-            scale: highlighted ? 1.06 : 1.0,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutBack,
-            child: Opacity(
-              opacity: fits ? 1 : 0.45,
-              // Same border thickness on every side, like the slot cards:
-              // the content sits inside the border instead of painting over
-              // it, and no offset shadow thickens the bottom/right edges.
-              child: Container(
-                width: width,
-                padding: const EdgeInsets.all(borderWidth),
-                decoration: BoxDecoration(
-                  color: borderColor,
-                  borderRadius: BorderRadius.circular(radius),
+    return ValueListenableBuilder<DeviceInputState>(
+      valueListenable: gamepads.inputListenable(device.id),
+      builder: (context, input, _) {
+        final stickX = -input.stickX;
+        final stickY = -input.stickY;
+        final isCentered = stickX == 0.0 && stickY == 0.0;
+        final isPressed = input.buttonPressed;
+
+        // Movement tilt leaning subtly into the direction of stick motion
+        final tiltAngle = stickX * 0.12;
+
+        // Mascot face lag and displacement inside the circular badge
+        final maxDisplacement = size * 0.15;
+        final targetTx = stickX * maxDisplacement;
+        final targetTy = stickY * maxDisplacement;
+
+        return SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Pointer tip at the cursor's center (top-left of the face).
+              Positioned(
+                left: size / 2 - 10,
+                top: size / 2 - 10,
+                child: Transform.rotate(
+                  angle: -math.pi / 4,
+                  child: Icon(
+                    Icons.navigation_rounded,
+                    size: size * 0.38,
+                    color: device.color,
+                  ),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(radius - borderWidth),
-                  child: ColoredBox(
-                    color: AppColors.lightColor,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          height: coverHeight,
-                          child: _Cover(game: game),
-                        ),
-                        Container(height: borderWidth, color: borderColor),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                game.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _cardTitleStyle,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                fits
-                                    ? strings.playersRange(
-                                        game.minPlayers,
-                                        game.maxPlayers,
-                                      )
-                                    : strings.doesNotFit(playerCount),
-                                style: _captionStyle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              SizedBox(
-                                height: 30,
-                                child: Row(
-                                  children: [
-                                    for (final voter in voters.take(6))
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 4,
-                                        ),
-                                        child: TweenAnimationBuilder<double>(
-                                          key: ValueKey('vote_${voter.id}'),
-                                          tween: Tween(begin: 0.2, end: 1),
-                                          duration: const Duration(
-                                            milliseconds: 420,
-                                          ),
-                                          curve: Curves.elasticOut,
-                                          builder: (context, scale, child) =>
-                                              Transform.scale(
-                                                scale: scale,
-                                                child: child,
-                                              ),
-                                          child: PlayerFaceIndicator(
-                                            face: voter.face,
-                                            size: 28,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+              ),
+              Positioned(
+                left: size / 2,
+                top: size / 2,
+                child: ComicBopBurst(
+                  trigger: bopTrigger,
+                  burstColor: device.color,
+                  burstRadius: size * 0.45,
+                  child: TweenAnimationBuilder<Offset>(
+                    tween: Tween<Offset>(
+                      begin: Offset(targetTx, targetTy),
+                      end: Offset(targetTx, targetTy),
+                    ),
+                    duration: isCentered
+                        ? const Duration(milliseconds: 320)
+                        : const Duration(milliseconds: 80),
+                    curve: isCentered ? Curves.elasticOut : Curves.easeOutQuad,
+                    builder: (context, stickOffset, child) {
+                      return Transform.rotate(
+                        angle: tiltAngle,
+                        alignment: Alignment.center,
+                        child: Transform.scale(
+                          scale: isPressed ? 0.92 : 1.0,
+                          alignment: Alignment.center,
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 6,
+                                  offset: Offset(2, 3),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
+                            child: PlayerFaceIndicator(
+                              face: device.face,
+                              size: size * 0.8,
+                              faceTranslateX: stickOffset.dx,
+                              faceTranslateY: stickOffset.dy,
+                              pressed: isPressed,
+                            ),
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-class _Cover extends StatelessWidget {
-  final GameEntry game;
-
-  const _Cover({required this.game});
-
-  @override
-  Widget build(BuildContext context) {
-    if (game.coverPath.isNotEmpty && File(game.coverPath).existsSync()) {
-      return Image.file(File(game.coverPath), fit: BoxFit.cover);
-    }
-    // Placeholder: a color picked from the name, with its initials.
-    final hue = (game.name.codeUnits.fold<int>(0, (a, b) => a + b) * 37) % 360;
-    final words = game.name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty);
-    final initials = words.take(2).map((w) => w[0].toUpperCase()).join();
-    return Container(
-      color: HSLColor.fromAHSL(1, hue.toDouble(), 0.55, 0.72).toColor(),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          fontFamily: 'momo',
-          fontSize: 56,
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayerCursor extends StatelessWidget {
-  final DeviceModel device;
-  final double size;
-
-  const _PlayerCursor({required this.device, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Pointer tip at the cursor's center (top-left of the face).
-          Positioned(
-            left: size / 2 - 7,
-            top: size / 2 - 7,
-            child: Transform.rotate(
-              angle: -math.pi / 4,
-              child: Icon(
-                Icons.navigation_rounded,
-                size: 18,
-                color: device.color,
-              ),
-            ),
-          ),
-          Positioned(
-            left: size / 2,
-            top: size / 2,
-            child: Container(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 6,
-                    offset: Offset(2, 3),
-                  ),
-                ],
-              ),
-              child: PlayerFaceIndicator(face: device.face, size: size * 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CountdownOverlay extends StatelessWidget {
+class _CountdownOverlay extends StatefulWidget {
   final GameEntry? game;
   final ValueListenable<int> secondsLeft;
   final VoidCallback onCancel;
@@ -588,49 +754,130 @@ class _CountdownOverlay extends StatelessWidget {
   });
 
   @override
+  State<_CountdownOverlay> createState() => _CountdownOverlayState();
+}
+
+class _CountdownOverlayState extends State<_CountdownOverlay> {
+  int _lastSeconds = -1;
+  int _burstTrigger = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.secondsLeft.addListener(_onSecondsChanged);
+    _onSecondsChanged();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CountdownOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.secondsLeft != widget.secondsLeft) {
+      oldWidget.secondsLeft.removeListener(_onSecondsChanged);
+      widget.secondsLeft.addListener(_onSecondsChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.secondsLeft.removeListener(_onSecondsChanged);
+    super.dispose();
+  }
+
+  void _onSecondsChanged() {
+    final s = widget.secondsLeft.value;
+    if (s != _lastSeconds) {
+      _lastSeconds = s;
+      _burstTrigger++;
+      if (s > 0) {
+        try {
+          SoundEffectService.instance.playCountdownTick();
+        } catch (_) {}
+      } else if (s == 0) {
+        try {
+          SoundEffectService.instance.playCountdownGo();
+        } catch (_) {}
+      }
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
+    final seconds = widget.secondsLeft.value;
+
     return Container(
-      color: AppColors.screenBackground.withValues(alpha: 0.75),
+      color: AppColors.screenBackground.withValues(alpha: 0.78),
       alignment: Alignment.center,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 28),
         decoration: BoxDecoration(
           color: AppColors.lightColor,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(32),
           border: Border.all(color: AppColors.textPrimary, width: 4),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 16,
+              offset: Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              strings.startingIn(game?.name ?? ''),
+              strings.startingIn(widget.game?.name ?? ''),
               style: _titleStyle,
               textAlign: TextAlign.center,
             ),
-            ValueListenableBuilder<int>(
-              valueListenable: secondsLeft,
-              builder: (context, seconds, _) => TweenAnimationBuilder<double>(
+            const SizedBox(height: 14),
+            ComicBopBurst(
+              trigger: _burstTrigger,
+              burstRadius: 78,
+              rayCount: 12,
+              rayWidth: 4.5,
+              burstColor: AppColors.highlightColor,
+              showDots: true,
+              child: TweenAnimationBuilder<double>(
                 key: ValueKey(seconds),
-                tween: Tween(begin: 1.6, end: 1),
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutBack,
+                tween: Tween(begin: 1.7, end: 1.0),
+                duration: const Duration(milliseconds: 380),
+                curve: Curves.elasticOut,
                 builder: (context, scale, child) =>
                     Transform.scale(scale: scale, child: child),
-                child: Text(
-                  '$seconds',
-                  style: const TextStyle(
-                    fontFamily: 'momo',
-                    fontSize: 96,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                child: Container(
+                  width: 130,
+                  height: 130,
+                  decoration: BoxDecoration(
+                    color: AppColors.highlightColor.withValues(alpha: 0.22),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.textPrimary, width: 4),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    seconds > 0 ? '$seconds' : '!',
+                    style: const TextStyle(
+                      fontFamily: 'momo',
+                      fontSize: 82,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ),
             ),
+            const SizedBox(height: 18),
             JuicyButton(
-              onPressed: onCancel,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              onPressed: widget.onCancel,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
               child: Text(strings.cancel, style: _buttonStyle),
             ),
           ],
@@ -669,13 +916,6 @@ const TextStyle _titleStyle = TextStyle(
   fontFamily: 'momo',
   fontWeight: FontWeight.bold,
   fontSize: 24,
-  color: AppColors.textPrimary,
-);
-
-const TextStyle _cardTitleStyle = TextStyle(
-  fontFamily: 'momo',
-  fontWeight: FontWeight.bold,
-  fontSize: 16,
   color: AppColors.textPrimary,
 );
 

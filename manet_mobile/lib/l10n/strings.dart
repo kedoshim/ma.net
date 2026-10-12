@@ -11,6 +11,34 @@ abstract class AppStrings {
   JoystickStrings get joystick;
   DisconnectStrings get disconnect;
   AndroidOnboardingStrings get androidOnboarding;
+  MenuStrings get menu;
+}
+
+abstract class MenuStrings {
+  String get select;
+  String get back;
+  String get avatar;
+  String get lobbyHint;
+  String get libraryHint;
+  String get overlayHint;
+  String playgroundHint(String owner);
+  String get someone;
+  String get jump;
+  String get seat;
+  String get seatsTitle;
+  String get seatsHint;
+  String get bench;
+  String you(String name);
+  String get swap;
+  String get freeSeat;
+  String get goToBench;
+  String get joinGame;
+  String swapOffer(String name, String fromSeat, String toSeat);
+  String get accept;
+  String get decline;
+  String swapAccepted(String name);
+  String swapDeclined(String name);
+  String get tournamentHint;
 }
 
 abstract class CommonStrings {

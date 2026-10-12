@@ -147,6 +147,58 @@ abstract class SessionStrings {
   String displayLabel(int number, bool primary, int width, int height);
   String get fullscreenGame;
   String get fullscreenGameHint;
+  String get overlayHint;
+  String get overlayResume;
+  String get overlayAddPlayers;
+  String get overlayLayout;
+  String get overlaySwitchGame;
+  String overlayConfirm(String action);
+  String get overlayPlayersTitle;
+  String get overlayPlayersHint;
+  String get overlayLayoutTitle;
+  String overlayControlledBy(String name);
+  String get inputPausedHint;
+  String get coverInvalidLink;
+  String get coverNotAnImage;
+  String get playgroundTitle;
+  String get playgroundHint;
+  String get overlayInCharge;
+  String get overlayHostOwner;
+  String overlayNextSeat(int seat);
+  String get overlayNoSeat;
+  String get overlaySeatsHint;
+  String get freeSeat;
+  String playersInSession(int count);
+  /// 0 = A–Z, 1 = recent, 2 = most players (LibrarySort order).
+  String sortLabel(int sort);
+  String fitsOnly(int players);
+  String get clearFilters;
+  String get noGamesMatch;
+  String playersShort(int min, int max);
+  String get gameDetails;
+  String get noDescription;
+  String fitsSession(int players);
+  String get closeDetails;
+  String get voteForThis;
+  String get watchTrailer;
+  String get gameDescription;
+  String get gameDescriptionHint;
+  String get gameTags;
+  String get gameTagsHint;
+  String get gameTrailer;
+  String get gameTrailerHint;
+  String get searchTrailer;
+  String get steamInfoLoading;
+  String get tournamentTitle;
+  String tournamentIntro(int games);
+  /// [matches] in this round (1 = final), [round] of [rounds].
+  String tournamentRound(int matches, int round, int rounds);
+  String get tournamentLean;
+  String tournamentVotes(int count);
+  String tournamentAdvances(String game);
+  String tournamentDraw(String game);
+  String tournamentChampion(String game);
+  String get tournamentCancel;
 }
 
 abstract class ControllersStrings {
@@ -228,6 +280,8 @@ abstract class SettingsStrings {
   String timeoutValue(int minutes);
   String get languageTitle;
   String get fullScreenTitle;
+  String get matchSecondsTitle;
+  String matchSecondsValue(int seconds);
 }
 
 abstract class SlotsStrings {

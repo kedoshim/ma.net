@@ -5,6 +5,7 @@ import 'package:window_manager/window_manager.dart';
 class AppPreferences {
   static const _controllerModeKey = 'controller_mode';
   static const _fullScreenKey = 'full_screen';
+  static const _matchSecondsKey = 'tournament_match_seconds';
 
   /// 'x360' (x•input) or 'ds4' (d•input). Defaults to x•input.
   static Future<String> controllerMode() async {
@@ -28,6 +29,17 @@ class AppPreferences {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_fullScreenKey, value);
     await windowManager.setFullScreen(value);
+  }
+
+  /// How long each tournament duel lasts.
+  static Future<int> matchSeconds() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getInt(_matchSecondsKey) ?? 10).clamp(3, 60);
+  }
+
+  static Future<void> setMatchSeconds(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_matchSecondsKey, seconds.clamp(3, 60));
   }
 
   /// Re-applies the full screen preference (e.g. after coming back from a

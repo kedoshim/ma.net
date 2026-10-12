@@ -11,6 +11,8 @@ enum ServerAppSound {
   optionsButton,
   themeSelect,
   dropPlayer,
+  countdownTick,
+  countdownGo,
 }
 
 class ServerAppSoundConfig {
@@ -93,6 +95,18 @@ class SoundEffectService {
       volume: 0.5,
       minimumInterval: Duration(milliseconds: 80),
       playerKey: 'dropPlayer',
+    ),
+    ServerAppSound.countdownTick: ServerAppSoundConfig(
+      assetPaths: ['audio/pop1.wav'],
+      volume: 0.9,
+      minimumInterval: Duration(milliseconds: 100),
+      playerKey: 'countdownTick',
+    ),
+    ServerAppSound.countdownGo: ServerAppSoundConfig(
+      assetPaths: ['audio/pop13.wav'],
+      volume: 1.0,
+      minimumInterval: Duration(milliseconds: 100),
+      playerKey: 'countdownGo',
     ),
   };
 
@@ -178,6 +192,10 @@ class SoundEffectService {
   Future<void> playThemeSelect() => play(ServerAppSound.themeSelect);
 
   Future<void> playDropPlayer() => play(ServerAppSound.dropPlayer);
+
+  Future<void> playCountdownTick() => play(ServerAppSound.countdownTick);
+
+  Future<void> playCountdownGo() => play(ServerAppSound.countdownGo);
 
   String _resolveAssetPath(ServerAppSoundConfig config) {
     if (!config.randomizeAsset || config.assetPaths.length == 1) {

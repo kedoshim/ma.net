@@ -608,6 +608,37 @@ class HostApiService {
 
   Future<void> returnFromGame() => _postJson('/api/session/return');
 
+  /// Shows/hides the in-game overlay (phones toggle it with Home).
+  Future<void> setOverlay(bool open) =>
+      _postJson('/api/session/overlay', {'open': open});
+
+  /// Leaves the tournament and goes back to the library (votes kept).
+  Future<void> cancelTournament() => _postJson('/api/session/cancel-tournament');
+
+  /// Which field of the current duel a player's cursor is in (null: none).
+  Future<void> tournamentVote(String deviceId, String? side) => _postJson(
+    '/api/session/tournament-vote',
+    {'deviceId': deviceId, 'side': side},
+  );
+
+  /// Seconds each tournament match lasts.
+  Future<void> setMatchSeconds(int seconds) =>
+      _postJson('/api/session/settings', {'matchSeconds': seconds});
+
+  /// Asks the server to move MaNet's window onto the game's monitor.
+  Future<void> placeOverlayWindow() => _postJson('/api/session/place-overlay');
+
+  /// Asks the server to bring the running game's window to the front.
+  Future<void> focusGame() => _postJson('/api/session/focus-game');
+
+  /// Close the running game and go back to picking one.
+  Future<void> switchGame() => _postJson('/api/session/switch-game');
+
+  /// Screenshot of the game taken when the overlay opened; [shotId] busts
+  /// the image cache between openings.
+  String overlayShotUrl(int shotId) =>
+      '$baseUrl/api/session/overlay-shot?v=$shotId';
+
   Future<List<DisplayInfo>> fetchDisplays() async {
     final response = await http
         .get(Uri.parse('$baseUrl/api/displays'))

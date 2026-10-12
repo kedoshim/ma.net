@@ -49,7 +49,7 @@ class EnUsSessionStrings implements SessionStrings {
   String get libraryTitle => 'Pick a game';
   @override
   String get libraryHint =>
-      'Stick moves · A votes · B removes vote · START plays the top pick · SELECT goes back';
+      'Stick moves · A votes, opens details (i) and filters · B removes the vote or closes details · START decides';
   @override
   String get backToLobby => 'Lobby';
   @override
@@ -178,6 +178,121 @@ class EnUsSessionStrings implements SessionStrings {
   String get fullscreenGame => 'Open full screen';
   @override
   String get fullscreenGameHint => 'If the game opens in a window, ma•net stretches it over the whole screen, borderless.';
+  @override
+  String get overlayHint => '↑ ↓ choose · A confirm · B back · Home closes';
+  @override
+  String get overlayResume => 'Back to the game';
+  @override
+  String get overlayAddPlayers => 'Add players';
+  @override
+  String get overlayLayout => 'Controller layout';
+  @override
+  String get overlaySwitchGame => 'Switch game';
+  @override
+  String overlayConfirm(String action) => '$action? Press again';
+  @override
+  String get overlayPlayersTitle => 'Bring more people!';
+  @override
+  String get overlayPlayersHint => 'Point a phone camera at the QR code or open the link.';
+  @override
+  String get overlayLayoutTitle => 'Controller layout';
+  @override
+  String overlayControlledBy(String name) => 'In control: $name';
+  @override
+  String get inputPausedHint =>
+      'Controllers are paused while the game is not in front, so they don\'t touch other programs.';
+  @override
+  String get coverInvalidLink => 'That doesn\'t look like a link. Paste the full image address.';
+  @override
+  String get coverNotAnImage =>
+      'That link opens a page, not an image. Right-click the image and use "Copy image address".';
+  @override
+  String get playgroundTitle => 'Meanwhile...';
+  @override
+  String get playgroundHint => 'Stick moves, Select jumps. You can climb on top of each other!';
+  @override
+  String get overlayInCharge => 'is in charge';
+  @override
+  String get overlayHostOwner => 'Menu opened on the PC';
+  @override
+  String overlayNextSeat(int seat) => 'Whoever joins now becomes p$seat';
+  @override
+  String get overlayNoSeat => 'All seats are taken: newcomers go to the bench.';
+  @override
+  String get overlaySeatsHint => 'To trade places or go to the bench, use the Seat button on the phone.';
+  @override
+  String get freeSeat => 'Free';
+  @override
+  String playersInSession(int count) =>
+      count == 1 ? '1 player in the session' : '$count players in the session';
+  @override
+  String sortLabel(int sort) => switch (sort) {
+    1 => 'Recent',
+    2 => 'Most players',
+    _ => 'A–Z',
+  };
+  @override
+  String fitsOnly(int players) => 'Fits $players';
+  @override
+  String get clearFilters => 'Clear';
+  @override
+  String get noGamesMatch => 'No games match these filters.';
+  @override
+  String playersShort(int min, int max) => min == max ? '$min' : '$min–$max';
+  @override
+  String get gameDetails => 'Details';
+  @override
+  String get noDescription => 'No description yet.';
+  @override
+  String fitsSession(int players) =>
+      players == 1 ? 'Playable solo' : 'Playable with all $players';
+  @override
+  String get closeDetails => 'Close';
+  @override
+  String get voteForThis => 'Vote for this';
+  @override
+  String get watchTrailer => 'Watch trailer';
+  @override
+  String get gameDescription => 'Description';
+  @override
+  String get gameDescriptionHint => 'A sentence or two about the game';
+  @override
+  String get gameTags => 'Tags';
+  @override
+  String get gameTagsHint => 'Comma separated: Racing, Party, Local co-op';
+  @override
+  String get gameTrailer => 'Trailer';
+  @override
+  String get gameTrailerHint => 'Video link (YouTube, Steam...)';
+  @override
+  String get searchTrailer => 'Search YouTube';
+  @override
+  String get steamInfoLoading => 'Getting description and tags from Steam...';
+  @override
+  String get tournamentTitle => 'Tournament!';
+  @override
+  String tournamentIntro(int games) =>
+      '$games games in the running: the most voted in each duel advances';
+  @override
+  String tournamentRound(int matches, int round, int rounds) => switch (matches) {
+    1 => 'Final',
+    2 => 'Semifinal',
+    4 => 'Quarterfinal',
+    _ => 'Round $round of $rounds',
+  };
+  @override
+  String get tournamentLean =>
+      'Move your face to the side of the game you want to play';
+  @override
+  String tournamentVotes(int count) => count == 1 ? '1 vote' : '$count votes';
+  @override
+  String tournamentAdvances(String game) => '$game advances!';
+  @override
+  String tournamentDraw(String game) => 'Tie! $game advances by draw.';
+  @override
+  String tournamentChampion(String game) => "Let's play $game!";
+  @override
+  String get tournamentCancel => 'Library';
 }
 
 class EnUsControllersStrings implements ControllersStrings {
@@ -440,6 +555,10 @@ class EnUsSettingsStrings implements SettingsStrings {
   String get languageTitle => 'Language';
   @override
   String get fullScreenTitle => 'Full screen (F11)';
+  @override
+  String get matchSecondsTitle => 'Tournament duel length';
+  @override
+  String matchSecondsValue(int seconds) => '${seconds}s';
 }
 
 

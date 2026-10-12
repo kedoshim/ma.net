@@ -107,13 +107,19 @@ void main() {
       final icon = File('assets/icon/icon.png').absolute.path;
       kart = (await post('/api/games', {
         'name': 'Kart Rápido', 'path': Platform.resolvedExecutable, 'coverPath': icon,
+        'description': 'Corridas malucas com itens, atalhos e muita casca de banana pelo caminho.',
+        'tags': ['Corrida', 'Tela dividida'],
+        'trailerUrl': 'https://www.youtube.com/watch?v=tKlRN2YpxRE',
         'minPlayers': 1, 'maxPlayers': 4,
       }))['game'];
       party = (await post('/api/games', {
         'name': 'Party Ilha', 'path': Platform.resolvedExecutable, 'minPlayers': 2, 'maxPlayers': 8,
+        'description': 'Minigames rápidos numa ilha: quem juntar mais estrelas vence.',
+        'tags': ['Festa', 'Co-op'],
       }))['game'];
       solo = (await post('/api/games', {
         'name': 'Aventura Solo', 'path': Platform.resolvedExecutable, 'minPlayers': 1, 'maxPlayers': 1,
+        'tags': ['Aventura'],
       }))['game'];
     });
 
@@ -161,6 +167,7 @@ void main() {
 
     // Bruno and Carla vote through the API (same as an A press on a card).
     await tester.runAsync(() async {
+      await post('/api/session/vote', {'deviceId': 'fake1', 'gameId': party['id']});
       await post('/api/session/vote', {'deviceId': 'fake2', 'gameId': party['id']});
     });
     await settle();
@@ -177,6 +184,63 @@ void main() {
     );
     // ignore: avoid_print
     print('VOTE for 1-player game with 3 players accepted: ${denied?['success']}');
+
+    // Three different picks -> elimination tournament.
+    Future<String?> stage() async {
+      final request = await client.getUrl(Uri.parse('$base/api/session'));
+      final body = jsonDecode(await (await request.close()).transform(utf8.decoder).join());
+      final session = (body['session'] ?? body) as Map<String, dynamic>;
+      return (session['tournament'] as Map<String, dynamic>?)?['stage'] as String?;
+    }
+
+    Future<void> waitStage(String wanted, {int maxMs = 12000}) async {
+      for (var waited = 0; waited < maxMs; waited += 200) {
+        if (await tester.runAsync(stage) == wanted) return;
+        await settle(200);
+      }
+      // ignore: avoid_print
+      print('TOURNAMENT stage $wanted not reached');
+    }
+
+    await tester.runAsync(() async {
+      final race = (await post('/api/games', {
+        'name': 'Corrida Maluca', 'path': Platform.resolvedExecutable, 'minPlayers': 1, 'maxPlayers': 4,
+        'tags': ['Corrida'],
+      }))['game'];
+      await post('/api/session/settings', {'matchSeconds': 5});
+      await post('/api/session/vote', {'deviceId': 'fake3', 'gameId': null});
+      await post('/api/session/vote', {'deviceId': 'fake1', 'gameId': kart['id']});
+      await post('/api/session/vote', {'deviceId': 'fake3', 'gameId': race['id']});
+    });
+    await settle(1200);
+    await shot('7b_tournament_intro');
+    await waitStage('match');
+    await settle(300);
+    // Ana walks to the left field, Bruno to the right; Carla stays in the
+    // middle (no vote) for the shot, then joins Ana.
+    phones[0].stick(-0.9, 0);
+    phones[1].stick(0.9, 0);
+    await settle(500);
+    phones[0].stick(0, 0);
+    phones[1].stick(0, 0);
+    await settle(500);
+    await shot('7c_tournament_match');
+    phones[2].stick(-0.9, 0.3);
+    await settle(400);
+    phones[2].stick(0, 0);
+    await waitStage('result');
+    await settle(700);
+    await shot('7d_tournament_result');
+    await waitStage('champion', maxMs: 16000);
+    await settle(900);
+    await shot('7e_tournament_champion');
+    await tester.runAsync(() async {
+      await post('/api/session/cancel-tournament', {});
+      for (final id in ['fake1', 'fake2', 'fake3']) {
+        await post('/api/session/vote', {'deviceId': id, 'gameId': null});
+      }
+    });
+    await settle();
 
     // Manage games dialog.
     await tester.tap(find.byIcon(Icons.edit_rounded).first);
@@ -219,6 +283,77 @@ void main() {
     Navigator.of(tester.element(find.text('Games'))).pop();
     await settle(600);
     await shot('13_library_cards');
+
+    // Filters, sorting and the details panel.
+    await tester.tap(find.text('Corrida').first);
+    await tester.tap(find.text('A–Z'));
+    await settle(500);
+    await shot('13b_library_filtered');
+    await tester.tap(find.text('Clear'));
+    await settle(300);
+    await tester.tap(find.byIcon(Icons.info_outline_rounded).first);
+    await settle(1500);
+    await shot('13c_library_details');
+    await tester.tap(find.text('Close'));
+    await settle(500);
+
+    // Phase 4: a running game and the in-game overlay.
+    late Map<String, dynamic> sleeper;
+    await tester.runAsync(() async {
+      sleeper = (await post('/api/games', {
+        'name': 'Sleeper',
+        'path': Platform.environment['MANET_SLEEPER_EXE'] ?? r'C:\Python313\python.exe',
+        'arguments': '-c "import time; time.sleep(120)"',
+        'minPlayers': 1,
+        'maxPlayers': 4,
+        'fullscreen': false,
+      }))['game'];
+      await post('/api/session/play', {'gameId': sleeper['id']});
+    });
+    await settle(4500);
+    await shot('14_in_game');
+    // Only the player who opened the overlay (phones[0]) can drive it.
+    void press(String button) => phones[0].press(button);
+    phones[0].socket.add(jsonEncode({'type': 'home_pressed'}));
+    await settle(2500);
+    await shot('15_overlay');
+    // The others play in the face playground meanwhile (and can't move the
+    // owner's menu): Bruno rolls right and jumps, Carla jumps.
+    phones[1].stick(0.9, 0);
+    await settle(700);
+    phones[1].press('A');
+    await settle(100);
+    await shot('15b_overlay_playground');
+    phones[1].stick(0, 0);
+    await settle(1500);
+    await shot('15c_overlay_playground_rest');
+    press('DOWN');
+    await settle(400);
+    press('A');
+    await settle(1500);
+    await shot('16_overlay_add_players');
+    press('B');
+    await settle(300);
+    press('DOWN');
+    await settle(300);
+    press('A');
+    await settle(800);
+    await shot('17_overlay_layouts');
+    press('B');
+    await settle(300);
+    press('DOWN');
+    press('DOWN');
+    await settle(300);
+    press('A');
+    await settle(600);
+    await shot('18_overlay_confirm_close');
+    press('A');
+    await settle(1500);
+    await shot('19_after_close_game');
+    await tester.runAsync(() async {
+      final request = await client.deleteUrl(Uri.parse('$base/api/games/${sleeper['id']}'));
+      await (await request.close()).drain<void>();
+    });
 
     // Leave the lobby like the power button does; must not throw.
     Navigator.of(tester.element(find.byType(HomePageScreen))).pushReplacement(

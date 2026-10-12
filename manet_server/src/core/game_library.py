@@ -3,6 +3,7 @@ Games the couch can pick from. Registered manually by the host (path to the
 executable or shortcut, cover image, player range, controller layout).
 """
 import json
+import time
 import logging
 import os
 import sys
@@ -68,6 +69,19 @@ def normalize_game(data: dict, game_id: str | None = None) -> dict:
             "presetId": rule.get("presetId") or None,
         })
 
+    tags = []
+    raw_tags = data.get("tags") or []
+    if isinstance(raw_tags, str):
+        raw_tags = raw_tags.split(",")
+    for tag in raw_tags:
+        tag = str(tag).strip()[:24]
+        if tag and tag.lower() not in (t.lower() for t in tags):
+            tags.append(tag)
+    try:
+        added_at = float(data.get("addedAt") or 0) or time.time()
+    except (TypeError, ValueError):
+        added_at = time.time()
+
     display = data.get("display")
     display = int(display) if isinstance(display, (int, float)) and display >= 0 else None
 
@@ -89,6 +103,12 @@ def normalize_game(data: dict, game_id: str | None = None) -> dict:
         "display": display,
         # Make windowed games cover their monitor (borderless).
         "fullscreen": bool(data.get("fullscreen", True)),
+        # Shown in the library: short text, genre/category tags, a trailer
+        # link (YouTube/Steam/any URL) and when it was added (for sorting).
+        "description": str(data.get("description") or "").strip()[:1200],
+        "tags": tags[:12],
+        "trailerUrl": str(data.get("trailerUrl") or "").strip(),
+        "addedAt": added_at,
     }
 
 
@@ -114,7 +134,11 @@ class GameLibraryStore:
             if self.storage_path.exists():
                 raw = json.loads(self.storage_path.read_text(encoding="utf-8"))
                 games = []
-                for item in raw.get("games", []):
+                for index, item in enumerate(raw.get("games", [])):
+                    # Games saved before addedAt existed keep their order,
+                    # older than anything added from now on.
+                    if isinstance(item, dict) and not item.get("addedAt"):
+                        item["addedAt"] = 1 + index
                     try:
                         games.append(normalize_game(item, item.get("id")))
                     except GameValidationError:
@@ -145,6 +169,8 @@ class GameLibraryStore:
     def update(self, game_id: str, data: dict) -> dict | None:
         for index, existing in enumerate(self._games):
             if existing["id"] == game_id:
+                if isinstance(data, dict) and not data.get("addedAt"):
+                    data = {**data, "addedAt": existing.get("addedAt")}
                 game = normalize_game(data, game_id)
                 self._games[index] = game
                 self._save()

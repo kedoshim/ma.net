@@ -45,6 +45,10 @@ if sys.platform == "win32":
     user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
     user32.GetWindow.restype = wintypes.HWND
     user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.IsIconic.argtypes = [wintypes.HWND]
     user32.MonitorFromWindow.restype = wintypes.HMONITOR
     user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
     user32.SetWindowPos.argtypes = [
@@ -201,3 +205,78 @@ async def enforce_placement(running, display_index: int | None, fullscreen: bool
                 return
         else:
             placed_at = None
+
+
+def game_monitor(pids: set[int]) -> dict | None:
+    """Monitor showing the game (its main window, else the foreground one)."""
+    if user32 is None:
+        return None
+    hwnd = find_main_window(pids) if pids else None
+    hwnd = hwnd or user32.GetForegroundWindow()
+    if not hwnd:
+        return None
+    return _monitor_info(user32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+
+
+def foreground_pid() -> int | None:
+    if user32 is None:
+        return None
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return None
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return pid.value or None
+
+
+def move_to_monitor(pid: int, monitor: dict) -> bool:
+    """Move a process's main window onto `monitor` (centered, same size),
+    so the desktop can then go full screen there."""
+    if user32 is None or not pid or not monitor:
+        return False
+    hwnd = find_main_window({pid})
+    if not hwnd:
+        return False
+    current = _monitor_info(user32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+    if current and current["device"] == monitor["device"]:
+        return True
+    _, _, w, h = _window_rect(hwnd)
+    w, h = min(w, monitor["width"]), min(h, monitor["height"])
+    x = monitor["x"] + (monitor["width"] - w) // 2
+    y = monitor["y"] + (monitor["height"] - h) // 2
+    return bool(user32.SetWindowPos(hwnd, None, x, y, w, h, SWP_SHOWWINDOW | SWP_NOZORDER))
+
+
+def capture_game_screen(monitor: dict | None) -> bytes | None:
+    """JPEG of `monitor` (or the main one), small enough to send to the
+    desktop as the overlay's backdrop."""
+    from io import BytesIO
+    from PIL import ImageGrab
+
+    bbox = None
+    if monitor:
+        bbox = (
+            monitor["x"], monitor["y"],
+            monitor["x"] + monitor["width"], monitor["y"] + monitor["height"],
+        )
+    image = ImageGrab.grab(bbox=bbox, all_screens=True)
+    image.thumbnail((1280, 1280))
+    buffer = BytesIO()
+    image.convert("RGB").save(buffer, format="JPEG", quality=70)
+    return buffer.getvalue()
+
+
+SW_RESTORE = 9
+
+
+def bring_to_front(pids: set[int]) -> bool:
+    """Give the game window the foreground again (after the overlay closes).
+    Works because the desktop app allowed it right before stepping aside."""
+    if user32 is None or not pids:
+        return False
+    hwnd = find_main_window(pids)
+    if not hwnd:
+        return False
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, SW_RESTORE)
+    return bool(user32.SetForegroundWindow(hwnd))

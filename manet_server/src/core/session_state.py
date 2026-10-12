@@ -19,8 +19,22 @@ from enum import Enum
 
 from src.core.slot_handler import reset_slot_gamepad
 from src.core.game_library import resolve_settings
+from src.core.tournament import (
+    ALL_VOTED_GRACE_SECONDS,
+    CHAMPION_SECONDS,
+    INTRO_SECONDS,
+    MATCH_SECONDS_DEFAULT,
+    RESULT_SECONDS,
+    Tournament,
+)
 from src.services.game_launcher import LaunchError, RunningGame, start_game, watch_game
-from src.services.window_placement import enforce_placement
+from src.services.window_placement import (
+    capture_game_screen,
+    enforce_placement,
+    foreground_pid,
+    game_monitor,
+    move_to_monitor,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +44,12 @@ COUNTDOWN_SECONDS = 3.0
 class SessionPhase(str, Enum):
     LOBBY = "lobby"
     LIBRARY = "library"
+    # Elimination tournament between the games voted in the library.
+    TOURNAMENT = "tournament"
     IN_GAME = "in_game"
+
+
+MENU_PHASES = (SessionPhase.LOBBY, SessionPhase.LIBRARY, SessionPhase.TOURNAMENT)
 
 
 class InputMode(str, Enum):
@@ -38,6 +57,16 @@ class InputMode(str, Enum):
     GAME = "game"
     # Phone input drives MaNet menus/cursors and never reaches the game.
     MENU = "menu"
+    # A MaNet-launched game is running but another window is in front:
+    # input reaches nothing, so it can't leak into other games/apps.
+    PAUSED = "paused"
+
+
+# How long a "trade places?" request waits for an answer.
+SWAP_OFFER_SECONDS = 20.0
+
+# How often the running game's foreground status is checked.
+FOREGROUND_POLL_SECONDS = 0.3
 
 
 class SessionState:
@@ -58,6 +87,21 @@ class SessionState:
         self._watch_task: asyncio.Task | None = None
         self._placement_task: asyncio.Task | None = None
         self.last_error: str | None = None
+        self.overlay_open = False
+        # Only the player who opened the overlay drives it (None: anyone,
+        # e.g. after the opener disconnected or the host opened it).
+        self.overlay_owner: str | None = None
+        self.overlay_monitor: dict | None = None
+        self.overlay_shot: bytes | None = None
+        self.overlay_shot_id = 0
+        self.game_in_front = True
+        self._guard_task: asyncio.Task | None = None
+        self._last_phone_payloads: dict[str, dict] = {}
+        # target deviceId -> (requesting deviceId, expiry timestamp)
+        self._swap_offers: dict[str, tuple[str, float]] = {}
+        self.tournament: Tournament | None = None
+        self._tournament_task: asyncio.Task | None = None
+        self.match_seconds = MATCH_SECONDS_DEFAULT
 
     # ---------------------------------------------------------------- players
 
@@ -88,6 +132,11 @@ class SessionState:
                 changed = True
         if changed and self.phase == SessionPhase.LIBRARY:
             self._votes_changed()
+        if self.tournament is not None:
+            self.tournament.drop_voters(players)
+        if self.overlay_owner is not None and self.overlay_owner not in players:
+            # The opener left; let anyone drive the overlay so it can't get stuck.
+            self.overlay_owner = None
         # Always publish: a player joining changes "everyone ready" too.
         self.broadcast()
 
@@ -97,13 +146,18 @@ class SessionState:
         return self.input_mode == InputMode.GAME
 
     def _refresh_input_mode(self):
-        menu = self.focused and self.phase in (SessionPhase.LOBBY, SessionPhase.LIBRARY)
-        mode = InputMode.MENU if menu else InputMode.GAME
+        menu = self.overlay_open or (self.focused and self.phase in MENU_PHASES)
+        if menu:
+            mode = InputMode.MENU
+        elif self.phase == SessionPhase.IN_GAME and not self.game_in_front:
+            mode = InputMode.PAUSED
+        else:
+            mode = InputMode.GAME
         if mode == self.input_mode:
             return
         self.input_mode = mode
         LOGGER.info("Input mode -> %s", mode.value)
-        if mode == InputMode.MENU:
+        if mode != InputMode.GAME:
             # Whatever was held when the game lost the input must not stay
             # stuck pressed on the virtual pads.
             for slot in self.manager.slots:
@@ -125,8 +179,10 @@ class SessionState:
         (A) are resolved by the desktop, which knows where each cursor is."""
         if state != "down" or device_id not in self.player_ids():
             return
+        # Menus use a game-independent scheme: Select (A) and Back (B); the
+        # console-style START/SELECT keep working too.
         if self.phase == SessionPhase.LOBBY:
-            if button == "START":
+            if button in ("A", "START"):
                 if device_id not in self.ready:
                     self.ready.add(device_id)
                     self.manager.pulse_device(device_id)
@@ -137,21 +193,89 @@ class SessionState:
                 self.ready.discard(device_id)
                 self.broadcast()
         elif self.phase == SessionPhase.LIBRARY:
-            if button == "B":
-                self.vote(device_id, None)
-            elif button == "SELECT":
+            # B (Back) is resolved by the desktop, which knows whether it
+            # should close the game details panel, remove the vote or leave.
+            if button == "SELECT":
                 self.back_to_lobby()
             elif button == "START" and self.countdown_game_id is None:
-                leader = self.leading_game_id()
-                if leader:
-                    self.start_countdown(leader)
+                self.decide()
 
     def handle_home_pressed(self, device_id: str):
+        """A phone's Home button toggles the in-game overlay."""
+        if self.phase != SessionPhase.IN_GAME or device_id not in self.player_ids():
+            return
+        if self.overlay_open and self.overlay_owner not in (None, device_id):
+            return  # someone else is using the overlay
         LOGGER.info("Home pressed by device %s", device_id)
-        self.admin_panel.broadcast_event({
-            "type": "overlay_toggle",
-            "deviceId": device_id,
-        })
+        self.manager.pulse_device(device_id)
+        asyncio.get_running_loop().create_task(
+            self.set_overlay(not self.overlay_open, owner=device_id)
+        )
+
+    # ------------------------------------------------------------- overlay
+
+    async def set_overlay(self, open_: bool, owner: str | None = None):
+        """Show/hide the overlay over the running game. While it is open,
+        phone input drives the overlay menu and never reaches the game."""
+        if self.phase != SessionPhase.IN_GAME:
+            open_ = False
+        if open_ == self.overlay_open:
+            return
+        if open_:
+            pids = self._game_pids()
+            self.overlay_monitor = await asyncio.to_thread(game_monitor, pids)
+            try:
+                shot = await asyncio.to_thread(capture_game_screen, self.overlay_monitor)
+            except Exception:
+                LOGGER.exception("Could not capture the game screen")
+                shot = None
+            self.overlay_shot = shot
+            self.overlay_shot_id += 1
+        self.overlay_owner = owner if open_ else None
+        self.overlay_open = open_
+        self._refresh_input_mode()
+        self.broadcast()
+
+    def _game_pids(self) -> set[int]:
+        return self.running.alive_pids() if self.running and self.running.tracked else set()
+
+    async def place_overlay_window(self) -> bool:
+        """Move MaNet's window onto the game's monitor (called by the desktop
+        right before it goes full screen for the overlay)."""
+        desktop_pid = getattr(self.manager.config, "parent_pid", None)
+        if not desktop_pid or not self.overlay_monitor:
+            return False
+        return await asyncio.to_thread(move_to_monitor, desktop_pid, self.overlay_monitor)
+
+    async def _guard_foreground(self):
+        """While a tracked game runs, input only reaches the virtual pads
+        when that game is the foreground window."""
+        try:
+            while self.phase == SessionPhase.IN_GAME and self.running is not None:
+                await asyncio.sleep(FOREGROUND_POLL_SECONDS)
+                if not self.running.tracked:
+                    # Handed off to a launcher: we can't tell which window
+                    # is the game any more, so stop guarding.
+                    if not self.game_in_front:
+                        self.game_in_front = True
+                        self._refresh_input_mode()
+                        self.broadcast()
+                    return
+                pid = await asyncio.to_thread(foreground_pid)
+                pids = await asyncio.to_thread(self._game_pids)
+                in_front = pid is None or pid in pids
+                if in_front != self.game_in_front:
+                    self.game_in_front = in_front
+                    LOGGER.info("Game %s the foreground window", "is" if in_front else "is not")
+                    self._refresh_input_mode()
+                    self.broadcast()
+        except asyncio.CancelledError:
+            pass
+
+    def switch_game(self):
+        """Close the running game and go pick another one."""
+        self.stop_game()
+        self.enter_library()
 
     # -------------------------------------------------------------- phases
 
@@ -173,6 +297,7 @@ class SessionState:
     def back_to_lobby(self):
         if self.phase == SessionPhase.IN_GAME:
             return
+        self._stop_tournament()
         self.cancel_countdown(broadcast=False)
         self.votes.clear()
         self.ready.clear()
@@ -217,9 +342,99 @@ class SessionState:
         self.cancel_countdown(broadcast=False)
         players = self.player_ids()
         if players and all(p in self.votes for p in players):
-            leader = self.leading_game_id()
-            if leader:
-                self.start_countdown(leader, broadcast=False)
+            self.decide(broadcast=False)
+
+    def decide(self, broadcast: bool = True):
+        """Everyone picked (or someone pressed START): one candidate gets a
+        countdown; several play an elimination tournament."""
+        candidates = set(self.votes.values())
+        if len(candidates) >= 2:
+            self.start_tournament()
+        elif candidates:
+            self.start_countdown(next(iter(candidates)), broadcast=broadcast)
+
+    # ---------------------------------------------------------- tournament
+
+    def start_tournament(self) -> bool:
+        if self.phase != SessionPhase.LIBRARY:
+            return False
+        counts: dict[str, int] = {}
+        for game_id in self.votes.values():
+            counts[game_id] = counts.get(game_id, 0) + 1
+        if len(counts) < 2:
+            return False
+        self.cancel_countdown(broadcast=False)
+        self.tournament = Tournament(counts)
+        LOGGER.info("Tournament between %d games", len(counts))
+        self._set_phase(SessionPhase.TOURNAMENT)
+        self._tournament_task = asyncio.get_running_loop().create_task(self._run_tournament())
+        self.broadcast()
+        return True
+
+    def _stop_tournament(self):
+        if self._tournament_task is not None:
+            self._tournament_task.cancel()
+        self._tournament_task = None
+        self.tournament = None
+
+    def cancel_tournament(self):
+        """Back to the library with the votes kept."""
+        if self.phase != SessionPhase.TOURNAMENT:
+            return
+        self._stop_tournament()
+        self._set_phase(SessionPhase.LIBRARY)
+        self.broadcast()
+
+    def tournament_vote(self, device_id: str, side: str | None) -> bool:
+        """The desktop reports which half of the screen each player's
+        cursor is in (None: the middle strip)."""
+        t = self.tournament
+        if t is None or device_id not in self.player_ids():
+            return False
+        if not t.vote(device_id, side):
+            return False
+        if side is not None:
+            self.manager.pulse_device(device_id, strong=0.3, weak=0.2, seconds=0.05)
+        players = set(self.player_ids())
+        if t.ends_at and all(p in t.votes for p in players):
+            # Everyone chose: don't make them wait out the clock.
+            t.ends_at = min(t.ends_at, time.time() + ALL_VOTED_GRACE_SECONDS)
+        self.broadcast()
+        return True
+
+    async def _run_tournament(self):
+        t = self.tournament
+        try:
+            t.stage = "intro"
+            self.broadcast()
+            await asyncio.sleep(INTRO_SECONDS)
+            while t.next_match() is not None:
+                t.stage = "match"
+                t.ends_at = time.time() + self.match_seconds
+                self.broadcast()
+                while time.time() < t.ends_at:
+                    await asyncio.sleep(0.1)
+                t.close_match(set(self.player_ids()))
+                t.stage = "result"
+                t.ends_at = None
+                self.broadcast()
+                await asyncio.sleep(RESULT_SECONDS)
+            t.stage = "champion"
+            self.broadcast()
+            await asyncio.sleep(CHAMPION_SECONDS)
+        except asyncio.CancelledError:
+            return
+        self._tournament_task = None
+        champion = t.champion
+        self.tournament = None
+        # launch() needs to start from the library phase on failure too.
+        self._set_phase(SessionPhase.LIBRARY)
+        await self.launch(champion)
+        if self.phase == SessionPhase.LIBRARY:
+            self.broadcast()
+
+    def set_match_seconds(self, seconds: float):
+        self.match_seconds = max(3.0, min(60.0, float(seconds)))
 
     # ----------------------------------------------------------- countdown
 
@@ -287,6 +502,8 @@ class SessionState:
             self._placement_task = loop.create_task(
                 enforce_placement(running, game.get("display"), game.get("fullscreen", True))
             )
+            self.game_in_front = True
+            self._guard_task = loop.create_task(self._guard_foreground())
         self.broadcast()
 
     def _on_game_exit(self, handoff: bool):
@@ -303,12 +520,17 @@ class SessionState:
         self.return_from_game()
 
     def return_from_game(self):
-        for task in (self._watch_task, self._placement_task):
+        for task in (self._watch_task, self._placement_task, self._guard_task):
             if task is not None:
                 task.cancel()
         self._watch_task = None
         self._placement_task = None
+        self._guard_task = None
+        self.game_in_front = True
+        self.overlay_owner = None
         self.running = None
+        self.overlay_open = False
+        self.overlay_shot = None
         self.ready.clear()
         self.votes.clear()
         self._set_phase(SessionPhase.LOBBY)
@@ -342,7 +564,151 @@ class SessionState:
             } if self.countdown_game_id else None,
             "runningGame": self.running.to_payload() if self.running else None,
             "lastError": self.last_error,
+            "tournament": self.tournament.to_payload() if self.tournament else None,
+            "matchSeconds": self.match_seconds,
+            "overlayOpen": self.overlay_open,
+            "overlayOwner": self.overlay_owner,
+            "overlayShotId": self.overlay_shot_id if self.overlay_shot else None,
+            "gameInFront": self.game_in_front,
         }
+
+    def phone_payload(self, device_id: str | None = None) -> dict:
+        """What one phone needs: whether a game runs (the face button becomes
+        Home), whether its input drives MaNet menus (it then shows the menu
+        controls: Select / Back / Avatar), and whether someone else holds
+        the overlay."""
+        overlay_mine = self.overlay_open and self.overlay_owner in (None, device_id)
+        # While the overlay is open everyone is in menu mode: the owner drives
+        # the menu, the others play with their faces in the playground.
+        menu = self.input_mode == InputMode.MENU
+        owner_name = None
+        if self.overlay_open and not overlay_mine and self.overlay_owner:
+            owner_name = self.manager.connected_devices.get(self.overlay_owner, {}).get("name")
+        return {
+            "type": "session_phase",
+            "phase": self.phase.value,
+            "overlayOpen": self.overlay_open,
+            "overlayMine": overlay_mine,
+            "overlayOwnerName": owner_name,
+            "menu": menu,
+            "paused": self.input_mode == InputMode.PAUSED,
+            "me": device_id,
+            "mySlot": self.manager.device_map.get(device_id) if device_id else None,
+            "seats": self.seats_payload(),
+        }
+
+    # --------------------------------------------------------------- seats
+
+    def _identity(self, device_id: str) -> dict:
+        identity = self.manager.get_device_identity(device_id)
+        name = self.manager.connected_devices.get(device_id, {}).get("name")
+        slot = self.manager.get_slot_by_device(device_id)
+        if slot is not None and slot.player_name:
+            name = slot.player_name
+        return {
+            "deviceId": device_id,
+            "name": name or "",
+            "color": identity.get("color"),
+            "faceText": identity.get("faceText"),
+            "faceRotation": identity.get("faceRotation"),
+        }
+
+    def seats_payload(self) -> dict:
+        """Who sits where: what phones show to pick a swap or the bench."""
+        slots = []
+        for slot in self.manager.slots:
+            occupant = None
+            if slot.assigned_device_id:
+                occupant = {**self._identity(slot.assigned_device_id), "connected": slot.connected}
+            slots.append({"slot": slot.slot_id, "player": occupant})
+        bench = [
+            self._identity(device_id)
+            for device_id in self.manager.connected_devices
+            if device_id not in self.manager.device_map
+        ]
+        return {"slots": slots, "bench": bench}
+
+    def go_to_bench(self, device_id: str) -> bool:
+        slot = self.manager.get_slot_by_device(device_id)
+        if slot is None:
+            return False
+        LOGGER.info("Device %s moves to the bench", device_id)
+        reset_slot_gamepad(slot)
+        self.manager.unassign_slot(slot.slot_id)
+        self.admin_panel.broadcast_update()
+        return True
+
+    def join_from_bench(self, device_id: str) -> bool:
+        if device_id in self.manager.device_map:
+            return False
+        name = self.manager.connected_devices.get(device_id, {}).get("name")
+        slot = self.manager.assign_slot(device_id, name)
+        if slot is None:
+            return False
+        slot.connected = True
+        self.manager.notify_device(device_id, {
+            "type": "assigned",
+            "slot": slot.slot_id,
+            "name": slot.player_name,
+            **self.manager.get_slot_identity(slot),
+            "total_slots": len(self.manager.slots),
+        })
+        self.admin_panel.broadcast_update()
+        return True
+
+    def request_swap(self, from_id: str, target_id: str) -> bool:
+        """Ask `target_id` to trade places with `from_id`; they must accept."""
+        if from_id == target_id or target_id not in self.manager.device_ws_map:
+            return False
+        from_slot = self.manager.device_map.get(from_id)
+        target_slot = self.manager.device_map.get(target_id)
+        if from_slot is None and target_slot is None:
+            return False
+        self._swap_offers[target_id] = (from_id, time.time() + SWAP_OFFER_SECONDS)
+        self.manager.pulse_device(target_id)
+        self.manager.notify_device(target_id, {
+            "type": "swap_offer",
+            "from": self._identity(from_id),
+            "fromSlot": from_slot,
+            "toSlot": target_slot,
+            "expiresIn": SWAP_OFFER_SECONDS,
+        })
+        return True
+
+    def answer_swap(self, target_id: str, from_id: str, accept: bool) -> bool:
+        offer = self._swap_offers.pop(target_id, None)
+        if offer is None or offer[0] != from_id or time.time() > offer[1]:
+            return False
+        if accept:
+            self._swap_places(from_id, target_id)
+        self.manager.notify_device(from_id, {
+            "type": "swap_result",
+            "accepted": accept,
+            "by": self._identity(target_id),
+        })
+        return True
+
+    def _swap_places(self, a: str, b: str):
+        slot_a = self.manager.device_map.get(a)
+        slot_b = self.manager.device_map.get(b)
+        LOGGER.info("Swapping places: %s (slot %s) <-> %s (slot %s)", a, slot_a, b, slot_b)
+        if slot_a is not None and slot_b is not None:
+            self.manager.swap_slots(slot_a, slot_b)
+        elif slot_b is not None:  # a was on the bench: takes b's place
+            self.manager.unassign_slot(slot_b)
+            self.manager.assign_to_slot(a, slot_b)
+        elif slot_a is not None:
+            self.manager.unassign_slot(slot_a)
+            self.manager.assign_to_slot(b, slot_a)
+        for index in (slot_a, slot_b):
+            if index is not None and index < len(self.manager.slots):
+                reset_slot_gamepad(self.manager.slots[index])
+        self.admin_panel.broadcast_update()
 
     def broadcast(self):
         self.admin_panel.broadcast_event(self.to_payload())
+        for device_id in list(self.manager.device_ws_map.keys()):
+            phone = self.phone_payload(device_id)
+            if phone != self._last_phone_payloads.get(device_id):
+                self._last_phone_payloads[device_id] = phone
+                self.manager.notify_device(device_id, phone)

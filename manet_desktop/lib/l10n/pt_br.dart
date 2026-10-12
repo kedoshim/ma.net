@@ -50,7 +50,7 @@ class PtBrSessionStrings implements SessionStrings {
   String get libraryTitle => 'Escolham o jogo';
   @override
   String get libraryHint =>
-      'Analógico move · A vota · B tira o voto · START joga o mais votado · SELECT volta';
+      'Analógico move · A vota, abre detalhes (i) e filtros · B tira o voto ou fecha detalhes · START decide';
   @override
   String get backToLobby => 'Lobby';
   @override
@@ -180,6 +180,121 @@ class PtBrSessionStrings implements SessionStrings {
   String get fullscreenGame => 'Abrir em tela cheia';
   @override
   String get fullscreenGameHint => 'Se o jogo abrir em janela, o ma•net estica ela na tela inteira, sem bordas.';
+  @override
+  String get overlayHint => '↑ ↓ escolhe · A confirma · B volta · Home fecha';
+  @override
+  String get overlayResume => 'Voltar ao jogo';
+  @override
+  String get overlayAddPlayers => 'Adicionar jogadores';
+  @override
+  String get overlayLayout => 'Layout do controle';
+  @override
+  String get overlaySwitchGame => 'Trocar de jogo';
+  @override
+  String overlayConfirm(String action) => '$action? Aperte de novo';
+  @override
+  String get overlayPlayersTitle => 'Chama mais gente!';
+  @override
+  String get overlayPlayersHint => 'Aponte a câmera do celular para o QR code ou abra o link.';
+  @override
+  String get overlayLayoutTitle => 'Layout do controle';
+  @override
+  String overlayControlledBy(String name) => 'Quem controla: $name';
+  @override
+  String get inputPausedHint =>
+      'Os controles estão pausados enquanto o jogo não estiver na frente, para não mexerem em outros programas.';
+  @override
+  String get coverInvalidLink => 'Isso não parece um link. Cole o endereço completo da imagem.';
+  @override
+  String get coverNotAnImage =>
+      'Esse link abre uma página, não uma imagem. Clique com o botão direito na imagem e use "Copiar endereço da imagem".';
+  @override
+  String get playgroundTitle => 'Enquanto isso...';
+  @override
+  String get playgroundHint => 'Analógico anda, Selecionar pula. Dá pra subir em cima dos outros!';
+  @override
+  String get overlayInCharge => 'está no comando';
+  @override
+  String get overlayHostOwner => 'Menu aberto no PC';
+  @override
+  String overlayNextSeat(int seat) => 'Quem entrar agora vira o p$seat';
+  @override
+  String get overlayNoSeat => 'Todas as vagas estão ocupadas: quem entrar fica no banco.';
+  @override
+  String get overlaySeatsHint => 'Para trocar de lugar ou ir pro banco, use o botão Lugar no celular.';
+  @override
+  String get freeSeat => 'Livre';
+  @override
+  String playersInSession(int count) =>
+      count == 1 ? '1 jogador na sessão' : '$count jogadores na sessão';
+  @override
+  String sortLabel(int sort) => switch (sort) {
+    1 => 'Recentes',
+    2 => 'Mais jogadores',
+    _ => 'A–Z',
+  };
+  @override
+  String fitsOnly(int players) => 'Cabem $players';
+  @override
+  String get clearFilters => 'Limpar';
+  @override
+  String get noGamesMatch => 'Nenhum jogo com esses filtros.';
+  @override
+  String playersShort(int min, int max) => min == max ? '$min' : '$min–$max';
+  @override
+  String get gameDetails => 'Detalhes';
+  @override
+  String get noDescription => 'Sem descrição ainda.';
+  @override
+  String fitsSession(int players) =>
+      players == 1 ? 'Dá pra jogar sozinho' : 'Dá pra jogar com os $players';
+  @override
+  String get closeDetails => 'Fechar';
+  @override
+  String get voteForThis => 'Votar neste';
+  @override
+  String get watchTrailer => 'Ver trailer';
+  @override
+  String get gameDescription => 'Descrição';
+  @override
+  String get gameDescriptionHint => 'Uma ou duas frases sobre o jogo';
+  @override
+  String get gameTags => 'Tags';
+  @override
+  String get gameTagsHint => 'Separadas por vírgula: Corrida, Festa, Co-op local';
+  @override
+  String get gameTrailer => 'Trailer';
+  @override
+  String get gameTrailerHint => 'Link do vídeo (YouTube, Steam...)';
+  @override
+  String get searchTrailer => 'Buscar no YouTube';
+  @override
+  String get steamInfoLoading => 'Buscando descrição e tags na Steam...';
+  @override
+  String get tournamentTitle => 'Torneio!';
+  @override
+  String tournamentIntro(int games) =>
+      '$games jogos na disputa: em cada duelo, o mais votado avança';
+  @override
+  String tournamentRound(int matches, int round, int rounds) => switch (matches) {
+    1 => 'Final',
+    2 => 'Semifinal',
+    4 => 'Quartas de final',
+    _ => 'Rodada $round de $rounds',
+  };
+  @override
+  String get tournamentLean =>
+      'Leve seu rostinho para o lado do jogo que você quer jogar';
+  @override
+  String tournamentVotes(int count) => count == 1 ? '1 voto' : '$count votos';
+  @override
+  String tournamentAdvances(String game) => '$game avança!';
+  @override
+  String tournamentDraw(String game) => 'Empate! No sorteio, $game avança.';
+  @override
+  String tournamentChampion(String game) => 'Vamos jogar $game!';
+  @override
+  String get tournamentCancel => 'Biblioteca';
 }
 
 class PtBrControllersStrings implements ControllersStrings {
@@ -442,6 +557,10 @@ class PtBrSettingsStrings implements SettingsStrings {
   String get languageTitle => 'Idioma';
   @override
   String get fullScreenTitle => 'Tela cheia (F11)';
+  @override
+  String get matchSecondsTitle => 'Tempo de cada duelo do torneio';
+  @override
+  String matchSecondsValue(int seconds) => '${seconds}s';
 }
 
 class PtBrSlotsStrings implements SlotsStrings {

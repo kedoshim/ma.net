@@ -10,6 +10,7 @@ import 'package:manet_desktop/services/sound_effect_service.dart';
 import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import '../../widgets/comic_burst.dart';
 import 'lobby_ready_banner.dart';
 import 'lobby_toolbar.dart';
 import 'package:manet_desktop/services/session_controller.dart';
@@ -746,6 +747,8 @@ class ControllerSlotWidget extends StatefulWidget {
 
 class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
   DeviceModel? _disappearingDevice;
+  bool _wasReady = false;
+  int _readyBopTrigger = 0;
 
   @override
   void didUpdateWidget(covariant ControllerSlotWidget oldWidget) {
@@ -768,6 +771,13 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
     final isReady = context.select<SessionController, bool>(
       (session) => deviceId != null && session.isReady(deviceId),
     );
+    if (isReady && !_wasReady) {
+      _wasReady = true;
+      _readyBopTrigger++;
+      SoundEffectService.instance.playPlayerJoinPop();
+    } else if (!isReady && _wasReady) {
+      _wasReady = false;
+    }
 
     return DragTarget<DragData>(
       onWillAcceptWithDetails: (details) {
@@ -862,17 +872,22 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                               child: Center(
                                 child: DeviceJoinPopEffect(
                                   device: widget.slotModel.device!,
-                                  child: DropBounceEffect(
-                                    key: ValueKey('drop_${widget.slotModel.device!.id}'),
-                                    child: ValueListenableBuilder<DeviceInputState>(
-                                      valueListenable: state.inputListenable(
-                                        widget.slotModel.device!.id,
-                                      ),
-                                      builder: (context, input, _) => DeviceInputIndicator(
-                                        device: widget.slotModel.device!,
-                                        input: input,
-                                        size: widget.scale.half,
-                                        isOnPool: false,
+                                  child: ComicBopBurst(
+                                    trigger: _readyBopTrigger,
+                                    burstColor: widget.slotModel.device!.color,
+                                    burstRadius: widget.scale.quarter,
+                                    child: DropBounceEffect(
+                                      key: ValueKey('drop_${widget.slotModel.device!.id}'),
+                                      child: ValueListenableBuilder<DeviceInputState>(
+                                        valueListenable: state.inputListenable(
+                                          widget.slotModel.device!.id,
+                                        ),
+                                        builder: (context, input, _) => DeviceInputIndicator(
+                                          device: widget.slotModel.device!,
+                                          input: input,
+                                          size: widget.scale.half,
+                                          isOnPool: false,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -883,17 +898,22 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                         : Center(
                             child: DeviceJoinPopEffect(
                               device: widget.slotModel.device!,
-                              child: DropBounceEffect(
-                                key: ValueKey('drop_${widget.slotModel.device!.id}'),
-                                child: ValueListenableBuilder<DeviceInputState>(
-                                  valueListenable: state.inputListenable(
-                                    widget.slotModel.device!.id,
-                                  ),
-                                  builder: (context, input, _) => DeviceInputIndicator(
-                                    device: widget.slotModel.device!,
-                                    input: input,
-                                    size: widget.scale.half,
-                                    isOnPool: false,
+                              child: ComicBopBurst(
+                                trigger: _readyBopTrigger,
+                                burstColor: widget.slotModel.device!.color,
+                                burstRadius: widget.scale.quarter,
+                                child: DropBounceEffect(
+                                  key: ValueKey('drop_${widget.slotModel.device!.id}'),
+                                  child: ValueListenableBuilder<DeviceInputState>(
+                                    valueListenable: state.inputListenable(
+                                      widget.slotModel.device!.id,
+                                    ),
+                                    builder: (context, input, _) => DeviceInputIndicator(
+                                      device: widget.slotModel.device!,
+                                      input: input,
+                                      size: widget.scale.half,
+                                      isOnPool: false,
+                                    ),
                                   ),
                                 ),
                               ),

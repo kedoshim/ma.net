@@ -27,6 +27,7 @@ import 'lobby_toolbar.dart';
 import 'session_stage.dart';
 import '../../services/session_controller.dart';
 import '../../utils/app_preferences.dart';
+import '../library/game_overlay.dart';
 import 'server_alerts.dart';
 import 'onboarding_overlay.dart';
 import 'qr_code_container.dart';
@@ -75,6 +76,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
   late final HostApiService _api;
   late final SessionController _session;
+  late final GamepadState _gamepadState;
   ControllerInventory? _controllerInventory;
   Timer? _inventoryRefreshTimer;
   late final HostWindowService _hostWindowService;
@@ -153,6 +155,91 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _hostWindowService = HostWindowService(api: _api);
     _hostWindowService.start();
     _session = SessionController(_api)..start();
+    _gamepadState = GamepadState(
+      _api,
+      onSlotsUpdated: (newCount) {
+        _scheduleInventoryRefresh();
+        if (_slots != newCount) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _slots = newCount);
+          });
+        }
+      },
+      onControllerModeChanged: (newMode) {
+        if (_controllerMode != newMode) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _controllerMode = newMode;
+              });
+              _syncAlerts();
+              _brandingModeNotifier.value = ControllerBranding.modeFromWire(
+                newMode,
+              );
+            }
+          });
+        }
+      },
+      onGamepadLimitReached: (message) {
+        if (mounted) {
+          _addAlert(message, isError: false);
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 8),
+              content: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.screenBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.textPrimary, width: 4),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: AppColors.textPrimary,
+                      offset: Offset(4, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.highlightColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        message,
+                        style: AppTheme.bodyMedium.copyWith(
+                          fontFamily: 'momo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+      },
+    )..initialize();
     _startupPipeline = StartupConnectionPipeline(
       api: _api,
       onNetworkChanged: _handleNetworkChanged,
@@ -615,6 +702,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _brandingModeNotifier.dispose();
     _hostWindowService.dispose();
     _session.dispose();
+    _gamepadState.dispose();
     _startupPipeline.dispose();
     super.dispose();
   }
@@ -642,466 +730,281 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       dynamicHorizontalPadding = (50.0 + extraPadding).clamp(50.0, maxPadding);
     }
 
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: AppColors.screenBackground,
-        body: SafeArea(
-          top: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              Align(
-                alignment: AlignmentDirectional(-1.0, 0.0),
-                child: Container(
-                  decoration: BoxDecoration(),
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      left: dynamicHorizontalPadding,
-                      top: 40.0,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.max,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(
-                            10.0,
-                            0.0,
-                            0.0,
-                            0.0,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'ma•net',
-                                style: AppTheme.bodyMedium.copyWith(
-                                  fontFamily: 'momo',
-                                  fontSize: 40.0,
-                                  letterSpacing: 0.0,
-                                ),
-                              ),
-                              Container(
-                                width: 32,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: AppColors.highlightColor,
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ],
-                          ),
+    return Stack(
+      fit: StackFit.expand,
+
+      children: [
+        GestureDetector(
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            FocusManager.instance.primaryFocus?.unfocus();
+          },
+          child: Scaffold(
+            key: scaffoldKey,
+            backgroundColor: AppColors.screenBackground,
+            body: SafeArea(
+              top: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional(-1.0, 0.0),
+                    child: Container(
+                      decoration: BoxDecoration(),
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          left: dynamicHorizontalPadding,
+                          top: 40.0,
                         ),
-                        const Spacer(),
-                        if (_alerts.isNotEmpty) ...[
-                          AlertIcon(
-                            alerts: _alerts,
-                            onTap: () {
-                              _markAlertsSeen();
-                              showDialog(
-                                context: context,
-                                builder: (c) => ServerAlertsDialog(
-                                  alerts: _alerts,
-                                  onDismiss: _dismissAlert,
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        _buildControllersButton(),
-                        const SizedBox(width: 8),
-                        JuicyIconButton(
-                          size: 48,
-                          borderRadius: 14,
-                          icon: const Icon(Icons.settings),
-                          onTap: () {
-                            SoundEffectService.instance.playOptionsButton();
-                            showDialog(
-                              context: context,
-                              builder: (context) => ServerOptionsPopup(
-                                currentTheme: _currentTheme,
-                                currentTimeoutMinutes:
-                                    _reservationTimeoutMinutes,
-                                onThemeChanged: (theme) async {
-                                  setState(() => _currentTheme = theme);
-                                  try {
-                                    final prefs =
-                                        await SharedPreferences.getInstance();
-                                    await prefs.setString(
-                                      'selected_theme',
-                                      theme.name,
-                                    );
-                                  } catch (_) {}
-                                },
-                                onTimeoutChanged: (timeoutMinutes) async {
-                                  setState(
-                                    () => _reservationTimeoutMinutes =
-                                        timeoutMinutes,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.max,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Padding(
+                              padding: EdgeInsetsDirectional.fromSTEB(
+                                10.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'ma•net',
+                                    style: AppTheme.bodyMedium.copyWith(
+                                      fontFamily: 'momo',
+                                      fontSize: 40.0,
+                                      letterSpacing: 0.0,
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 32,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.highlightColor,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_alerts.isNotEmpty) ...[
+                              AlertIcon(
+                                alerts: _alerts,
+                                onTap: () {
+                                  _markAlertsSeen();
+                                  showDialog(
+                                    context: context,
+                                    builder: (c) => ServerAlertsDialog(
+                                      alerts: _alerts,
+                                      onDismiss: _dismissAlert,
+                                    ),
                                   );
-                                  try {
-                                    final prefs =
-                                        await SharedPreferences.getInstance();
-                                    await prefs.setInt(
-                                      'reservation_timeout_minutes',
-                                      timeoutMinutes,
-                                    );
-                                    await _api.resetControllers(
-                                      reservationTimeout: timeoutMinutes * 60,
-                                    );
-                                  } catch (e) {
-                                    debugPrint(
-                                      'Failed to save or apply reservation timeout: $e',
-                                    );
-                                  }
                                 },
                               ),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        JuicyIconButton(
-                          size: 48,
-                          borderRadius: 14,
-                          icon: const Icon(Icons.power_settings_new_rounded),
-                          onTap: () async {
-                            print('Turning off ...');
-
-                            await ServerProcessService.instance.stopServer();
-
-                            if (!mounted) return;
-
-                            Navigator.of(context).pushAndRemoveUntil(
-                              PageRouteBuilder(
-                                pageBuilder:
-                                    (context, animation, secondaryAnimation) =>
-                                        const StartPageWidget(),
-                                transitionsBuilder:
-                                    (
-                                      context,
-                                      animation,
-                                      secondaryAnimation,
-                                      child,
-                                    ) {
-                                      const begin = Offset(-1.0, 0.0);
-                                      const end = Offset.zero;
-                                      const curve = Curves.easeInOutCubic;
-                                      var tween = Tween(
-                                        begin: begin,
-                                        end: end,
-                                      ).chain(CurveTween(curve: curve));
-                                      return SlideTransition(
-                                        position: animation.drive(tween),
-                                        child: child,
-                                      );
+                              const SizedBox(width: 8),
+                            ],
+                            _buildControllersButton(),
+                            const SizedBox(width: 8),
+                            JuicyIconButton(
+                              size: 48,
+                              borderRadius: 14,
+                              icon: const Icon(Icons.settings),
+                              onTap: () {
+                                SoundEffectService.instance.playOptionsButton();
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => ServerOptionsPopup(
+                                    currentTheme: _currentTheme,
+                                    currentTimeoutMinutes:
+                                        _reservationTimeoutMinutes,
+                                    onMatchSecondsChanged: (seconds) =>
+                                        _session.setMatchSeconds(seconds),
+                                    onThemeChanged: (theme) async {
+                                      setState(() => _currentTheme = theme);
+                                      try {
+                                        final prefs =
+                                            await SharedPreferences.getInstance();
+                                        await prefs.setString(
+                                          'selected_theme',
+                                          theme.name,
+                                        );
+                                      } catch (_) {}
                                     },
+                                    onTimeoutChanged: (timeoutMinutes) async {
+                                      setState(
+                                        () => _reservationTimeoutMinutes =
+                                            timeoutMinutes,
+                                      );
+                                      try {
+                                        final prefs =
+                                            await SharedPreferences.getInstance();
+                                        await prefs.setInt(
+                                          'reservation_timeout_minutes',
+                                          timeoutMinutes,
+                                        );
+                                        await _api.resetControllers(
+                                          reservationTimeout:
+                                              timeoutMinutes * 60,
+                                        );
+                                      } catch (e) {
+                                        debugPrint(
+                                          'Failed to save or apply reservation timeout: $e',
+                                        );
+                                      }
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            JuicyIconButton(
+                              size: 48,
+                              borderRadius: 14,
+                              icon: const Icon(
+                                Icons.power_settings_new_rounded,
                               ),
-                              (route) => false,
-                            );
-                          },
+                              onTap: () async {
+                                print('Turning off ...');
+
+                                await ServerProcessService.instance
+                                    .stopServer();
+
+                                if (!mounted) return;
+
+                                Navigator.of(context).pushAndRemoveUntil(
+                                  PageRouteBuilder(
+                                    pageBuilder:
+                                        (
+                                          context,
+                                          animation,
+                                          secondaryAnimation,
+                                        ) => const StartPageWidget(),
+                                    transitionsBuilder:
+                                        (
+                                          context,
+                                          animation,
+                                          secondaryAnimation,
+                                          child,
+                                        ) {
+                                          const begin = Offset(-1.0, 0.0);
+                                          const end = Offset.zero;
+                                          const curve = Curves.easeInOutCubic;
+                                          var tween = Tween(
+                                            begin: begin,
+                                            end: end,
+                                          ).chain(CurveTween(curve: curve));
+                                          return SlideTransition(
+                                            position: animation.drive(tween),
+                                            child: child,
+                                          );
+                                        },
+                                  ),
+                                  (route) => false,
+                                );
+                              },
+                            ),
+                            SizedBox(width: dynamicHorizontalPadding),
+                          ],
                         ),
-                        SizedBox(width: dynamicHorizontalPadding),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  width: MediaQuery.sizeOf(context).width * 1.0,
-                  decoration: BoxDecoration(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: dynamicHorizontalPadding,
-                            vertical: isCompact ? 16.0 : 50.0,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Expanded(
-                                child: ChangeNotifierProvider<SessionController>.value(
-                                  value: _session,
-                                  child: ChangeNotifierProvider(
-                                    create: (_) => GamepadState(
-                                      _api,
-                                      onSlotsUpdated: (newCount) {
-                                        _scheduleInventoryRefresh();
-                                        if (_slots != newCount) {
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                                if (mounted)
-                                                  setState(
-                                                    () => _slots = newCount,
-                                                  );
-                                              });
-                                        }
-                                      },
-                                      onControllerModeChanged: (newMode) {
-                                        if (_controllerMode != newMode) {
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                                if (mounted) {
-                                                  setState(() {
-                                                    _controllerMode = newMode;
-                                                  });
-                                                  _syncAlerts();
-                                                  _brandingModeNotifier.value =
-                                                      ControllerBranding.modeFromWire(
-                                                        newMode,
-                                                      );
-                                                }
-                                              });
-                                        }
-                                      },
-                                      onGamepadLimitReached: (message) {
-                                        if (mounted) {
-                                          _addAlert(message, isError: false);
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).clearSnackBars();
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            SnackBar(
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              elevation: 0,
-                                              behavior:
-                                                  SnackBarBehavior.floating,
-                                              duration: const Duration(
-                                                seconds: 8,
-                                              ),
-                                              content: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 12,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors
-                                                      .screenBackground,
-                                                  borderRadius:
-                                                      BorderRadius.circular(16),
-                                                  border: Border.all(
-                                                    color:
-                                                        AppColors.textPrimary,
-                                                    width: 4,
-                                                  ),
-                                                  boxShadow: const [
-                                                    BoxShadow(
-                                                      color:
-                                                          AppColors.textPrimary,
-                                                      offset: Offset(4, 4),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    Container(
-                                                      width: 40,
-                                                      height: 40,
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors
-                                                            .highlightColor,
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: const Icon(
-                                                        Icons
-                                                            .warning_amber_rounded,
-                                                        color: AppColors
-                                                            .textPrimary,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 12),
-                                                    Expanded(
-                                                      child: Text(
-                                                        message,
-                                                        style: AppTheme
-                                                            .bodyMedium
-                                                            .copyWith(
-                                                              fontFamily:
-                                                                  'momo',
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontSize: 14,
-                                                              color: AppColors
-                                                                  .textPrimary,
-                                                            ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    )..initialize(),
-                                    child: SessionStage(
-                                      presetCatalog: _presetCatalog,
-                                      lobby: AdaptiveStageLayout(
-                                        lobbyToolbar: LobbyToolbar(
-                                          serverSlots: _slots,
-                                          serverLocked: _locked,
-                                          controllerMode: _controllerMode,
-                                          layoutCatalog: _presetCatalog,
-                                          layoutApi: _api,
-                                          brandingModeListenable:
-                                              _brandingModeNotifier,
-                                          modeChangeState: _modeChangeState,
-                                          onLayoutCatalogChanged: (catalog) {
-                                            setState(() {
-                                              _presetCatalog = catalog;
-                                            });
-                                          },
-                                          onApply: (newSlots, newLocked) async {
-                                            final slotsChanged =
-                                                newSlots != _slots;
-                                            final lockedChanged =
-                                                newLocked != _locked;
+                  Expanded(
+                    child: Container(
+                      width: MediaQuery.sizeOf(context).width * 1.0,
+                      decoration: BoxDecoration(),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.max,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: dynamicHorizontalPadding,
+                                vertical: isCompact ? 16.0 : 50.0,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  Expanded(
+                                    child: ChangeNotifierProvider<SessionController>.value(
+                                      value: _session,
+                                      child: ChangeNotifierProvider<GamepadState>.value(
+                                        value: _gamepadState,
+                                        child: SessionStage(
+                                          presetCatalog: _presetCatalog,
+                                          lobby: AdaptiveStageLayout(
+                                            lobbyToolbar: LobbyToolbar(
+                                              serverSlots: _slots,
+                                              serverLocked: _locked,
+                                              controllerMode: _controllerMode,
+                                              layoutCatalog: _presetCatalog,
+                                              layoutApi: _api,
+                                              brandingModeListenable:
+                                                  _brandingModeNotifier,
+                                              modeChangeState: _modeChangeState,
+                                              onLayoutCatalogChanged:
+                                                  (catalog) {
+                                                    setState(() {
+                                                      _presetCatalog = catalog;
+                                                    });
+                                                  },
+                                              onApply: (newSlots, newLocked) async {
+                                                final slotsChanged =
+                                                    newSlots != _slots;
+                                                final lockedChanged =
+                                                    newLocked != _locked;
 
-                                            if (!slotsChanged && !lockedChanged)
-                                              return;
+                                                if (!slotsChanged &&
+                                                    !lockedChanged)
+                                                  return;
 
-                                            try {
-                                              if (slotsChanged) {
-                                                final assigned = await _api
-                                                    .fetchSlots();
-                                                final active = assigned.slots
-                                                    .where(
-                                                      (s) => s.device != null,
-                                                    )
-                                                    .length;
-                                                if (newSlots <
-                                                        assigned.slots.length &&
-                                                    active > 0) {
-                                                  final ok = await showDialog<bool>(
-                                                    context: context,
-                                                    builder: (c) => AlertDialog(
-                                                      backgroundColor: AppColors
-                                                          .screenBackground,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              24,
-                                                            ),
-                                                        side: const BorderSide(
-                                                          color: AppColors
-                                                              .textPrimary,
-                                                          width: 4,
-                                                        ),
-                                                      ),
-                                                      title: Text(
-                                                        context
-                                                            .l10n
-                                                            .home
-                                                            .removeControllersTitle,
-                                                        style: AppTheme
-                                                            .titleSmall
-                                                            .copyWith(
-                                                              color: AppColors
-                                                                  .textPrimary,
-                                                              fontFamily:
-                                                                  'momo',
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w900,
-                                                            ),
-                                                      ),
-                                                      content: Text(
-                                                        context
-                                                            .l10n
-                                                            .home
-                                                            .removeControllersBody,
-                                                        style: AppTheme
-                                                            .bodyMedium
-                                                            .copyWith(
-                                                              color: AppColors
-                                                                  .textPrimary,
-                                                            ),
-                                                      ),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () =>
-                                                              Navigator.of(
-                                                                c,
-                                                              ).pop(false),
-                                                          style: TextButton.styleFrom(
-                                                            foregroundColor:
-                                                                AppColors
-                                                                    .textPrimary,
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      20,
-                                                                  vertical: 12,
+                                                try {
+                                                  if (slotsChanged) {
+                                                    final assigned = await _api
+                                                        .fetchSlots();
+                                                    final active = assigned
+                                                        .slots
+                                                        .where(
+                                                          (s) =>
+                                                              s.device != null,
+                                                        )
+                                                        .length;
+                                                    if (newSlots <
+                                                            assigned
+                                                                .slots
+                                                                .length &&
+                                                        active > 0) {
+                                                      final ok = await showDialog<bool>(
+                                                        context: context,
+                                                        builder: (c) => AlertDialog(
+                                                          backgroundColor: AppColors
+                                                              .screenBackground,
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  24,
                                                                 ),
+                                                            side: const BorderSide(
+                                                              color: AppColors
+                                                                  .textPrimary,
+                                                              width: 4,
+                                                            ),
                                                           ),
-                                                          child: Text(
+                                                          title: Text(
                                                             context
                                                                 .l10n
-                                                                .common
-                                                                .cancel,
-                                                            style:
-                                                                const TextStyle(
-                                                                  fontFamily:
-                                                                      'momo',
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        ElevatedButton(
-                                                          onPressed: () =>
-                                                              Navigator.of(
-                                                                c,
-                                                              ).pop(true),
-                                                          style: ElevatedButton.styleFrom(
-                                                            backgroundColor:
-                                                                AppColors
-                                                                    .highlightColor,
-                                                            foregroundColor:
-                                                                AppColors
-                                                                    .textPrimary,
-                                                            elevation: 0,
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      20,
-                                                                  vertical: 12,
-                                                                ),
-                                                            shape: RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    12,
-                                                                  ),
-                                                              side: const BorderSide(
-                                                                color: AppColors
-                                                                    .textPrimary,
-                                                                width: 3,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          child: Text(
-                                                            context
-                                                                .l10n
-                                                                .common
-                                                                .confirm,
-                                                            style:
-                                                                const TextStyle(
+                                                                .home
+                                                                .removeControllersTitle,
+                                                            style: AppTheme
+                                                                .titleSmall
+                                                                .copyWith(
+                                                                  color: AppColors
+                                                                      .textPrimary,
                                                                   fontFamily:
                                                                       'momo',
                                                                   fontWeight:
@@ -1109,20 +1012,108 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                                           .w900,
                                                                 ),
                                                           ),
+                                                          content: Text(
+                                                            context
+                                                                .l10n
+                                                                .home
+                                                                .removeControllersBody,
+                                                            style: AppTheme
+                                                                .bodyMedium
+                                                                .copyWith(
+                                                                  color: AppColors
+                                                                      .textPrimary,
+                                                                ),
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                    c,
+                                                                  ).pop(false),
+                                                              style: TextButton.styleFrom(
+                                                                foregroundColor:
+                                                                    AppColors
+                                                                        .textPrimary,
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          20,
+                                                                      vertical:
+                                                                          12,
+                                                                    ),
+                                                              ),
+                                                              child: Text(
+                                                                context
+                                                                    .l10n
+                                                                    .common
+                                                                    .cancel,
+                                                                style: const TextStyle(
+                                                                  fontFamily:
+                                                                      'momo',
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            ElevatedButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                    c,
+                                                                  ).pop(true),
+                                                              style: ElevatedButton.styleFrom(
+                                                                backgroundColor:
+                                                                    AppColors
+                                                                        .highlightColor,
+                                                                foregroundColor:
+                                                                    AppColors
+                                                                        .textPrimary,
+                                                                elevation: 0,
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          20,
+                                                                      vertical:
+                                                                          12,
+                                                                    ),
+                                                                shape: RoundedRectangleBorder(
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        12,
+                                                                      ),
+                                                                  side: const BorderSide(
+                                                                    color: AppColors
+                                                                        .textPrimary,
+                                                                    width: 3,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                              child: Text(
+                                                                context
+                                                                    .l10n
+                                                                    .common
+                                                                    .confirm,
+                                                                style: const TextStyle(
+                                                                  fontFamily:
+                                                                      'momo',
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w900,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                  if (ok != true) return;
-                                                }
-                                              }
-                                            } catch (e) {
-                                              if (!mounted) return;
-                                              showDialog(
-                                                context: context,
-                                                barrierDismissible: false,
-                                                builder: (context) =>
-                                                    AppErrorWidget(
+                                                      );
+                                                      if (ok != true) return;
+                                                    }
+                                                  }
+                                                } catch (e) {
+                                                  if (!mounted) return;
+                                                  showDialog(
+                                                    context: context,
+                                                    barrierDismissible: false,
+                                                    builder: (context) => AppErrorWidget(
                                                       title: context
                                                           .l10n
                                                           .error
@@ -1139,114 +1130,145 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                             '/',
                                                           ), // Return to start
                                                     ),
-                                              );
-                                            }
+                                                  );
+                                                }
 
-                                            setState(() {
-                                              _slots = newSlots;
-                                              _locked = newLocked;
-                                            });
+                                                setState(() {
+                                                  _slots = newSlots;
+                                                  _locked = newLocked;
+                                                });
 
-                                            _syncAlerts();
+                                                _syncAlerts();
 
-                                            try {
-                                              await _api.resetControllers(
-                                                slots: slotsChanged
-                                                    ? _slots
-                                                    : null,
-                                                fixed: lockedChanged
-                                                    ? _locked
-                                                    : null,
-                                                reservationTimeout:
-                                                    _reservationTimeoutMinutes *
-                                                    60,
-                                              );
-                                            } catch (e, st) {
-                                              if (mounted) {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (c) => AppErrorWidget(
-                                                    title: context
-                                                        .l10n
-                                                        .error
-                                                        .applyConfigErrorTitle,
-                                                    message: context.l10n.error
-                                                        .applyConfigErrorMessage(
-                                                          e.toString(),
-                                                        ),
-                                                    logs: st.toString(),
-                                                    onRetry: () async {
-                                                      Navigator.of(c).pop();
-                                                      try {
-                                                        await _api.resetControllers(
-                                                          slots: slotsChanged
-                                                              ? _slots
-                                                              : null,
-                                                          fixed: lockedChanged
-                                                              ? _locked
-                                                              : null,
-                                                          reservationTimeout:
-                                                              _reservationTimeoutMinutes *
-                                                              60,
-                                                        );
-                                                      } catch (_) {}
-                                                    },
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                          },
-                                          onOpenSettings: _openModeSettings,
+                                                try {
+                                                  await _api.resetControllers(
+                                                    slots: slotsChanged
+                                                        ? _slots
+                                                        : null,
+                                                    fixed: lockedChanged
+                                                        ? _locked
+                                                        : null,
+                                                    reservationTimeout:
+                                                        _reservationTimeoutMinutes *
+                                                        60,
+                                                  );
+                                                } catch (e, st) {
+                                                  if (mounted) {
+                                                    showDialog(
+                                                      context: context,
+                                                      builder: (c) => AppErrorWidget(
+                                                        title: context
+                                                            .l10n
+                                                            .error
+                                                            .applyConfigErrorTitle,
+                                                        message: context
+                                                            .l10n
+                                                            .error
+                                                            .applyConfigErrorMessage(
+                                                              e.toString(),
+                                                            ),
+                                                        logs: st.toString(),
+                                                        onRetry: () async {
+                                                          Navigator.of(c).pop();
+                                                          try {
+                                                            await _api.resetControllers(
+                                                              slots:
+                                                                  slotsChanged
+                                                                  ? _slots
+                                                                  : null,
+                                                              fixed:
+                                                                  lockedChanged
+                                                                  ? _locked
+                                                                  : null,
+                                                              reservationTimeout:
+                                                                  _reservationTimeoutMinutes *
+                                                                  60,
+                                                            );
+                                                          } catch (_) {}
+                                                        },
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              onOpenSettings: _openModeSettings,
+                                            ),
+                                            connectionSnapshot: _startupPipeline
+                                                .state
+                                                .value
+                                                .connectionSnapshot,
+                                            diagnosticsSnapshot:
+                                                _startupPipeline
+                                                    .state
+                                                    .value
+                                                    .diagnosticsSnapshot,
+                                            selectedConnection: _startupPipeline
+                                                .state
+                                                .value
+                                                .selectedConnection,
+                                            qrEndpointUrl: _startupPipeline
+                                                .state
+                                                .value
+                                                .qrEndpointUrl,
+                                            qrImage: _startupPipeline
+                                                .state
+                                                .value
+                                                .qrImage,
+                                            api: _api,
+                                            isLoadingConnections:
+                                                _startupPipeline
+                                                    .state
+                                                    .value
+                                                    .isLoadingConnections,
+                                            isLoadingDiagnostics:
+                                                _startupPipeline
+                                                    .state
+                                                    .value
+                                                    .isLoadingDiagnostics,
+                                            onSelectConnection:
+                                                _selectConnection,
+                                            onRefreshDiagnostics:
+                                                _refreshDiagnostics,
+                                          ),
                                         ),
-                                        connectionSnapshot: _startupPipeline
-                                            .state
-                                            .value
-                                            .connectionSnapshot,
-                                        diagnosticsSnapshot: _startupPipeline
-                                            .state
-                                            .value
-                                            .diagnosticsSnapshot,
-                                        selectedConnection: _startupPipeline
-                                            .state
-                                            .value
-                                            .selectedConnection,
-                                        qrEndpointUrl: _startupPipeline
-                                            .state
-                                            .value
-                                            .qrEndpointUrl,
-                                        qrImage: _startupPipeline
-                                            .state
-                                            .value
-                                            .qrImage,
-                                        api: _api,
-                                        isLoadingConnections: _startupPipeline
-                                            .state
-                                            .value
-                                            .isLoadingConnections,
-                                        isLoadingDiagnostics: _startupPipeline
-                                            .state
-                                            .value
-                                            .isLoadingDiagnostics,
-                                        onSelectConnection: _selectConnection,
-                                        onRefreshDiagnostics:
-                                            _refreshDiagnostics,
                                       ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
+
+        // In-game overlay over everything (phones open it with Home).
+        ListenableBuilder(
+          listenable: _session,
+
+          builder: (context, _) => _session.snapshot.overlayOpen
+              ? MultiProvider(
+                  providers: [
+                    ChangeNotifierProvider<SessionController>.value(
+                      value: _session,
+                    ),
+
+                    ChangeNotifierProvider<GamepadState>.value(
+                      value: _gamepadState,
+                    ),
+                  ],
+
+                  child: GameOverlay(presetCatalog: _presetCatalog),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }

@@ -48,7 +48,9 @@ class InGameView extends StatelessWidget {
             Text(
               running?.tracked == false
                   ? strings.untrackedHint
-                  : strings.playingHint,
+                  : (session.snapshot.gameInFront
+                        ? strings.playingHint
+                        : strings.inputPausedHint),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'momo',

@@ -8,7 +8,7 @@ from aiohttp import web
 from src.services.qr_service import generate_qr_code_image
 from src.lifecycle.process_exit import exit_process
 from src.core.game_library import GameValidationError
-from src.services.window_placement import list_displays
+from src.services.window_placement import bring_to_front, list_displays
 from src.services.controller_inventory import build_inventory, close_other_servers, snapshot_own_pads
 from src.services.connection_service import ConnectionService
 from src.services.network_diagnostics_service import NetworkDiagnosticsService
@@ -559,6 +559,63 @@ class HTTPRoutes:
 
     async def session_stop_game_handler(self, request):
         self.session.stop_game()
+        return web.json_response({"success": True})
+
+    async def session_overlay_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        # Opened by the host (mouse/keyboard): anyone may drive it.
+        await self.session.set_overlay(bool(data.get("open")), owner=None)
+        return web.json_response({"success": True})
+
+    async def session_overlay_shot_handler(self, request):
+        shot = self.session.overlay_shot
+        if not shot:
+            return web.json_response({"success": False, "code": "no_shot"}, status=404)
+        return web.Response(body=shot, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    async def session_focus_game_handler(self, request):
+        running = self.session.running
+        pids = running.alive_pids() if running and running.tracked else set()
+        focused = await asyncio.to_thread(bring_to_front, pids)
+        return web.json_response({"success": focused})
+
+    async def session_cancel_tournament_handler(self, request):
+        self.session.cancel_tournament()
+        return web.json_response({"success": True})
+
+    async def session_tournament_vote_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        side = data.get("side")
+        ok = self.session.tournament_vote(
+            str(data.get("deviceId") or ""), side if side in ("a", "b") else None
+        )
+        return web.json_response({"success": ok})
+
+    async def session_settings_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        if "matchSeconds" in data:
+            try:
+                self.session.set_match_seconds(float(data["matchSeconds"]))
+            except (TypeError, ValueError):
+                return _bad_request("invalid_matchSeconds")
+        self.session.broadcast()
+        return web.json_response({"success": True, "matchSeconds": self.session.match_seconds})
+
+    async def session_place_overlay_handler(self, request):
+        placed = await self.session.place_overlay_window()
+        return web.json_response({"success": placed})
+
+    async def session_switch_game_handler(self, request):
+        self.session.switch_game()
         return web.json_response({"success": True})
 
     async def session_return_handler(self, request):

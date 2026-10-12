@@ -36,6 +36,62 @@ class PtBrStrings implements AppStrings {
 
   @override
   final androidOnboarding = PtBrAndroidOnboardingStrings();
+
+  @override
+  final menu = PtBrMenuStrings();
+}
+
+class PtBrMenuStrings implements MenuStrings {
+  @override
+  String get select => 'Selecionar';
+  @override
+  String get back => 'Voltar';
+  @override
+  String get avatar => 'Avatar';
+  @override
+  String get lobbyHint => 'Selecionar quando estiver pronto';
+  @override
+  String get libraryHint => 'Mova o cursor e selecione um jogo';
+  @override
+  String get overlayHint => 'Escolha uma opção no menu da TV';
+  @override
+  String playgroundHint(String owner) => '$owner está no menu. Brinca aí: anda e pula!';
+  @override
+  String get someone => 'Alguém';
+  @override
+  String get jump => 'Pular';
+  @override
+  String get seat => 'Lugar';
+  @override
+  String get seatsTitle => 'Lugares';
+  @override
+  String get seatsHint => 'Cada posição é um controle no jogo (P1 é o jogador 1).';
+  @override
+  String get bench => 'Banco de reservas';
+  @override
+  String you(String name) => '$name (você)';
+  @override
+  String get swap => 'Trocar';
+  @override
+  String get freeSeat => 'Livre';
+  @override
+  String get goToBench => 'Ir pro banco';
+  @override
+  String get joinGame => 'Entrar no jogo';
+  @override
+  String swapOffer(String name, String fromSeat, String toSeat) =>
+      '$name quer trocar de lugar com você.\nVocê vai para $fromSeat e $name vai para $toSeat.';
+  @override
+  String get accept => 'Aceitar';
+  @override
+  String get decline => 'Recusar';
+  @override
+  String swapAccepted(String name) => '$name aceitou trocar de lugar!';
+  @override
+  String swapDeclined(String name) => '$name preferiu ficar onde está.';
+  @override
+  String get tournamentHint =>
+      'Torneio! Leve seu rostinho para o lado do jogo que você quer jogar.';
 }
 
 class PtBrCommonStrings implements CommonStrings {
