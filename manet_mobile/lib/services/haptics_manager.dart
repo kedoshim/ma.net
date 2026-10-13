@@ -126,4 +126,67 @@ class HapticsManager {
       Vibration.vibrate(duration: 24);
     }
   }
+
+  /// Plays the tactile signature of a gamepad button, so each button feels
+  /// different regardless of where the preset places it.
+  void buttonTap(String xinputId) {
+    if (!_enabled) return;
+    if (!_isMobileOS) return;
+    // A tap would replace the game's rumble loop on Android; let rumble win.
+    if (_lastIntensity > 0) return;
+
+    final signature = _buttonSignatures[xinputId];
+    if (signature == null) {
+      softTap();
+      return;
+    }
+
+    // Patterns alternate off/on durations, starting with a 0 ms delay.
+    final pattern = <int>[];
+    final intensities = <int>[];
+    for (var i = 0; i < signature.pulses.length; i++) {
+      final (duration, amplitude) = signature.pulses[i];
+      pattern
+        ..add(i == 0 ? 0 : signature.gap)
+        ..add(duration);
+      intensities
+        ..add(0)
+        ..add(amplitude);
+    }
+
+    if (_hasAmplitudeControl) {
+      Vibration.vibrate(pattern: pattern, intensities: intensities);
+    } else {
+      Vibration.vibrate(pattern: pattern);
+    }
+  }
+
+  static const Map<String, _TapSignature> _buttonSignatures = {
+    'A': _TapSignature([(22, 170)]),
+    'B': _TapSignature([(12, 255)]),
+    'X': _TapSignature([(10, 130), (10, 130)], gap: 35),
+    'Y': _TapSignature([(40, 70)]),
+    'RB': _TapSignature([(14, 100)]),
+    'LB': _TapSignature([(14, 100), (8, 60)], gap: 25),
+    'RT': _TapSignature([(8, 70), (8, 150), (12, 230)], gap: 0),
+    'LT': _TapSignature([(12, 230), (8, 150), (8, 70)], gap: 0),
+    'R': _TapSignature([(30, 200)]),
+    'L': _TapSignature([(18, 200), (18, 200)], gap: 30),
+    'UP': _TapSignature([(10, 90)]),
+    'DOWN': _TapSignature([(10, 60)]),
+    'LEFT': _TapSignature([(8, 75)]),
+    'RIGHT': _TapSignature([(12, 75)]),
+    'START': _TapSignature([(8, 140), (8, 140), (8, 140)], gap: 25),
+    'SELECT': _TapSignature([(8, 90), (8, 90)], gap: 25),
+  };
+}
+
+class _TapSignature {
+  /// (duration ms, amplitude 1-255) for each pulse.
+  final List<(int, int)> pulses;
+
+  /// Silence between pulses, in ms.
+  final int gap;
+
+  const _TapSignature(this.pulses, {this.gap = 30});
 }

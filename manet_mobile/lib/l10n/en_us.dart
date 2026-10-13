@@ -49,9 +49,9 @@ class EnUsMenuStrings implements MenuStrings {
   @override
   String get avatar => 'Avatar';
   @override
-  String get lobbyHint => 'Select when you are ready';
+  String get lobbyHint => 'Press Ready when you are ready';
   @override
-  String get libraryHint => 'Move the cursor and select a game';
+  String get libraryHint => 'Move the cursor to a game and pick it';
   @override
   String get overlayHint => 'Pick an option on the TV menu';
   @override
@@ -92,6 +92,38 @@ class EnUsMenuStrings implements MenuStrings {
   @override
   String get tournamentHint =>
       'Tournament! Move your face to the side of the game you want to play.';
+  @override
+  String get betterInApp => 'It is better in the app';
+  @override
+  String get ready => 'Ready';
+  @override
+  String get notReady => 'Not ready';
+  @override
+  String get waitingOthers => 'Waiting for the others…';
+  @override
+  String startingIn(int seconds) => 'Everyone is ready! Starting in $seconds…';
+  @override
+  String get face => 'Face';
+  @override
+  String get cancelSelection => 'Cancel selection';
+  @override
+  String get info => 'Info';
+  @override
+  String get cancel => 'Cancel';
+  @override
+  String get backToLobby => 'Back to lobby';
+  @override
+  String lobbyWaiting(int yes, int needed) => 'Waiting $yes/$needed';
+  @override
+  String lobbyRequestOffer(String name) => '$name wants to go back to the lobby. Go back?';
+  @override
+  String get stayHere => 'Stay';
+  @override
+  String get goBack => 'Go back';
+  @override
+  String playersRange(int min, int max) => min == max ? '$min players' : '$min–$max players';
+  @override
+  String get noDescription => 'No description yet.';
 }
 
 class EnUsCommonStrings implements CommonStrings {

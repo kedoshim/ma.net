@@ -41,6 +41,45 @@ class SessionCountdown {
   });
 }
 
+/// Everyone is ready in the lobby: the game selection opens at [endsAt].
+class LobbyCountdown {
+  final DateTime endsAt;
+  final double seconds;
+
+  const LobbyCountdown({required this.endsAt, required this.seconds});
+}
+
+/// A player asked to leave the game selection; the majority decides.
+class LobbyRequest {
+  final String fromDeviceId;
+  final String fromName;
+  final int yes;
+  final int no;
+  final int needed;
+
+  const LobbyRequest({
+    required this.fromDeviceId,
+    required this.fromName,
+    required this.yes,
+    required this.no,
+    required this.needed,
+  });
+
+  factory LobbyRequest.fromJson(Map<String, dynamic> json) {
+    final from = json['from'] as Map<String, dynamic>? ?? const {};
+    return LobbyRequest(
+      fromDeviceId: from['deviceId'] as String? ?? '',
+      fromName: from['name'] as String? ?? '',
+      yes: json['yes'] as int? ?? 0,
+      no: json['no'] as int? ?? 0,
+      needed: json['needed'] as int? ?? 1,
+    );
+  }
+}
+
+DateTime _fromEpochSeconds(num seconds) =>
+    DateTime.fromMillisecondsSinceEpoch((seconds * 1000).round());
+
 class RunningGameInfo {
   final String id;
   final String name;
@@ -71,6 +110,13 @@ class SessionSnapshot {
   final bool gameInFront;
   final TournamentState? tournament;
   final double matchSeconds;
+  /// MaNet stepped aside: phones are plain gamepads for any game.
+  final bool freeMode;
+  final bool freeModeEnabled;
+  final LobbyCountdown? lobbyCountdown;
+  final LobbyRequest? lobbyRequest;
+  /// deviceId -> gameId whose details that player reads on their phone.
+  final Map<String, String> reading;
 
   const SessionSnapshot({
     this.phase = SessionPhase.lobby,
@@ -87,6 +133,11 @@ class SessionSnapshot {
     this.gameInFront = true,
     this.tournament,
     this.matchSeconds = 10,
+    this.freeMode = false,
+    this.freeModeEnabled = true,
+    this.lobbyCountdown,
+    this.lobbyRequest,
+    this.reading = const {},
   });
 
   int get readyCount => players.where((p) => p.ready).length;
@@ -94,6 +145,8 @@ class SessionSnapshot {
   factory SessionSnapshot.fromJson(Map<String, dynamic> json) {
     final countdown = json['countdown'] as Map<String, dynamic>?;
     final running = json['runningGame'] as Map<String, dynamic>?;
+    final lobbyCountdown = json['lobbyCountdown'] as Map<String, dynamic>?;
+    final lobbyRequest = json['lobbyRequest'] as Map<String, dynamic>?;
     return SessionSnapshot(
       phase: _phaseFromWire(json['phase'] as String?),
       menuInput: json['inputMode'] == 'menu',
@@ -127,6 +180,19 @@ class SessionSnapshot {
           ? null
           : TournamentState.fromJson(json['tournament'] as Map<String, dynamic>),
       matchSeconds: (json['matchSeconds'] as num?)?.toDouble() ?? 10,
+      freeMode: json['freeMode'] == true,
+      freeModeEnabled: json['freeModeEnabled'] != false,
+      lobbyCountdown: lobbyCountdown == null
+          ? null
+          : LobbyCountdown(
+              endsAt: _fromEpochSeconds(lobbyCountdown['endsAt'] as num),
+              seconds: (lobbyCountdown['seconds'] as num?)?.toDouble() ?? 5,
+            ),
+      lobbyRequest: lobbyRequest == null ? null : LobbyRequest.fromJson(lobbyRequest),
+      reading: {
+        for (final e in (json['reading'] as Map<String, dynamic>? ?? const {}).entries)
+          e.key: e.value as String,
+      },
     );
   }
 }
@@ -215,6 +281,10 @@ class GameEntry {
   /// When it was added to the library (seconds since epoch; small numbers
   /// for games saved before this field existed).
   final double addedAt;
+  /// When MaNet last launched it (seconds since epoch, 0: never).
+  final double lastPlayedAt;
+  /// Image URLs shown on a player's phone with the details.
+  final List<String> screenshots;
 
   const GameEntry({
     this.id = '',
@@ -234,6 +304,8 @@ class GameEntry {
     this.tags = const [],
     this.trailerUrl = '',
     this.addedAt = 0,
+    this.lastPlayedAt = 0,
+    this.screenshots = const [],
   });
 
   bool fits(int players) => players >= minPlayers && players <= maxPlayers;
@@ -261,6 +333,11 @@ class GameEntry {
     ],
     trailerUrl: json['trailerUrl'] as String? ?? '',
     addedAt: (json['addedAt'] as num?)?.toDouble() ?? 0,
+    lastPlayedAt: (json['lastPlayedAt'] as num?)?.toDouble() ?? 0,
+    screenshots: [
+      for (final url in json['screenshots'] as List<dynamic>? ?? const [])
+        url.toString(),
+    ],
   );
 
   Map<String, dynamic> toJson() => {
@@ -280,6 +357,8 @@ class GameEntry {
     'tags': tags,
     'trailerUrl': trailerUrl,
     if (addedAt > 0) 'addedAt': addedAt,
+    if (lastPlayedAt > 0) 'lastPlayedAt': lastPlayedAt,
+    'screenshots': screenshots,
   };
 }
 

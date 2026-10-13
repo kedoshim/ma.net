@@ -129,6 +129,22 @@ class PreferencesService {
     return dpad ? 0 : 2;
   }
 
+  Future<void> setOverlayMovementMode(int modeIndex) async =>
+      (await _getInstance).setInt('overlayMovementMode', modeIndex);
+
+  Future<int> getOverlayMovementMode() async {
+    final p = await _getInstance;
+    return p.getInt('overlayMovementMode') ?? MovementMode.dpad.index;
+  }
+
+  Future<void> setMenuMovementMode(int modeIndex) async =>
+      (await _getInstance).setInt('menuMovementMode', modeIndex);
+
+  Future<int> getMenuMovementMode() async {
+    final p = await _getInstance;
+    return p.getInt('menuMovementMode') ?? MovementMode.floatingJoystick.index;
+  }
+
 
   @Deprecated('Use setMovementMode instead')
   Future<void> setDpadMode(bool mode) async => setMovementMode(mode ? 0 : 1);

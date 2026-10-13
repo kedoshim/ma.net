@@ -18,6 +18,7 @@ void main() async {
   // Preload UI sounds in the background; the start button plays one.
   SoundEffectService.instance.init();
   AppLogger.init();
+  await AppPreferences.initLauncherPreferences();
 
   const options = WindowOptions(
     center: true,

@@ -547,11 +547,6 @@ class _GameButtonState extends State<GameButton> with SingleTickerProviderStateM
     if (value) {
       _animController.animateTo(0.6,
           duration: const Duration(milliseconds: 50), curve: Curves.easeOutQuad);
-      if (widget.tapHapticsEnabled) {
-        try {
-          HapticsManager.instance.softTap();
-        } catch (_) {}
-      }
     } else {
       _animController.forward(from: 0.6);
     }

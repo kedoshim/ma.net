@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../l10n/strings.dart';
 import '../../models/session_models.dart';
 import '../../services/host_api_service.dart';
 import '../../services/session_controller.dart';
@@ -15,17 +17,30 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/juicy_widgets.dart';
 import '../../widgets/comic_burst.dart';
-import '../../widgets/player_face_indicator.dart';
+import '../../widgets/player_cursor.dart';
 import '../../services/sound_effect_service.dart';
 import '../home_page/gamepad_state.dart';
 import 'library_browser.dart';
 import 'manage_games_dialog.dart';
+import '../../utils/app_preferences.dart';
 
-/// Game library: every player steers a cursor with their own face using the
-/// left stick. Select (A) presses what is under it: a game votes for it, the
-/// "i" opens its details, chips filter/sort. Back (B) closes the details the
-/// player opened, otherwise removes their vote. When all players voted the
-/// server counts down (one game) or starts a tournament (several).
+export '../../widgets/player_cursor.dart' show PlayerCursor;
+
+/// Game selection: every player steers an arrow with their face using the
+/// left stick over a two-row strip of big game cards.
+///
+/// - Cursors near the left/right edge of the strip push it sideways; pushes
+///   from both sides cancel out. It starts centered on the most recently
+///   played games.
+/// - Select (A) on a game sticks the player's face on it as their vote: the
+///   cursor squashes into a sticker and stays there until Cancel (B).
+/// - Info (X) on a game shows its details on that player's phone; while
+///   reading, the cursor waits and doesn't push the strip.
+/// - Emote (Y) wiggles the cursor.
+///
+/// When all players voted the server counts down (one game) or starts a
+/// tournament (several). Going back to the lobby is asked from the phone and
+/// needs the majority.
 class LibraryView extends StatefulWidget {
   final PresetCatalog? presetCatalog;
 
@@ -35,17 +50,48 @@ class LibraryView extends StatefulWidget {
   State<LibraryView> createState() => _LibraryViewState();
 }
 
+/// Sizes of the game strip from the last layout (used to find where a card
+/// is even when it is scrolled out and not built).
+class _StripGeometry {
+  final double cardWidth;
+  final double cardHeight;
+  final double columnGap;
+  final double rowGap;
+  final double padding;
+  final double topPadding;
+  final double viewport;
+
+  const _StripGeometry({
+    required this.cardWidth,
+    required this.cardHeight,
+    required this.columnGap,
+    required this.rowGap,
+    required this.padding,
+    required this.topPadding,
+    required this.viewport,
+  });
+
+  double columnLeft(int column) => padding + column * (cardWidth + columnGap);
+
+  double contentWidth(int columns) =>
+      columns == 0 ? 0 : columns * cardWidth + (columns - 1) * columnGap;
+
+  double rowCenter(int row) =>
+      topPadding + row * (cardHeight + rowGap) + cardHeight / 2;
+}
+
 class _LibraryViewState extends State<LibraryView>
     with SingleTickerProviderStateMixin {
   // Full stick deflection crosses ~900 px per second.
   static const double _cursorSpeed = 900;
   static const double _deadZone = 0.12;
   static const double _cursorSize = 58;
+  // Cursors this close to the strip's sides push it.
+  static const double _pushZone = 130;
+  static const double _pushSpeed = 1100;
+  static const double _sideWidth = 46;
 
   late final Ticker _ticker;
-  // Cursors near the top/bottom of the grid scroll it.
-  static const double _edgeZone = 70;
-  static const double _edgeScrollSpeed = 700;
 
   final GlobalKey _stackKey = GlobalKey();
   final GlobalKey _gridKey = GlobalKey();
@@ -55,36 +101,70 @@ class _LibraryViewState extends State<LibraryView>
   final ValueNotifier<Map<String, Offset>> _cursors = ValueNotifier(const {});
   // deviceId -> target under that player's cursor.
   final ValueNotifier<Map<String, String>> _hovered = ValueNotifier(const {});
+  // Signed push on the strip (negative: towards the left).
+  final ValueNotifier<double> _push = ValueNotifier(0);
+  double _scrollVelocity = 0;
+  double _mousePush = 0;
   LibraryFilter _filter = const LibraryFilter();
+  // Mouse-only details panel (players read details on their phones).
   String? _detailsGameId;
-  String? _detailsOwner;
   final ValueNotifier<int> _countdownLeft = ValueNotifier(0);
   final ValueNotifier<Map<String, int>> _bopTriggers = ValueNotifier(const {});
+  final ValueNotifier<Map<String, int>> _emoteTriggers = ValueNotifier(
+    const {},
+  );
   final Map<String, String?> _lastVotes = {};
   StreamSubscription<PadButtonEvent>? _buttons;
   Duration _lastTick = Duration.zero;
 
+  List<List<GameEntry>> _columns = const [];
+  int _startColumn = 0;
+  _StripGeometry? _geometry;
+  String? _centeredFor;
+
   @override
   void initState() {
     super.initState();
+    _filter = _filter.copyWith(
+      sort: LibraryFilter.parseSort(AppPreferences.sortOrderNotifier.value),
+    );
+    AppPreferences.cardStyleNotifier.addListener(_onPrefsChanged);
+    AppPreferences.gridRowsNotifier.addListener(_onPrefsChanged);
+    AppPreferences.sortOrderNotifier.addListener(_onPrefsChanged);
     _ticker = createTicker(_tick)..start();
     _buttons = context.read<GamepadState>().buttonEvents.listen(_onButton);
   }
 
+  void _onPrefsChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    AppPreferences.cardStyleNotifier.removeListener(_onPrefsChanged);
+    AppPreferences.gridRowsNotifier.removeListener(_onPrefsChanged);
+    AppPreferences.sortOrderNotifier.removeListener(_onPrefsChanged);
     _ticker.dispose();
     _buttons?.cancel();
     _cursors.dispose();
     _hovered.dispose();
+    _push.dispose();
     _scroll.dispose();
     _countdownLeft.dispose();
     _bopTriggers.dispose();
+    _emoteTriggers.dispose();
     super.dispose();
   }
 
   Size? get _stackSize =>
       (_stackKey.currentContext?.findRenderObject() as RenderBox?)?.size;
+
+  SessionSnapshot get _snapshot => context.read<SessionController>().snapshot;
+
+  /// Players whose cursor is stuck as a vote sticker or waiting while they
+  /// read details: they neither move nor push.
+  bool _parked(SessionPlayer player) =>
+      player.vote != null || _snapshot.reading.containsKey(player.deviceId);
 
   void _tick(Duration elapsed) {
     final dt = _lastTick == Duration.zero
@@ -107,37 +187,56 @@ class _LibraryViewState extends State<LibraryView>
           );
 
     final players = session.snapshot.players;
-    for (final player in players) {
-      final prevVote = _lastVotes[player.deviceId];
-      if (player.vote != null && player.vote != prevVote) {
-        _triggerBop(player.deviceId);
-      }
-      _lastVotes[player.deviceId] = player.vote;
-    }
-
     final next = <String, Offset>{};
     for (var i = 0; i < players.length; i++) {
-      final id = players[i].deviceId;
+      final player = players[i];
+      final id = player.deviceId;
       var position =
           _cursors.value[id] ??
-          // New cursors start spread along the bottom.
-          Offset(size.width * (i + 1) / (players.length + 1), size.height - 80);
-      final input = gamepads.inputListenable(id).value;
-      position += _stickVelocity(input.stickX, input.stickY) * dt;
+          // New cursors start spread along the middle of the strip.
+          Offset(size.width * (i + 1) / (players.length + 1), size.height / 2);
+      final prevVote = _lastVotes[id];
+      if (player.vote != prevVote) {
+        if (player.vote != null) {
+          _onStamped();
+        } else if (prevVote != null) {
+          // The sticker peels off: the cursor comes back where the card is.
+          position = _cardCenter(prevVote) ?? position;
+          _triggerBop(id);
+        }
+        _lastVotes[id] = player.vote;
+      }
+      if (!_parked(player)) {
+        final input = gamepads.inputListenable(id).value;
+        position += _stickVelocity(input.stickX, input.stickY) * dt;
+      }
       next[id] = Offset(
         position.dx.clamp(0.0, size.width),
         position.dy.clamp(0.0, size.height),
       );
     }
-    _edgeScroll(next.values, dt);
-    // Hover is recomputed every frame: the grid can scroll under a still
+    _lastVotes.removeWhere((id, _) => !next.containsKey(id));
+    _pushStrip([
+      for (final player in players)
+        if (!_parked(player) && next[player.deviceId] != null)
+          next[player.deviceId]!,
+    ], dt);
+    // Hover is recomputed every frame: the strip can move under a still
     // cursor.
     final hovered = {
-      for (final entry in next.entries)
-        if (_targetAt(entry.value) case final target?) entry.key: target,
+      for (final player in players)
+        if (!_parked(player))
+          if (next[player.deviceId] case final point?)
+            if (_targetAt(point) case final target?) player.deviceId: target,
     };
     if (!_sameCursors(next, _cursors.value)) _cursors.value = next;
     if (!mapEquals(hovered, _hovered.value)) _hovered.value = hovered;
+  }
+
+  void _onStamped() {
+    try {
+      SoundEffectService.instance.playPlayerJoinPop();
+    } catch (_) {}
   }
 
   Rect? _rectOf(GlobalKey key) {
@@ -149,39 +248,84 @@ class _LibraryViewState extends State<LibraryView>
     return box.localToGlobal(Offset.zero, ancestor: stackBox) & box.size;
   }
 
-  void _edgeScroll(Iterable<Offset> cursors, double dt) {
+  /// Where a game's card is now (null when it is scrolled out of view).
+  Offset? _cardCenter(String gameId) {
+    final rect = _rectOf(_keyFor(LibraryTargets.game(gameId)));
+    final grid = _rectOf(_gridKey);
+    if (rect == null || grid == null || !grid.overlaps(rect)) return null;
+    return rect.center;
+  }
+
+  /// Cursors or the mouse at the strip's sides push it; opposite pushes cancel out.
+  /// The speed eases towards the push so it feels like shoving, not jumping.
+  void _pushStrip(List<Offset> cursors, double dt) {
     final grid = _rectOf(_gridKey);
     if (grid == null || !_scroll.hasClients) return;
-    var speed = 0.0;
-    for (final c in cursors) {
-      if (c.dx < grid.left || c.dx > grid.right) continue;
-      if (_detailsGameId != null &&
-          (_rectOf(_keyFor(LibraryTargets.panel))?.contains(c) ?? false)) {
-        continue;
-      }
-      if (c.dy > grid.bottom - _edgeZone && c.dy <= grid.bottom + 4) {
-        speed += (c.dy - (grid.bottom - _edgeZone)) / _edgeZone;
-      } else if (c.dy < grid.top + _edgeZone && c.dy >= grid.top - 4) {
-        speed -= ((grid.top + _edgeZone) - c.dy) / _edgeZone;
-      }
+    if (_scroll.position.maxScrollExtent <= 0) {
+      _push.value = 0;
+      _scrollVelocity = 0;
+      return;
     }
-    if (speed == 0) return;
+    final frame = Rect.fromLTRB(
+      grid.left - _sideWidth,
+      grid.top,
+      grid.right + _sideWidth,
+      grid.bottom,
+    );
+    final cursorForce = edgePushForce(cursors, frame, _pushZone + _sideWidth);
+    final force = (cursorForce + _mousePush).clamp(-2.0, 2.0);
+    _push.value = force;
+    final target = force.clamp(-2.0, 2.0) * _pushSpeed;
+    final blend = 1 - math.exp(-dt * 7);
+    _scrollVelocity += (target - _scrollVelocity) * blend;
+    if (_scrollVelocity.abs() < 1) {
+      _scrollVelocity = 0;
+      return;
+    }
     final position = _scroll.position;
-    final target =
-        (position.pixels + speed.clamp(-1.5, 1.5) * _edgeScrollSpeed * dt)
-            .clamp(position.minScrollExtent, position.maxScrollExtent);
-    if (target != position.pixels) _scroll.jumpTo(target);
+    final next = (position.pixels + _scrollVelocity * dt).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if (next != position.pixels) {
+      _scroll.jumpTo(next);
+    } else {
+      _scrollVelocity = 0;
+    }
+  }
+
+  void _stepScroll(bool left) {
+    if (!_scroll.hasClients) return;
+    final geometry = _geometry;
+    final step = geometry != null
+        ? (geometry.cardWidth + geometry.columnGap)
+        : 260.0;
+    final position = _scroll.position;
+    final target = left
+        ? math.max(position.minScrollExtent, _scroll.offset - step)
+        : math.min(position.maxScrollExtent, _scroll.offset + step);
+    _scrollVelocity = 0;
+    _scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+    try {
+      SoundEffectService.instance.playPlayerJoinPop();
+    } catch (_) {}
   }
 
   GlobalKey _keyFor(String target) =>
       _targetKeys.putIfAbsent(target, GlobalKey.new);
 
   static int _priority(String target) {
-    if (target.startsWith('panel:')) return 0;
-    if (target == LibraryTargets.panel) return 1;
-    if (target.startsWith('info:')) return 2;
-    if (target.startsWith('filter:') || target.startsWith('tag:')) return 3;
-    return 4;
+    if (target.startsWith('filter:') ||
+        target.startsWith('tag:') ||
+        target.startsWith('nav:')) {
+      return 3;
+    }
+    if (target.startsWith('game:')) return 4;
+    return 99;
   }
 
   Offset _stickVelocity(double x, double y) {
@@ -198,14 +342,15 @@ class _LibraryViewState extends State<LibraryView>
     if (a.length != b.length) return false;
     for (final entry in a.entries) {
       final other = b[entry.key];
-      if (other == null || (other - entry.value).distanceSquared > 0.01)
+      if (other == null || (other - entry.value).distanceSquared > 0.01) {
         return false;
+      }
     }
     return true;
   }
 
-  /// What a cursor at [point] would press: panel buttons first, then the
-  /// panel itself (it covers the grid), "i" buttons, chips and games.
+  /// What a cursor at [point] would press: header chips first, then games
+  /// (only inside the visible strip).
   String? _targetAt(Offset point) {
     final grid = _rectOf(_gridKey);
     String? best;
@@ -214,13 +359,10 @@ class _LibraryViewState extends State<LibraryView>
       final target = entry.key;
       final priority = _priority(target);
       if (priority >= bestPriority) continue;
-      if (target.startsWith('panel') && _detailsGameId == null) continue;
       final rect = _rectOf(entry.value);
       if (rect == null || !rect.contains(point)) continue;
-      // Cards scrolled out of the grid's viewport can't be pressed.
-      if (priority >= 2 && priority != 3 && !(grid?.contains(point) ?? false)) {
-        continue;
-      }
+      // Cards scrolled out of the strip's viewport can't be pressed.
+      if (priority == 4 && !(grid?.contains(point) ?? false)) continue;
       best = target;
       bestPriority = priority;
     }
@@ -229,32 +371,40 @@ class _LibraryViewState extends State<LibraryView>
 
   void _onButton(PadButtonEvent event) {
     if (!event.pressed) return;
-    if (event.button == 'A' || event.button == 'START') {
-      final cursor = _cursors.value[event.deviceId];
-      if (cursor == null) return;
-      final target = _targetAt(cursor);
-      if (target != null) _press(target, event.deviceId);
-    } else if (event.button == 'B') {
-      _back(event.deviceId);
-    }
-  }
-
-  /// Back: closes the details this player opened (or the cursor is on),
-  /// otherwise removes their vote; with no votes at all, leaves the library.
-  void _back(String deviceId) {
     final session = context.read<SessionController>();
-    final onPanel =
-        _hovered.value[deviceId]?.startsWith(LibraryTargets.panel) ?? false;
-    if (_detailsGameId != null && (_detailsOwner == deviceId || onPanel)) {
-      _closeDetails();
-      return;
-    }
-    final players = session.snapshot.players;
-    final mine = players.where((p) => p.deviceId == deviceId).firstOrNull;
-    if (mine?.vote != null) {
-      unawaited(session.vote(deviceId, null));
-    } else if (players.every((p) => p.vote == null)) {
-      unawaited(session.backToLobby());
+    final id = event.deviceId;
+    final player = session.playerById(id);
+    if (player == null) return;
+    final reading = session.snapshot.reading[id];
+    switch (event.button) {
+      case 'A' || 'START':
+        if (reading != null) {
+          // Select while reading votes for the game being read.
+          unawaited(session.vote(id, reading));
+          unawaited(session.showDetails(id, null));
+          return;
+        }
+        if (player.vote != null) return;
+        final cursor = _cursors.value[id];
+        if (cursor == null) return;
+        final target = _targetAt(cursor);
+        if (target != null) _press(target, id);
+      case 'X':
+        if (reading != null || player.vote != null) return;
+        final cursor = _cursors.value[id];
+        final target = cursor == null ? null : _targetAt(cursor);
+        if (target != null && target.startsWith('game:')) {
+          _triggerBop(id);
+          unawaited(session.showDetails(id, target.substring(5)));
+        }
+      case 'B':
+        if (reading != null) {
+          unawaited(session.showDetails(id, null));
+        } else if (player.vote != null) {
+          unawaited(session.vote(id, null));
+        }
+      case 'Y':
+        _triggerEmote(id);
     }
   }
 
@@ -273,15 +423,8 @@ class _LibraryViewState extends State<LibraryView>
       if (deviceId == null) {
         unawaited(session.play(gameId));
       } else {
-        pop();
         unawaited(session.vote(deviceId, gameId));
       }
-    } else if (target.startsWith('info:')) {
-      pop();
-      setState(() {
-        _detailsGameId = target.substring(5);
-        _detailsOwner = deviceId;
-      });
     } else if (target.startsWith('tag:')) {
       pop();
       setState(() => _filter = _filter.toggleTag(target.substring(4)));
@@ -294,17 +437,22 @@ class _LibraryViewState extends State<LibraryView>
     } else if (target == LibraryTargets.clear) {
       pop();
       setState(() => _filter = LibraryFilter(sort: _filter.sort));
+    } else if (target == LibraryTargets.lobby) {
+      pop();
+      // The host leaves right away; a player asks the others.
+      unawaited(
+        deviceId == null
+            ? session.backToLobby()
+            : session.requestLobby(deviceId),
+      );
+    } else if (target == LibraryTargets.freeMode) {
+      pop();
+      unawaited(session.enterFreeMode());
     } else if (target == LibraryTargets.panelClose) {
       _closeDetails();
     } else if (target == LibraryTargets.panelVote) {
       final gameId = _detailsGameId;
-      if (gameId == null) return;
-      pop();
-      if (deviceId == null) {
-        unawaited(session.play(gameId));
-      } else {
-        unawaited(session.vote(deviceId, gameId));
-      }
+      if (gameId != null) unawaited(session.play(gameId));
     } else if (target == LibraryTargets.panelTrailer) {
       final url = session.gameById(_detailsGameId)?.trailerUrl ?? '';
       final uri = Uri.tryParse(url);
@@ -316,16 +464,19 @@ class _LibraryViewState extends State<LibraryView>
 
   void _closeDetails() {
     if (_detailsGameId == null) return;
-    setState(() {
-      _detailsGameId = null;
-      _detailsOwner = null;
-    });
+    setState(() => _detailsGameId = null);
   }
 
   void _triggerBop(String deviceId) {
     final next = Map<String, int>.from(_bopTriggers.value);
     next[deviceId] = (next[deviceId] ?? 0) + 1;
     _bopTriggers.value = next;
+  }
+
+  void _triggerEmote(String deviceId) {
+    final next = Map<String, int>.from(_emoteTriggers.value);
+    next[deviceId] = (next[deviceId] ?? 0) + 1;
+    _emoteTriggers.value = next;
   }
 
   void _openManageGames() {
@@ -338,6 +489,25 @@ class _LibraryViewState extends State<LibraryView>
     );
   }
 
+  /// Brings the start column into view whenever the shown games change.
+  void _centerStrip(String signature) {
+    if (_centeredFor == signature) return;
+    _centeredFor = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final geometry = _geometry;
+      if (!mounted || geometry == null || !_scroll.hasClients) return;
+      final position = _scroll.position;
+      // Four whole columns on screen, the start column second from the
+      // left so there are games on both sides of it.
+      final first = math.max(0, _startColumn - 1);
+      final target = geometry.columnLeft(first) - 36;
+      _scrollVelocity = 0;
+      _scroll.jumpTo(
+        target.clamp(position.minScrollExtent, position.maxScrollExtent),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionController>();
@@ -346,19 +516,30 @@ class _LibraryViewState extends State<LibraryView>
     final snapshot = session.snapshot;
     final playerCount = snapshot.players.length;
 
-    final tags = LibraryFilter.topTags(session.games);
-    // Tags that disappeared from the library can't stay selected.
-    if (_filter.tags.any((t) => !tags.containsKey(t))) {
-      _filter = _filter.copyWith(
-        tags: _filter.tags.where(tags.containsKey).toSet(),
-      );
+    final prefSort = LibraryFilter.parseSort(
+      AppPreferences.sortOrderNotifier.value,
+    );
+    if (_filter.sort != prefSort) {
+      _filter = _filter.copyWith(sort: prefSort);
     }
+    final rows = AppPreferences.gridRowsNotifier.value;
+    final isCoverOnly = AppPreferences.cardStyleNotifier.value == 'cover_only';
+
     final games = _filter.apply(session.games, playerCount);
+    final layout = layoutColumns(
+      games,
+      perColumn: rows,
+      centerOut: false,
+    );
+    _columns = layout.columns;
+    _startColumn = layout.start;
+    _centerStrip(
+      '${_filter.sort}|${_filter.fitsOnly}|${_filter.tags.join(',')}|'
+      '${games.map((g) => g.id).join(',')}|$rows|$isCoverOnly',
+    );
+
     final details = session.gameById(_detailsGameId);
-    if (_detailsGameId != null && details == null) {
-      _detailsGameId = null;
-      _detailsOwner = null;
-    }
+    if (_detailsGameId != null && details == null) _detailsGameId = null;
     List<DeviceModel> devices(Iterable<String> ids) => [
       for (final id in ids)
         if (gamepads.deviceById(id) case final device?) device,
@@ -376,152 +557,67 @@ class _LibraryViewState extends State<LibraryView>
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _LibraryHeader(onManageGames: _openManageGames, players: players),
-            if (snapshot.lastError != null) ...[
-              const SizedBox(height: 8),
-              _ErrorStrip(text: strings.launchError(snapshot.lastError!)),
-            ],
-            const SizedBox(height: 12),
-            if (session.games.isNotEmpty)
-              ValueListenableBuilder<Map<String, String>>(
-                valueListenable: _hovered,
-                builder: (context, hovered, _) => LibraryFilterBar(
-                  filter: _filter,
-                  tags: tags,
-                  playerCount: playerCount,
-                  keyFor: _keyFor,
-                  hoveredBy: (target) => hoveredBy(hovered, target),
-                  onPress: (target) => _press(target, null),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: snapshot.lobbyRequest == null
+                  ? const SizedBox(width: double.infinity)
+                  : _LobbyRequestStrip(request: snapshot.lobbyRequest!),
+            ),
+            if (snapshot.lastError != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: _ErrorStrip(
+                  text: strings.launchError(snapshot.lastError!),
                 ),
               ),
-            const SizedBox(height: 12),
             Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: session.games.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(strings.emptyLibrary, style: _titleStyle),
-                                const SizedBox(height: 16),
-                                JuicyButton(
-                                  onPressed: _openManageGames,
-                                  backgroundColor: AppColors.highlightColor,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
-                                  ),
-                                  child: Text(
-                                    strings.addFirstGame,
-                                    style: _buttonStyle,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : games.isEmpty
-                        ? Center(
-                            child: Text(
-                              strings.noGamesMatch,
-                              style: _bodyStyle,
-                            ),
-                          )
-                        : SingleChildScrollView(
-                            key: _gridKey,
-                            controller: _scroll,
-                            padding: const EdgeInsets.all(8),
-                            child: ValueListenableBuilder<Map<String, String>>(
-                              valueListenable: _hovered,
-                              builder: (context, hovered, _) => Wrap(
-                                spacing: 18,
-                                runSpacing: 18,
-                                children: [
-                                  for (final game in games)
-                                    LibraryGameCard(
-                                      key: _keyFor(
-                                        LibraryTargets.game(game.id),
-                                      ),
-                                      infoKey: _keyFor(
-                                        LibraryTargets.info(game.id),
-                                      ),
-                                      game: game,
-                                      playerCount: playerCount,
-                                      voters: devices(
-                                        session.votersFor(game.id),
-                                      ),
-                                      hoveredBy: hoveredBy(
-                                        hovered,
-                                        LibraryTargets.game(game.id),
-                                      ),
-                                      infoHoveredBy: hoveredBy(
-                                        hovered,
-                                        LibraryTargets.info(game.id),
-                                      ),
-                                      isCountdownTarget:
-                                          snapshot.countdown?.gameId == game.id,
-                                      onTap: () => _press(
-                                        LibraryTargets.game(game.id),
-                                        null,
-                                      ),
-                                      onInfo: () => _press(
-                                        LibraryTargets.info(game.id),
-                                        null,
-                                      ),
-                                    ),
-                                ],
+              child: ColoredBox(
+                color: AppColors.screenBackground,
+                child: session.games.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(strings.emptyLibrary, style: _titleStyle),
+                            const SizedBox(height: 16),
+                            JuicyButton(
+                              onPressed: _openManageGames,
+                              backgroundColor: AppColors.highlightColor,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              child: Text(
+                                strings.addFirstGame,
+                                style: _buttonStyle,
                               ),
                             ),
-                          ),
-                  ),
-                  // Details slide in from the right, over the grid.
-                  Positioned(
-                    top: 0,
-                    bottom: 0,
-                    right: 0,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) => SlideTransition(
-                        position: Tween(
-                          begin: const Offset(1.1, 0),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
+                          ],
+                        ),
+                      )
+                    : _buildStrip(
+                        snapshot: snapshot,
+                        session: session,
+                        playerCount: playerCount,
+                        devices: devices,
+                        hoveredBy: hoveredBy,
+                        details: details,
+                        empty: games.isEmpty,
+                        rows: rows,
+                        isCoverOnly: isCoverOnly,
                       ),
-                      child: details == null
-                          ? const SizedBox.shrink()
-                          : SizedBox(
-                              key: ValueKey(details.id),
-                              width: 420,
-                              child:
-                                  ValueListenableBuilder<Map<String, String>>(
-                                    valueListenable: _hovered,
-                                    builder: (context, hovered, _) =>
-                                        GameDetailsPanel(
-                                          game: details,
-                                          playerCount: playerCount,
-                                          openedBy: _detailsOwner == null
-                                              ? null
-                                              : gamepads.deviceById(
-                                                  _detailsOwner!,
-                                                ),
-                                          voters: devices(
-                                            session.votersFor(details.id),
-                                          ),
-                                          keyFor: _keyFor,
-                                          hoveredBy: (target) =>
-                                              hoveredBy(hovered, target),
-                                          onPress: (target) =>
-                                              _press(target, null),
-                                        ),
-                                  ),
-                            ),
-                    ),
-                  ),
-                ],
+              ),
+            ),
+            ValueListenableBuilder<Map<String, String>>(
+              valueListenable: _hovered,
+              builder: (context, hovered, _) => _LibraryFooter(
+                players: players,
+                snapshot: snapshot,
+                gameName: (id) => session.gameById(id)?.name ?? '',
+                keyFor: _keyFor,
+                hoveredBy: (target) => hoveredBy(hovered, target),
+                onPress: (target) => _press(target, null),
               ),
             ),
           ],
@@ -542,21 +638,33 @@ class _LibraryViewState extends State<LibraryView>
               builder: (context, cursors, _) =>
                   ValueListenableBuilder<Map<String, int>>(
                     valueListenable: _bopTriggers,
-                    builder: (context, bops, _) => Stack(
-                      children: [
-                        for (final entry in cursors.entries)
-                          if (gamepads.deviceById(entry.key) case final device?)
-                            Positioned(
-                              left: entry.value.dx - _cursorSize / 2,
-                              top: entry.value.dy - _cursorSize / 2,
-                              child: PlayerCursor(
-                                device: device,
-                                size: _cursorSize,
-                                bopTrigger: bops[entry.key] ?? 0,
-                              ),
-                            ),
-                      ],
-                    ),
+                    builder: (context, bops, _) =>
+                        ValueListenableBuilder<Map<String, int>>(
+                          valueListenable: _emoteTriggers,
+                          builder: (context, emotes, _) => Stack(
+                            children: [
+                              for (final entry in cursors.entries)
+                                if (gamepads.deviceById(entry.key)
+                                    case final device?)
+                                  // Voted: the cursor is a sticker on the card.
+                                  if (session.playerById(entry.key)?.vote ==
+                                      null)
+                                    Positioned(
+                                      left: entry.value.dx - _cursorSize / 2,
+                                      top: entry.value.dy - _cursorSize / 2,
+                                      child: PlayerCursor(
+                                        device: device,
+                                        size: _cursorSize,
+                                        bopTrigger: bops[entry.key] ?? 0,
+                                        emoteTrigger: emotes[entry.key] ?? 0,
+                                        reading: snapshot.reading.containsKey(
+                                          entry.key,
+                                        ),
+                                      ),
+                                    ),
+                            ],
+                          ),
+                        ),
                   ),
             ),
           ),
@@ -564,180 +672,560 @@ class _LibraryViewState extends State<LibraryView>
       ],
     );
   }
+
+  /// The framed strip: push zones on both sides (when content overflows),
+  /// cards scrolling sideways, and faces pinned at the edge for votes on
+  /// cards that are out of view.
+  Widget _buildStrip({
+    required SessionSnapshot snapshot,
+    required SessionController session,
+    required int playerCount,
+    required List<DeviceModel> Function(Iterable<String>) devices,
+    required List<DeviceModel> Function(Map<String, String>, String) hoveredBy,
+    required GameEntry? details,
+    required bool empty,
+    required int rows,
+    required bool isCoverOnly,
+  }) {
+    final strings = context.l10n.session;
+    return ClipRect(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const columnGap = 26.0;
+          const rowGap = 22.0;
+          const topPadding = 22.0;
+          final cardHeight = math.max(
+            120.0,
+            (constraints.maxHeight - topPadding * 2 - rowGap * (rows - 1)) / rows,
+          );
+          const sidePadding = 36.0;
+          final cardWidth = isCoverOnly
+              ? math.max(140.0, cardHeight * (2.0 / 3.0))
+              : math.max(
+                  220.0,
+                  (constraints.maxWidth - sidePadding * 2 - columnGap * 3) / 4,
+                );
+          final content =
+              _columns.length * cardWidth +
+              math.max(0, _columns.length - 1) * columnGap;
+          // Only show side push arrows if games overflow the screen.
+          final bool needsScroll =
+              content + sidePadding * 2 > constraints.maxWidth;
+          final double effectiveSideWidth = needsScroll ? _sideWidth : 0.0;
+          final viewport = constraints.maxWidth - effectiveSideWidth * 2;
+          final padding = math.max(
+            sidePadding,
+            (viewport - content) / 2,
+          );
+          final geometry = _StripGeometry(
+            cardWidth: cardWidth,
+            cardHeight: cardHeight,
+            columnGap: columnGap,
+            rowGap: rowGap,
+            padding: padding,
+            topPadding: topPadding,
+            viewport: viewport,
+          );
+          _geometry = geometry;
+
+          if (empty) {
+            return Center(
+              child: Text(strings.noGamesMatch, style: _bodyStyle),
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (needsScroll)
+                _PushSide(
+                  push: _push,
+                  left: true,
+                  width: _sideWidth,
+                  onTap: () => _stepScroll(true),
+                  onPushChange: (p) => _mousePush = p,
+                ),
+              Expanded(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: ValueListenableBuilder<Map<String, String>>(
+                        valueListenable: _hovered,
+                        builder: (context, hovered, _) => ListView.separated(
+                          key: _gridKey,
+                          controller: _scroll,
+                          scrollDirection: Axis.horizontal,
+                          physics: const ClampingScrollPhysics(),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: padding,
+                            vertical: topPadding,
+                          ),
+                          itemCount: _columns.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(width: columnGap),
+                          itemBuilder: (context, column) => Column(
+                            children: [
+                              for (final (row, game)
+                                  in _columns[column].indexed) ...[
+                                if (row > 0) const SizedBox(height: rowGap),
+                                LibraryGameCard(
+                                  key: _keyFor(LibraryTargets.game(game.id)),
+                                  game: game,
+                                  playerCount: playerCount,
+                                  width: cardWidth,
+                                  height: cardHeight,
+                                  coverOnly: isCoverOnly,
+                                  voters: devices(session.votersFor(game.id)),
+                                  hoveredBy: hoveredBy(
+                                    hovered,
+                                    LibraryTargets.game(game.id),
+                                  ),
+                                  isCountdownTarget:
+                                      snapshot.countdown?.gameId == game.id,
+                                  onTap: () => _press(
+                                    LibraryTargets.game(game.id),
+                                    null,
+                                  ),
+                                  onSecondaryTap: () =>
+                                      setState(() => _detailsGameId = game.id),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Votes on cards scrolled out of view show at the edge.
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: AnimatedBuilder(
+                          animation: _scroll,
+                          builder: (context, _) =>
+                              _buildOffscreenVotes(snapshot, geometry),
+                        ),
+                      ),
+                    ),
+                    // Mouse-only details (right click on a card).
+                    Positioned(
+                      top: 0,
+                      bottom: 0,
+                      right: 0,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) =>
+                            SlideTransition(
+                              position: Tween(
+                                begin: const Offset(1.1, 0),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                        child: details == null
+                            ? const SizedBox.shrink()
+                            : SizedBox(
+                                key: ValueKey(details.id),
+                                width: 420,
+                                child: GameDetailsPanel(
+                                  game: details,
+                                  playerCount: playerCount,
+                                  openedBy: null,
+                                  voters: devices(
+                                    session.votersFor(details.id),
+                                  ),
+                                  keyFor: (_) => GlobalKey(),
+                                  hoveredBy: (_) => const [],
+                                  onPress: (target) => _press(target, null),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (needsScroll)
+                _PushSide(
+                  push: _push,
+                  left: false,
+                  width: _sideWidth,
+                  onTap: () => _stepScroll(false),
+                  onPushChange: (p) => _mousePush = p,
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOffscreenVotes(SessionSnapshot snapshot, _StripGeometry g) {
+    if (!_scroll.hasClients) return const SizedBox.shrink();
+    final gamepads = context.read<GamepadState>();
+    final offset = _scroll.offset;
+    final left = <(DeviceModel, double)>[];
+    final right = <(DeviceModel, double)>[];
+    for (final player in snapshot.players) {
+      final vote = player.vote;
+      if (vote == null) continue;
+      final device = gamepads.deviceById(player.deviceId);
+      if (device == null) continue;
+      for (final (column, games) in _columns.indexed) {
+        final row = games.indexWhere((game) => game.id == vote);
+        if (row < 0) continue;
+        final x = g.columnLeft(column) - offset;
+        if (x + g.cardWidth * 0.5 < 0) {
+          left.add((device, g.rowCenter(row)));
+        } else if (x + g.cardWidth * 0.5 > g.viewport) {
+          right.add((device, g.rowCenter(row)));
+        }
+        break;
+      }
+    }
+    Iterable<Widget> pins(
+      List<(DeviceModel, double)> faces,
+      bool onLeft,
+    ) sync* {
+      final counts = <int, int>{};
+      for (final (device, y) in faces) {
+        // Several faces at the same height fan out a little.
+        final slot = counts.update(y.round(), (c) => c + 1, ifAbsent: () => 0);
+        yield Positioned(
+          key: ValueKey('pin_${device.id}'),
+          left: onLeft ? 6.0 + slot * 18 : null,
+          right: onLeft ? null : 6.0 + slot * 18,
+          top: y - 26,
+          child: _EdgePin(device: device, pointsLeft: onLeft),
+        );
+      }
+    }
+
+    return Stack(children: [...pins(left, true), ...pins(right, false)]);
+  }
 }
 
-class _LibraryHeader extends StatelessWidget {
-  final VoidCallback onManageGames;
-  final List<DeviceModel> players;
+/// A side of the strip: lights up and scrolls while cursors or the mouse push that way.
+class _PushSide extends StatefulWidget {
+  final ValueListenable<double> push;
+  final bool left;
+  final double width;
+  final VoidCallback? onTap;
+  final ValueChanged<double>? onPushChange;
 
-  const _LibraryHeader({required this.onManageGames, required this.players});
+  const _PushSide({
+    required this.push,
+    required this.left,
+    required this.width,
+    this.onTap,
+    this.onPushChange,
+  });
+
+  @override
+  State<_PushSide> createState() => _PushSideState();
+}
+
+class _PushSideState extends State<_PushSide> {
+  bool _hovered = false;
+  bool _pressed = false;
+  DateTime? _downTime;
 
   @override
   Widget build(BuildContext context) {
-    final strings = context.l10n.session;
-    final session = context.read<SessionController>();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        JuicyButton(
-          onPressed: session.backToLobby,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.arrow_back_rounded,
-                size: 18,
-                color: AppColors.textPrimary,
+    return ValueListenableBuilder<double>(
+      valueListenable: widget.push,
+      builder: (context, force, _) {
+        final amount = (widget.left ? -force : force).clamp(0.0, 1.0);
+        final effectiveAmount = math.max(
+          amount,
+          _pressed ? 1.0 : (_hovered ? 0.45 : 0.0),
+        );
+        final iconScale = _pressed ? 0.9 : (_hovered ? 1.25 : 1.0);
+
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) {
+            setState(() => _hovered = true);
+            try {
+              SoundEffectService.instance.playHover();
+            } catch (_) {}
+          },
+          onExit: (_) {
+            setState(() {
+              _hovered = false;
+              if (_pressed) {
+                _pressed = false;
+                widget.onPushChange?.call(0.0);
+              }
+            });
+          },
+          child: Listener(
+            onPointerDown: (event) {
+              if (event.buttons != kPrimaryMouseButton) return;
+              _downTime = DateTime.now();
+              setState(() => _pressed = true);
+              widget.onPushChange?.call(widget.left ? -1.0 : 1.0);
+            },
+            onPointerUp: (_) {
+              if (_pressed) {
+                setState(() => _pressed = false);
+                widget.onPushChange?.call(0.0);
+              }
+            },
+            onPointerCancel: (_) {
+              if (_pressed) {
+                setState(() => _pressed = false);
+                widget.onPushChange?.call(0.0);
+              }
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                final down = _downTime;
+                if (down == null ||
+                    DateTime.now().difference(down) <
+                        const Duration(milliseconds: 350)) {
+                  widget.onTap?.call();
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: widget.width,
+                decoration: BoxDecoration(
+                  color: Color.lerp(
+                    AppColors.screenBackground,
+                    AppColors.highlightColor,
+                    effectiveAmount,
+                  ),
+                ),
+                child: Center(
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 120),
+                    scale: iconScale,
+                    child: AnimatedSlide(
+                      duration: const Duration(milliseconds: 120),
+                      offset: Offset(
+                        (widget.left ? -0.22 : 0.22) * effectiveAmount,
+                        0,
+                      ),
+                      child: Icon(
+                        widget.left
+                            ? Icons.chevron_left_rounded
+                            : Icons.chevron_right_rounded,
+                        size: 34,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(width: 6),
-              Text(strings.backToLobby, style: _buttonStyle),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(strings.libraryTitle, style: _titleStyle),
-              Text(
-                strings.libraryHint,
-                style: _captionStyle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        PlayerCountBadge(players: players),
-        const SizedBox(width: 12),
-        JuicyButton(
-          onPressed: onManageGames,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.edit_rounded,
-                size: 18,
-                color: AppColors.textPrimary,
-              ),
-              const SizedBox(width: 6),
-              Text(strings.manageGames, style: _buttonStyle),
-            ],
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
 
-class PlayerCursor extends StatelessWidget {
+/// A vote on a card out of view: the face at the strip's edge, pointing to
+/// where the card is.
+class _EdgePin extends StatelessWidget {
   final DeviceModel device;
-  final double size;
-  final int bopTrigger;
+  final bool pointsLeft;
 
-  const PlayerCursor({
-    super.key,
-    required this.device,
-    required this.size,
-    this.bopTrigger = 0,
+  const _EdgePin({required this.device, required this.pointsLeft});
+
+  @override
+  Widget build(BuildContext context) {
+    final arrow = Icon(
+      pointsLeft ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
+      size: 26,
+      color: AppColors.textPrimary,
+    );
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.3, end: 1),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) =>
+          Transform.scale(scale: scale, child: child),
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: AppColors.lightColor,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: AppColors.textPrimary, width: 3),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (pointsLeft) arrow,
+            FaceSticker(face: device.face, size: 40),
+            if (!pointsLeft) arrow,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Ana wants to go back to the lobby — 2/3" while the others decide.
+class _LobbyRequestStrip extends StatelessWidget {
+  final LobbyRequest request;
+
+  const _LobbyRequestStrip({required this.request});
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = context.l10n.session;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.highlightColor,
+        border: const Border(
+          bottom: BorderSide(color: AppColors.textPrimary, width: 3),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.how_to_vote_rounded, color: AppColors.textPrimary),
+          const SizedBox(width: 10),
+          Text(
+            strings.lobbyRequest(request.fromName, request.yes, request.needed),
+            style: _buttonStyle.copyWith(fontSize: 16),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One chip per player: what each one is doing, plus back to lobby in the left corner.
+class _LibraryFooter extends StatelessWidget {
+  final List<DeviceModel> players;
+  final SessionSnapshot snapshot;
+  final String Function(String gameId) gameName;
+  final GlobalKey Function(String target) keyFor;
+  final List<DeviceModel> Function(String target) hoveredBy;
+  final ValueChanged<String> onPress;
+
+  const _LibraryFooter({
+    required this.players,
+    required this.snapshot,
+    required this.gameName,
+    required this.keyFor,
+    required this.hoveredBy,
+    required this.onPress,
   });
 
   @override
   Widget build(BuildContext context) {
-    final gamepads = context.read<GamepadState>();
+    final strings = context.l10n.session;
+    final voted = snapshot.players.where((p) => p.vote != null).length;
+    final lobbyTarget = LibraryTargets.lobby;
 
-    return ValueListenableBuilder<DeviceInputState>(
-      valueListenable: gamepads.inputListenable(device.id),
-      builder: (context, input, _) {
-        final stickX = -input.stickX;
-        final stickY = -input.stickY;
-        final isCentered = stickX == 0.0 && stickY == 0.0;
-        final isPressed = input.buttonPressed;
-
-        // Movement tilt leaning subtly into the direction of stick motion
-        final tiltAngle = stickX * 0.12;
-
-        // Mascot face lag and displacement inside the circular badge
-        final maxDisplacement = size * 0.15;
-        final targetTx = stickX * maxDisplacement;
-        final targetTy = stickY * maxDisplacement;
-
-        return SizedBox(
-          width: size,
-          height: size,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Pointer tip at the cursor's center (top-left of the face).
-              Positioned(
-                left: size / 2 - 10,
-                top: size / 2 - 10,
-                child: Transform.rotate(
-                  angle: -math.pi / 4,
-                  child: Icon(
-                    Icons.navigation_rounded,
-                    size: size * 0.38,
-                    color: device.color,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: size / 2,
-                top: size / 2,
-                child: ComicBopBurst(
-                  trigger: bopTrigger,
-                  burstColor: device.color,
-                  burstRadius: size * 0.45,
-                  child: TweenAnimationBuilder<Offset>(
-                    tween: Tween<Offset>(
-                      begin: Offset(targetTx, targetTy),
-                      end: Offset(targetTx, targetTy),
-                    ),
-                    duration: isCentered
-                        ? const Duration(milliseconds: 320)
-                        : const Duration(milliseconds: 80),
-                    curve: isCentered ? Curves.elasticOut : Curves.easeOutQuad,
-                    builder: (context, stickOffset, child) {
-                      return Transform.rotate(
-                        angle: tiltAngle,
-                        alignment: Alignment.center,
-                        child: Transform.scale(
-                          scale: isPressed ? 0.92 : 1.0,
-                          alignment: Alignment.center,
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 6,
-                                  offset: Offset(2, 3),
-                                ),
-                              ],
-                            ),
-                            child: PlayerFaceIndicator(
-                              face: device.face,
-                              size: size * 0.8,
-                              faceTranslateX: stickOffset.dx,
-                              faceTranslateY: stickOffset.dy,
-                              pressed: isPressed,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: const BoxDecoration(
+        color: AppColors.lightColor,
+        border: Border(
+          top: BorderSide(color: AppColors.textPrimary, width: 4),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          LibraryChip(
+            key: keyFor(lobbyTarget),
+            label: strings.backToLobby,
+            icon: Icons.arrow_back_rounded,
+            selected: false,
+            backgroundColor: AppColors.screenBackground,
+            hoveredBy: hoveredBy(lobbyTarget),
+            onTap: () => onPress(lobbyTarget),
           ),
-        );
-      },
+          const SizedBox(width: 16),
+          Expanded(
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                for (final device in players)
+                  _PlayerStatusChip(
+                    device: device,
+                    status: _status(strings, device.id),
+                    done: snapshot.players.any(
+                      (p) => p.deviceId == device.id && p.vote != null,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            strings.votedCount(voted, snapshot.players.length),
+            style: _captionStyle.copyWith(fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _status(SessionStrings strings, String deviceId) {
+    final player = snapshot.players
+        .where((p) => p.deviceId == deviceId)
+        .firstOrNull;
+    if (snapshot.lobbyRequest?.fromDeviceId == deviceId) {
+      return strings.statusWantsLobby;
+    }
+    if (player?.vote case final vote?) return gameName(vote);
+    if (snapshot.reading[deviceId] case final reading?) {
+      return strings.statusReading(gameName(reading));
+    }
+    return strings.statusChoosing;
+  }
+}
+
+class _PlayerStatusChip extends StatelessWidget {
+  final DeviceModel device;
+  final String status;
+  final bool done;
+
+  const _PlayerStatusChip({
+    required this.device,
+    required this.status,
+    required this.done,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+      decoration: BoxDecoration(
+        color: done ? AppColors.highlightColor : AppColors.screenBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.textPrimary, width: 2.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FaceSticker(face: device.face, size: 30),
+          const SizedBox(width: 8),
+          Text(device.name, style: _buttonStyle),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: Text(
+              status,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _captionStyle.copyWith(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

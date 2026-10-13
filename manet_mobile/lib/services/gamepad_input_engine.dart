@@ -719,7 +719,7 @@ class GamepadInputEngine {
   void updateButtonState(String xinputId, String state, bool tapHapticsEnabled) {
     if (state == 'down' && tapHapticsEnabled) {
       try {
-        HapticsManager.instance.softTap();
+        HapticsManager.instance.buttonTap(xinputId);
       } catch (_) {}
     }
     _sendFn?.call({'type': 'button', 'id': xinputId, 'state': state});

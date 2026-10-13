@@ -11,6 +11,7 @@ class ServerOptionsPopup extends StatefulWidget {
   final int currentTimeoutMinutes;
   final ValueChanged<int> onTimeoutChanged;
   final ValueChanged<int>? onMatchSecondsChanged;
+  final ValueChanged<bool>? onFreeModeChanged;
 
   const ServerOptionsPopup({
     super.key,
@@ -19,6 +20,7 @@ class ServerOptionsPopup extends StatefulWidget {
     required this.currentTimeoutMinutes,
     required this.onTimeoutChanged,
     this.onMatchSecondsChanged,
+    this.onFreeModeChanged,
   });
 
   @override
@@ -30,6 +32,7 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
   late int _selectedTimeoutMinutes;
   bool _fullScreen = true;
   int _matchSeconds = 10;
+  bool _freeMode = true;
 
   @override
   void initState() {
@@ -41,6 +44,9 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
     });
     AppPreferences.matchSeconds().then((value) {
       if (mounted) setState(() => _matchSeconds = value);
+    });
+    AppPreferences.freeModeEnabled().then((value) {
+      if (mounted) setState(() => _freeMode = value);
     });
   }
 
@@ -213,6 +219,45 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
                       ),
                     ),
                   ),
+                ),
+              ],
+            ),
+          ],
+          if (widget.onFreeModeChanged != null) ...[
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.l10n.settings.freeModeTitle,
+                        style: const TextStyle(
+                          fontFamily: 'momo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        context.l10n.settings.freeModeHint,
+                        style: TextStyle(
+                          fontFamily: 'momo',
+                          fontSize: 12,
+                          color: AppColors.textPrimary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                JuicyToggle(
+                  value: _freeMode,
+                  onChanged: (value) {
+                    SoundEffectService.instance.playThemeSelect();
+                    setState(() => _freeMode = value);
+                    widget.onFreeModeChanged!(value);
+                  },
                 ),
               ],
             ),

@@ -73,6 +73,7 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String launchError(String code) => switch (code) {
         'path_not_found' => 'Couldn\'t find the game file. Check its path in Manage games.',
+        'elevation_cancelled' => 'This game needs admin rights, and the Windows prompt was declined.',
         _ => 'Couldn\'t start the game.',
       };
   @override
@@ -88,6 +89,36 @@ class EnUsSessionStrings implements SessionStrings {
   String get returnToLobby => 'Back to lobby';
   @override
   String get gamesTitle => 'Games';
+  @override
+  String get tabGames => 'Games';
+  @override
+  String get tabLauncher => 'Launcher';
+  @override
+  String get launcherSettingsTitle => 'Launcher Appearance';
+  @override
+  String get cardStyleLabel => 'Card Style';
+  @override
+  String get cardStyleCoverOnly => 'Cover Only';
+  @override
+  String get cardStyleClassic => 'Classic (with details)';
+  @override
+  String get gridDensityLabel => 'Library Rows';
+  @override
+  String get gridRows1 => '1 Row (Wide)';
+  @override
+  String get gridRows2 => '2 Rows (Default)';
+  @override
+  String get gridRows3 => '3 Rows (Compact)';
+  @override
+  String get sortOrderLabel => 'Sorting';
+  @override
+  String get sortRecent => 'Most Recent';
+  @override
+  String get sortAlphabetical => 'Alphabetical (A–Z)';
+  @override
+  String get sortPlayers => 'By Players';
+  @override
+  String get manageGamesAndLauncher => 'Games & Launcher';
   @override
   String get addGame => 'Add game';
   @override
@@ -135,7 +166,7 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get coverSearch => 'Search';
   @override
-  String get coverSteamHint => 'Official covers from the Steam store. Click one to use it.';
+  String get coverSteamHint => 'Covers and details from Steam and IGDB. Click one to use it.';
   @override
   String get coverNoResults => 'Nothing found with that name.';
   @override
@@ -265,9 +296,13 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get gameTrailerHint => 'Video link (YouTube, Steam...)';
   @override
+  String get gameImages => 'Images';
+  @override
+  String get gameImagesHint => 'Image links, one per line (shown on the card and on the phones)';
+  @override
   String get searchTrailer => 'Search YouTube';
   @override
-  String get steamInfoLoading => 'Getting description and tags from Steam...';
+  String get steamInfoLoading => 'Getting description and game details...';
   @override
   String get tournamentTitle => 'Tournament!';
   @override
@@ -293,6 +328,25 @@ class EnUsSessionStrings implements SessionStrings {
   String tournamentChampion(String game) => "Let's play $game!";
   @override
   String get tournamentCancel => 'Library';
+  @override
+  String get lobbyCountdown => 'Everyone is ready! Opening the game selection…';
+  @override
+  String get freeMode => 'Free mode';
+  @override
+  String get freeModeHint => 'Open any game with the mouse. Phones work as plain controllers; press Home on a phone to come back.';
+  @override
+  String get leaveFreeMode => 'Leave free mode';
+  @override
+  String lobbyRequest(String name, int yes, int needed) =>
+      '$name wants to go back to the lobby · $yes/$needed agree';
+  @override
+  String get statusChoosing => 'choosing';
+  @override
+  String statusReading(String game) => 'reading about $game';
+  @override
+  String get statusWantsLobby => 'wants to go back';
+  @override
+  String votedCount(int voted, int total) => '$voted of $total picked';
 }
 
 class EnUsControllersStrings implements ControllersStrings {
@@ -559,6 +613,10 @@ class EnUsSettingsStrings implements SettingsStrings {
   String get matchSecondsTitle => 'Tournament duel length';
   @override
   String matchSecondsValue(int seconds) => '${seconds}s';
+  @override
+  String get freeModeTitle => 'Free mode';
+  @override
+  String get freeModeHint => 'Lets the game selection minimize MaNet so phones work as plain controllers for any game.';
 }
 
 

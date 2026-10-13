@@ -8,10 +8,12 @@ another process (common with Steam/Epic). Those games end only when the host
 says so.
 """
 import asyncio
+import ctypes
 import logging
 import os
 import subprocess
 import time
+from ctypes import wintypes
 
 import psutil
 
@@ -24,18 +26,80 @@ POLL_INTERVAL_SECONDS = 1.0
 
 _DETACHED = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
 
+_ERROR_ELEVATION_REQUIRED = 740
+_ERROR_CANCELLED = 1223  # user said "No" on the UAC prompt
+_SEE_MASK_NOCLOSEPROCESS = 0x00000040
+_SEE_MASK_NOASYNC = 0x00000100
+_SEE_MASK_FLAG_NO_UI = 0x00000400  # no shell error dialogs; UAC still shows
+_SW_SHOWNORMAL = 1
+
 
 class LaunchError(Exception):
     pass
 
 
+class _ShellExecuteInfo(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("fMask", ctypes.c_ulong),
+        ("hwnd", wintypes.HWND),
+        ("lpVerb", wintypes.LPCWSTR),
+        ("lpFile", wintypes.LPCWSTR),
+        ("lpParameters", wintypes.LPCWSTR),
+        ("lpDirectory", wintypes.LPCWSTR),
+        ("nShow", ctypes.c_int),
+        ("hInstApp", wintypes.HINSTANCE),
+        ("lpIDList", ctypes.c_void_p),
+        ("lpClass", wintypes.LPCWSTR),
+        ("hkeyClass", wintypes.HKEY),
+        ("dwHotKey", wintypes.DWORD),
+        ("hIconOrMonitor", wintypes.HANDLE),
+        ("hProcess", wintypes.HANDLE),
+    ]
+
+
+def _start_elevated(path: str, arguments: str, cwd: str | None) -> int:
+    """Starts `path` as admin through the shell and returns its pid."""
+    info = _ShellExecuteInfo()
+    info.cbSize = ctypes.sizeof(info)
+    info.fMask = _SEE_MASK_NOCLOSEPROCESS | _SEE_MASK_NOASYNC | _SEE_MASK_FLAG_NO_UI
+    info.lpVerb = "runas"
+    info.lpFile = path
+    info.lpParameters = arguments or None
+    info.lpDirectory = cwd or None
+    info.nShow = _SW_SHOWNORMAL
+
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(_ShellExecuteInfo)]
+    shell32.ShellExecuteExW.restype = wintypes.BOOL
+    kernel32.GetProcessId.argtypes = [wintypes.HANDLE]
+    kernel32.GetProcessId.restype = wintypes.DWORD
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+    if not shell32.ShellExecuteExW(ctypes.byref(info)):
+        error = ctypes.get_last_error()
+        if error == _ERROR_CANCELLED:
+            LOG.info("Host declined the admin prompt for %s", path)
+            raise LaunchError("elevation_cancelled")
+        LOG.error("Failed to start %s elevated: %s", path, ctypes.FormatError(error))
+        raise LaunchError("start_failed")
+    if not info.hProcess:
+        raise LaunchError("start_failed")
+    try:
+        return kernel32.GetProcessId(info.hProcess)
+    finally:
+        kernel32.CloseHandle(info.hProcess)
+
+
 class RunningGame:
-    def __init__(self, game: dict, process: subprocess.Popen | None):
+    def __init__(self, game: dict, process: subprocess.Popen | None, pid: int | None = None):
         self.game = game
         self.process = process
         self.started_at = time.monotonic()
-        self.tracked = process is not None
-        self._pids: set[int] = {process.pid} if process else set()
+        root_pid = process.pid if process else pid
+        self.tracked = root_pid is not None
+        self._pids: set[int] = {root_pid} if root_pid is not None else set()
 
     def to_payload(self) -> dict:
         return {"id": self.game["id"], "name": self.game["name"], "tracked": self.tracked}
@@ -50,7 +114,10 @@ class RunningGame:
                     continue
                 alive.add(pid)
                 alive.update(child.pid for child in proc.children(recursive=True))
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except psutil.AccessDenied:
+                # Elevated games can't be fully inspected, but they still exist.
+                alive.add(pid)
+            except psutil.NoSuchProcess:
                 continue
         self._pids |= alive
         return alive
@@ -59,7 +126,9 @@ class RunningGame:
         for pid in self.alive_pids():
             try:
                 psutil.Process(pid).kill()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except psutil.AccessDenied:
+                LOG.warning("Cannot close elevated process %d without admin rights", pid)
+            except psutil.NoSuchProcess:
                 pass
 
 
@@ -82,8 +151,14 @@ def start_game(game: dict) -> RunningGame:
                 close_fds=True,
             )
         except OSError as e:
-            LOG.error("Failed to start %s: %s", path, e)
-            raise LaunchError("start_failed") from e
+            if getattr(e, "winerror", None) != _ERROR_ELEVATION_REQUIRED:
+                LOG.error("Failed to start %s: %s", path, e)
+                raise LaunchError("start_failed") from e
+            # The exe's manifest asks for admin; CreateProcess can't do that,
+            # the shell can (the host sees a UAC prompt).
+            pid = _start_elevated(path, game.get("arguments", ""), cwd)
+            LOG.info("Started game %s elevated (pid %d)", game["name"], pid)
+            return RunningGame(game, None, pid=pid)
         LOG.info("Started game %s (pid %d)", game["name"], process.pid)
         return RunningGame(game, process)
 

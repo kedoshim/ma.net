@@ -625,11 +625,38 @@ class HostApiService {
   Future<void> setMatchSeconds(int seconds) =>
       _postJson('/api/session/settings', {'matchSeconds': seconds});
 
+  /// Whether the free mode option is offered.
+  Future<void> setFreeModeEnabled(bool enabled) =>
+      _postJson('/api/session/settings', {'freeModeEnabled': enabled});
+
+  /// MaNet steps aside: phones become plain gamepads for any game.
+  Future<void> enterFreeMode() => _postJson('/api/session/free-mode');
+
+  /// A player pressed Info over [gameId]: their phone shows the details
+  /// (null closes them).
+  Future<void> showDetails(String deviceId, String? gameId) => _postJson(
+    '/api/session/details',
+    {'deviceId': deviceId, 'gameId': gameId},
+  );
+
+  /// A player's cursor asked to go back to the lobby (the others confirm).
+  Future<void> requestLobby(String deviceId) =>
+      _postJson('/api/session/lobby-request', {'deviceId': deviceId});
+
   /// Asks the server to move MaNet's window onto the game's monitor.
   Future<void> placeOverlayWindow() => _postJson('/api/session/place-overlay');
 
   /// Asks the server to bring the running game's window to the front.
   Future<void> focusGame() => _postJson('/api/session/focus-game');
+
+  /// Handle (HWND) of the window the players are playing in, if known.
+  Future<int?> gameWindow() async {
+    final response = await http
+        .get(Uri.parse('$baseUrl/api/session/game-window'))
+        .timeout(_requestTimeout);
+    if (response.statusCode != 200) return null;
+    return (json.decode(response.body) as Map<String, dynamic>)['hwnd'] as int?;
+  }
 
   /// Close the running game and go back to picking one.
   Future<void> switchGame() => _postJson('/api/session/switch-game');

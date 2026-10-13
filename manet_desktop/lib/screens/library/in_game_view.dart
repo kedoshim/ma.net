@@ -15,6 +15,7 @@ class InGameView extends StatelessWidget {
     final strings = context.l10n.session;
     final session = context.watch<SessionController>();
     final running = session.snapshot.runningGame;
+    final freeMode = session.snapshot.freeMode;
 
     return Center(
       child: Container(
@@ -28,14 +29,14 @@ class InGameView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.sports_esports_rounded,
+            Icon(
+              freeMode ? Icons.mouse_rounded : Icons.sports_esports_rounded,
               size: 48,
               color: AppColors.textPrimary,
             ),
             const SizedBox(height: 12),
             Text(
-              strings.playing(running?.name ?? ''),
+              freeMode ? strings.freeMode : strings.playing(running?.name ?? ''),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontFamily: 'momo',
@@ -46,7 +47,9 @@ class InGameView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              running?.tracked == false
+              freeMode
+                  ? strings.freeModeHint
+                  : running?.tracked == false
                   ? strings.untrackedHint
                   : (session.snapshot.gameInFront
                         ? strings.playingHint
@@ -80,7 +83,10 @@ class InGameView extends StatelessWidget {
                     horizontal: 18,
                     vertical: 12,
                   ),
-                  child: Text(strings.returnToLobby, style: _buttonStyle),
+                  child: Text(
+                    freeMode ? strings.leaveFreeMode : strings.returnToLobby,
+                    style: _buttonStyle,
+                  ),
                 ),
               ],
             ),

@@ -2,17 +2,19 @@
 Session state: the server-side source of truth for what the whole couch is
 doing. Desktop and phones render it and send intents; they never own it.
 
-    lobby ──(everyone ready + START)──> library ──(votes + countdown)──> in_game
-      ^                                    │                                │
-      └──────────(SELECT / host)───────────┘<──────(game exits / host)──────┘
+    lobby ──(everyone ready + 5s)──> library ──(votes + countdown)──> in_game
+      ^                                  │                                │
+      └──(majority agrees / host)────────┘<──────(game exits / host)──────┘
+      └───────────────(free mode: MaNet steps aside)──────────────> in_game
 
-Input routing: while the MaNet window has focus in the lobby or the library,
-phone input drives MaNet (ready toggles, cursors, votes) and never reaches
-the virtual gamepads. Otherwise (a game in front, or MaNet in the
-background) input goes to the gamepads as usual.
+Input routing follows the screen: in the lobby (QR code) and the game
+selection, phone input always drives MaNet (ready toggles, cursors, votes)
+and never reaches the virtual gamepads. In a game, or in free mode (MaNet
+minimized, any game opened by hand), input goes to the gamepads.
 """
 import asyncio
 import logging
+import os
 import random
 import time
 from enum import Enum
@@ -31,14 +33,22 @@ from src.services.game_launcher import LaunchError, RunningGame, start_game, wat
 from src.services.window_placement import (
     capture_game_screen,
     enforce_placement,
-    foreground_pid,
-    game_monitor,
+    find_main_window,
+    focus_window,
+    foreground_window,
+    is_window,
+    list_displays,
     move_to_monitor,
+    window_monitor,
 )
 
 LOGGER = logging.getLogger(__name__)
 
 COUNTDOWN_SECONDS = 3.0
+# Everyone ready in the lobby: the game selection opens after this.
+LOBBY_COUNTDOWN_SECONDS = 5.0
+# How long a "back to the lobby?" request waits for the majority.
+LOBBY_REQUEST_SECONDS = 20.0
 
 
 class SessionPhase(str, Enum):
@@ -76,7 +86,8 @@ class SessionState:
         self.library = library
         self.phase = SessionPhase.LOBBY
         self.focused = False
-        self.input_mode = InputMode.GAME
+        # The lobby (QR code screen) owns the phones from the start.
+        self.input_mode = InputMode.MENU
         # Keyed by deviceId: slots can be reshuffled while a player stays.
         self.ready: set[str] = set()
         self.votes: dict[str, str] = {}
@@ -95,6 +106,10 @@ class SessionState:
         self.overlay_shot: bytes | None = None
         self.overlay_shot_id = 0
         self.game_in_front = True
+        # The window the players are playing in, so the overlay opens on its
+        # monitor and "back to the game" can focus it again (also works for
+        # games started through a launcher, which we can't track by pid).
+        self.game_hwnd: int | None = None
         self._guard_task: asyncio.Task | None = None
         self._last_phone_payloads: dict[str, dict] = {}
         # target deviceId -> (requesting deviceId, expiry timestamp)
@@ -102,6 +117,17 @@ class SessionState:
         self.tournament: Tournament | None = None
         self._tournament_task: asyncio.Task | None = None
         self.match_seconds = MATCH_SECONDS_DEFAULT
+        # Free mode: MaNet steps aside and phones are plain gamepads for any
+        # game opened by hand. The host can turn the option off.
+        self.free_mode = False
+        self.free_mode_enabled = True
+        self.lobby_countdown_ends_at: float | None = None
+        self._lobby_countdown_task: asyncio.Task | None = None
+        # Someone asked to leave the game selection: {"from", "yes", "no", "endsAt"}.
+        self.lobby_request: dict | None = None
+        self._lobby_request_task: asyncio.Task | None = None
+        # deviceId -> gameId whose details that phone is reading.
+        self.reading: dict[str, str] = {}
 
     # ---------------------------------------------------------------- players
 
@@ -137,6 +163,11 @@ class SessionState:
         if self.overlay_owner is not None and self.overlay_owner not in players:
             # The opener left; let anyone drive the overlay so it can't get stuck.
             self.overlay_owner = None
+        for device_id in list(self.reading):
+            if device_id not in players:
+                del self.reading[device_id]
+        self._sync_lobby_request(players)
+        self._check_lobby_countdown()
         # Always publish: a player joining changes "everyone ready" too.
         self.broadcast()
 
@@ -146,7 +177,9 @@ class SessionState:
         return self.input_mode == InputMode.GAME
 
     def _refresh_input_mode(self):
-        menu = self.overlay_open or (self.focused and self.phase in MENU_PHASES)
+        # The screen decides, not window focus: the lobby and the game
+        # selection always own the phones.
+        menu = self.overlay_open or self.phase in MENU_PHASES
         if menu:
             mode = InputMode.MENU
         elif self.phase == SessionPhase.IN_GAME and not self.game_in_front:
@@ -181,22 +214,23 @@ class SessionState:
             return
         # Menus use a game-independent scheme: Select (A) and Back (B); the
         # console-style START/SELECT keep working too.
+        # A ready / select, B not ready / cancel my selection, X info and
+        # Y emote (desktop only); START/SELECT keep working on real pads.
         if self.phase == SessionPhase.LOBBY:
-            if button in ("A", "START"):
-                if device_id not in self.ready:
-                    self.ready.add(device_id)
-                    self.manager.pulse_device(device_id)
-                    self.broadcast()
-                elif self.all_ready():
-                    self.enter_library()
+            if button in ("A", "START") and device_id not in self.ready:
+                self.ready.add(device_id)
+                self.manager.pulse_device(device_id)
+                self._check_lobby_countdown()
+                self.broadcast()
             elif button == "B" and device_id in self.ready:
                 self.ready.discard(device_id)
+                self._check_lobby_countdown()
                 self.broadcast()
         elif self.phase == SessionPhase.LIBRARY:
-            # B (Back) is resolved by the desktop, which knows whether it
-            # should close the game details panel, remove the vote or leave.
+            # A, B and X are resolved by the desktop, which knows what each
+            # cursor is over.
             if button == "SELECT":
-                self.back_to_lobby()
+                self.request_lobby(device_id)
             elif button == "START" and self.countdown_game_id is None:
                 self.decide()
 
@@ -222,8 +256,8 @@ class SessionState:
         if open_ == self.overlay_open:
             return
         if open_:
-            pids = self._game_pids()
-            self.overlay_monitor = await asyncio.to_thread(game_monitor, pids)
+            await asyncio.to_thread(self._remember_game_window, True)
+            self.overlay_monitor = await asyncio.to_thread(self._game_monitor)
             try:
                 shot = await asyncio.to_thread(capture_game_screen, self.overlay_monitor)
             except Exception:
@@ -238,6 +272,54 @@ class SessionState:
 
     def _game_pids(self) -> set[int]:
         return self.running.alive_pids() if self.running and self.running.tracked else set()
+
+    def _own_pids(self) -> set[int]:
+        desktop_pid = getattr(self.manager.config, "parent_pid", None)
+        return {os.getpid(), *([desktop_pid] if desktop_pid else [])}
+
+    def _remember_game_window(self, at_home: bool = False):
+        """Update `game_hwnd` (runs in a worker thread).
+
+        Order: the window in front when it belongs to the game; for a game
+        we can't track (launcher), whatever was in front when Home was
+        pressed unless it is MaNet itself; then the tracked processes' main
+        window (also when minimized); else keep the one remembered."""
+        hwnd, pid = foreground_window()
+        pids = self._game_pids()
+        if hwnd and pid and pid in pids:
+            self.game_hwnd = hwnd
+            return
+        if at_home and hwnd and pid and not pids and pid not in self._own_pids():
+            self.game_hwnd = hwnd
+            return
+        if pids:
+            main = find_main_window(pids)
+            if main:
+                self.game_hwnd = main
+                return
+        if not is_window(self.game_hwnd):
+            self.game_hwnd = None
+
+    def _game_monitor(self) -> dict | None:
+        """The game's monitor; else the one chosen for the game; else None
+        (never "whatever window happens to be in front")."""
+        monitor = window_monitor(self.game_hwnd)
+        if monitor:
+            return monitor
+        index = (self.running.game.get("display") if self.running else None)
+        if index is not None:
+            return next((d for d in list_displays() if d["index"] == index), None)
+        return None
+
+    def focus_game(self) -> bool:
+        """Bring the game window back to the front (server-side fallback;
+        the desktop normally does it itself while it still has the focus)."""
+        self._remember_game_window()
+        return focus_window(self.game_hwnd)
+
+    def game_window(self) -> int | None:
+        self._remember_game_window()
+        return self.game_hwnd
 
     async def place_overlay_window(self) -> bool:
         """Move MaNet's window onto the game's monitor (called by the desktop
@@ -261,9 +343,11 @@ class SessionState:
                         self._refresh_input_mode()
                         self.broadcast()
                     return
-                pid = await asyncio.to_thread(foreground_pid)
+                hwnd, pid = await asyncio.to_thread(foreground_window)
                 pids = await asyncio.to_thread(self._game_pids)
                 in_front = pid is None or pid in pids
+                if hwnd and pid in pids:
+                    self.game_hwnd = hwnd
                 if in_front != self.game_in_front:
                     self.game_in_front = in_front
                     LOGGER.info("Game %s the foreground window", "is" if in_front else "is not")
@@ -281,6 +365,9 @@ class SessionState:
 
     def _set_phase(self, phase: SessionPhase):
         self.phase = phase
+        self._clear_lobby_request()
+        self._cancel_lobby_countdown()
+        self.reading.clear()
         self._refresh_input_mode()
 
     def enter_library(self):
@@ -293,6 +380,199 @@ class SessionState:
         for device_id in self.player_ids():
             self.manager.pulse_device(device_id)
         self.broadcast()
+
+    # ------------------------------------------------------- lobby countdown
+
+    def _check_lobby_countdown(self):
+        """Everyone ready starts the countdown to the game selection; anyone
+        un-readying (or someone new arriving) stops it."""
+        should_run = self.phase == SessionPhase.LOBBY and self.all_ready()
+        if should_run and self._lobby_countdown_task is None:
+            self.lobby_countdown_ends_at = time.time() + LOBBY_COUNTDOWN_SECONDS
+            self._lobby_countdown_task = asyncio.get_running_loop().create_task(
+                self._run_lobby_countdown()
+            )
+        elif not should_run:
+            self._cancel_lobby_countdown()
+
+    def _cancel_lobby_countdown(self):
+        if self._lobby_countdown_task is not None:
+            self._lobby_countdown_task.cancel()
+        self._lobby_countdown_task = None
+        self.lobby_countdown_ends_at = None
+
+    async def _run_lobby_countdown(self):
+        try:
+            await asyncio.sleep(LOBBY_COUNTDOWN_SECONDS)
+        except asyncio.CancelledError:
+            return
+        self._lobby_countdown_task = None
+        self.lobby_countdown_ends_at = None
+        self.enter_library()
+
+    # ------------------------------------------------- back-to-lobby request
+
+    @staticmethod
+    def _lobby_votes_needed(players: int) -> int:
+        return players // 2 + 1
+
+    def request_lobby(self, device_id: str) -> bool:
+        """A player wants to leave the game selection: the others are asked
+        and the majority (the requester counts) decides."""
+        if self.phase != SessionPhase.LIBRARY or device_id not in self.player_ids():
+            return False
+        if self.lobby_request is not None:
+            # Asking while a request is open counts as agreeing with it.
+            return self.answer_lobby(device_id, True)
+        self.lobby_request = {
+            "from": device_id,
+            "yes": {device_id},
+            "no": set(),
+            "endsAt": time.time() + LOBBY_REQUEST_SECONDS,
+        }
+        LOGGER.info("Device %s asks to go back to the lobby", device_id)
+        if self._resolve_lobby_request():
+            return True
+        for other in self.player_ids():
+            if other != device_id:
+                self.manager.pulse_device(other)
+        self._lobby_request_task = asyncio.get_running_loop().create_task(
+            self._expire_lobby_request()
+        )
+        self.broadcast()
+        return True
+
+    def answer_lobby(self, device_id: str, accept: bool) -> bool:
+        request = self.lobby_request
+        if request is None or device_id not in self.player_ids():
+            return False
+        request["yes"].discard(device_id)
+        request["no"].discard(device_id)
+        (request["yes"] if accept else request["no"]).add(device_id)
+        if not self._resolve_lobby_request():
+            self.broadcast()
+        return True
+
+    def _resolve_lobby_request(self) -> bool:
+        """Go back when the majority agreed, drop the request when it can't
+        reach one any more. True when the request ended."""
+        request = self.lobby_request
+        if request is None:
+            return True
+        players = len(self.player_ids())
+        needed = self._lobby_votes_needed(players)
+        if len(request["yes"]) >= needed:
+            self.back_to_lobby()
+            return True
+        if players - len(request["no"]) < needed:
+            self._clear_lobby_request()
+            self.broadcast()
+            return True
+        return False
+
+    async def _expire_lobby_request(self):
+        try:
+            await asyncio.sleep(LOBBY_REQUEST_SECONDS)
+        except asyncio.CancelledError:
+            return
+        self._lobby_request_task = None
+        self.lobby_request = None
+        self.broadcast()
+
+    def _clear_lobby_request(self):
+        if self._lobby_request_task is not None:
+            self._lobby_request_task.cancel()
+        self._lobby_request_task = None
+        self.lobby_request = None
+
+    def _sync_lobby_request(self, players: set[str]):
+        request = self.lobby_request
+        if request is None:
+            return
+        if request["from"] not in players:
+            self._clear_lobby_request()
+            return
+        request["yes"] &= players
+        request["no"] &= players
+        # Fewer players can mean the majority is already there. Deferred so
+        # the phase doesn't change while slots are being updated.
+        asyncio.get_running_loop().call_soon(self._resolve_lobby_request)
+
+    def _lobby_request_payload(self, device_id: str | None = None) -> dict | None:
+        request = self.lobby_request
+        if request is None:
+            return None
+        answer = None
+        if device_id in request["yes"]:
+            answer = True
+        elif device_id in request["no"]:
+            answer = False
+        return {
+            "from": self._identity(request["from"]),
+            "mine": device_id == request["from"],
+            "myAnswer": answer,
+            "yes": len(request["yes"]),
+            "no": len(request["no"]),
+            "needed": self._lobby_votes_needed(len(self.player_ids())),
+            "endsAt": request["endsAt"],
+        }
+
+    # ------------------------------------------------------------ details
+
+    def show_details(self, device_id: str, game_id: str | None) -> bool:
+        """The desktop resolved a player's Info press over a game: that phone
+        shows the game's details and the player's cursor waits (it doesn't
+        scroll the library). None closes them."""
+        if device_id not in self.player_ids():
+            return False
+        if game_id is None:
+            if self.reading.pop(device_id, None) is not None:
+                self.broadcast()
+            return True
+        if self.phase != SessionPhase.LIBRARY:
+            return False
+        game = self.library.get(game_id)
+        if game is None:
+            return False
+        self.reading[device_id] = game_id
+        self.manager.notify_device(device_id, {
+            "type": "game_details",
+            "game": {
+                "id": game["id"],
+                "name": game["name"],
+                "description": game.get("description") or "",
+                "tags": game.get("tags") or [],
+                "minPlayers": game["minPlayers"],
+                "maxPlayers": game["maxPlayers"],
+                "trailerUrl": game.get("trailerUrl") or "",
+                "screenshots": game.get("screenshots") or [],
+                "coverUrl": f"/api/games/{game['id']}/cover" if game.get("coverPath") else None,
+            },
+        })
+        self.broadcast()
+        return True
+
+    # ---------------------------------------------------------- free mode
+
+    def enter_free_mode(self) -> bool:
+        """MaNet steps aside: phones become plain gamepads for whatever the
+        host opens by hand. Home on a phone brings the overlay back."""
+        if not self.free_mode_enabled or self.phase not in (SessionPhase.LOBBY, SessionPhase.LIBRARY):
+            return False
+        LOGGER.info("Entering free mode")
+        self.cancel_countdown(broadcast=False)
+        self.votes.clear()
+        self.ready.clear()
+        self.last_error = None
+        self.free_mode = True
+        self.running = None
+        self.game_in_front = True
+        self._set_phase(SessionPhase.IN_GAME)
+        self.broadcast()
+        return True
+
+    def set_free_mode_enabled(self, enabled: bool):
+        self.free_mode_enabled = bool(enabled)
 
     def back_to_lobby(self):
         if self.phase == SessionPhase.IN_GAME:
@@ -493,6 +773,8 @@ class SessionState:
             self.broadcast()
             return
 
+        self.library.touch(game_id)
+        self.admin_panel.broadcast_event({"type": "games_update", "games": self.library.list()})
         self.running = running
         self.votes.clear()
         self._set_phase(SessionPhase.IN_GAME)
@@ -503,6 +785,7 @@ class SessionState:
                 enforce_placement(running, game.get("display"), game.get("fullscreen", True))
             )
             self.game_in_front = True
+            self.game_hwnd = None
             self._guard_task = loop.create_task(self._guard_foreground())
         self.broadcast()
 
@@ -527,10 +810,12 @@ class SessionState:
         self._placement_task = None
         self._guard_task = None
         self.game_in_front = True
+        self.game_hwnd = None
         self.overlay_owner = None
         self.running = None
         self.overlay_open = False
         self.overlay_shot = None
+        self.free_mode = False
         self.ready.clear()
         self.votes.clear()
         self._set_phase(SessionPhase.LOBBY)
@@ -570,6 +855,14 @@ class SessionState:
             "overlayOwner": self.overlay_owner,
             "overlayShotId": self.overlay_shot_id if self.overlay_shot else None,
             "gameInFront": self.game_in_front,
+            "freeMode": self.free_mode,
+            "freeModeEnabled": self.free_mode_enabled,
+            "lobbyCountdown": {
+                "endsAt": self.lobby_countdown_ends_at,
+                "seconds": LOBBY_COUNTDOWN_SECONDS,
+            } if self.lobby_countdown_ends_at else None,
+            "lobbyRequest": self._lobby_request_payload(),
+            "reading": dict(self.reading),
         }
 
     def phone_payload(self, device_id: str | None = None) -> dict:
@@ -595,6 +888,12 @@ class SessionState:
             "me": device_id,
             "mySlot": self.manager.device_map.get(device_id) if device_id else None,
             "seats": self.seats_payload(),
+            "ready": device_id in self.ready,
+            "myVote": self.votes.get(device_id),
+            "reading": self.reading.get(device_id),
+            "freeMode": self.free_mode,
+            "lobbyCountdownEndsAt": self.lobby_countdown_ends_at,
+            "lobbyRequest": self._lobby_request_payload(device_id),
         }
 
     # --------------------------------------------------------------- seats

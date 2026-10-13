@@ -75,6 +75,7 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String launchError(String code) => switch (code) {
         'path_not_found' => 'Não encontrei o arquivo do jogo. Confira o caminho em Gerenciar jogos.',
+        'elevation_cancelled' => 'Esse jogo precisa de permissão de administrador, e o aviso do Windows foi recusado.',
         _ => 'Não consegui abrir o jogo.',
       };
   @override
@@ -90,6 +91,36 @@ class PtBrSessionStrings implements SessionStrings {
   String get returnToLobby => 'Voltar ao lobby';
   @override
   String get gamesTitle => 'Jogos';
+  @override
+  String get tabGames => 'Jogos';
+  @override
+  String get tabLauncher => 'Launcher';
+  @override
+  String get launcherSettingsTitle => 'Aparência do Launcher';
+  @override
+  String get cardStyleLabel => 'Estilo dos Cards';
+  @override
+  String get cardStyleCoverOnly => 'Apenas Imagem';
+  @override
+  String get cardStyleClassic => 'Clássico (com detalhes)';
+  @override
+  String get gridDensityLabel => 'Linhas da Biblioteca';
+  @override
+  String get gridRows1 => '1 Linha (Amplo)';
+  @override
+  String get gridRows2 => '2 Linhas (Padrão)';
+  @override
+  String get gridRows3 => '3 Linhas (Compacto)';
+  @override
+  String get sortOrderLabel => 'Ordenação';
+  @override
+  String get sortRecent => 'Mais Recentes';
+  @override
+  String get sortAlphabetical => 'Alfabética (A–Z)';
+  @override
+  String get sortPlayers => 'Por Jogadores';
+  @override
+  String get manageGamesAndLauncher => 'Jogos e Launcher';
   @override
   String get addGame => 'Adicionar jogo';
   @override
@@ -137,7 +168,7 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get coverSearch => 'Buscar';
   @override
-  String get coverSteamHint => 'Capas oficiais da loja Steam. Clique em uma para usar.';
+  String get coverSteamHint => 'Capas e dados da Steam e do IGDB. Clique em uma para usar.';
   @override
   String get coverNoResults => 'Nada encontrado com esse nome.';
   @override
@@ -267,9 +298,13 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get gameTrailerHint => 'Link do vídeo (YouTube, Steam...)';
   @override
+  String get gameImages => 'Imagens';
+  @override
+  String get gameImagesHint => 'Links de imagens, um por linha (aparecem no card e nos celulares)';
+  @override
   String get searchTrailer => 'Buscar no YouTube';
   @override
-  String get steamInfoLoading => 'Buscando descrição e tags na Steam...';
+  String get steamInfoLoading => 'Buscando descrição e detalhes do jogo...';
   @override
   String get tournamentTitle => 'Torneio!';
   @override
@@ -295,6 +330,25 @@ class PtBrSessionStrings implements SessionStrings {
   String tournamentChampion(String game) => 'Vamos jogar $game!';
   @override
   String get tournamentCancel => 'Biblioteca';
+  @override
+  String get lobbyCountdown => 'Todo mundo pronto! Abrindo a escolha de jogos…';
+  @override
+  String get freeMode => 'Modo livre';
+  @override
+  String get freeModeHint => 'Abra qualquer jogo com o mouse. Os celulares funcionam como controles comuns; aperte Home no celular para voltar.';
+  @override
+  String get leaveFreeMode => 'Sair do modo livre';
+  @override
+  String lobbyRequest(String name, int yes, int needed) =>
+      '$name quer voltar ao lobby · $yes/$needed concordam';
+  @override
+  String get statusChoosing => 'escolhendo';
+  @override
+  String statusReading(String game) => 'lendo sobre $game';
+  @override
+  String get statusWantsLobby => 'quer voltar ao lobby';
+  @override
+  String votedCount(int voted, int total) => '$voted de $total escolheram';
 }
 
 class PtBrControllersStrings implements ControllersStrings {
@@ -561,6 +615,10 @@ class PtBrSettingsStrings implements SettingsStrings {
   String get matchSecondsTitle => 'Tempo de cada duelo do torneio';
   @override
   String matchSecondsValue(int seconds) => '${seconds}s';
+  @override
+  String get freeModeTitle => 'Modo livre';
+  @override
+  String get freeModeHint => 'Permite minimizar o MaNet na escolha de jogos para os celulares virarem controles comuns em qualquer jogo.';
 }
 
 class PtBrSlotsStrings implements SlotsStrings {

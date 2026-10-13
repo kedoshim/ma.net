@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/igdb_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/juicy_widgets.dart';
 
@@ -105,25 +107,38 @@ class CoverStore {
 
 enum CoverError { invalidLink, unreachable, notAnImage }
 
-/// What the cover search returns: the downloaded file, plus the Steam app
-/// when the cover came from the Steam search (to fill in the game's info).
-class CoverPick {
-  final String path;
-  final int? steamAppId;
-
-  const CoverPick(this.path, {this.steamAppId});
-}
-
-/// Store info for a Steam app (public store API, no key needed).
-class SteamDetails {
+/// Unified game metadata (description, tags, trailer and screenshots).
+class GameDetails {
   final String description;
   final List<String> tags;
   final String trailerUrl;
+  final List<String> screenshots;
 
-  const SteamDetails({
+  const GameDetails({
     required this.description,
     required this.tags,
     required this.trailerUrl,
+    this.screenshots = const [],
+  });
+}
+
+/// What the cover search returns: the downloaded file, plus optional
+/// game details and the Steam app ID when available.
+class CoverPick {
+  final String path;
+  final int? steamAppId;
+  final GameDetails? details;
+
+  const CoverPick(this.path, {this.steamAppId, this.details});
+}
+
+/// Store info for a Steam app (public store API, no key needed).
+class SteamDetails extends GameDetails {
+  const SteamDetails({
+    required super.description,
+    required super.tags,
+    required super.trailerUrl,
+    super.screenshots = const [],
   });
 
   /// Steam's play-mode categories are long ("Co-op, tela dividida/
@@ -196,10 +211,18 @@ class SteamDetails {
       trailer = 'https://store.steampowered.com/app/$appId';
     }
 
+    final screenshots = [
+      for (final shot in data['screenshots'] as List<dynamic>? ?? const [])
+        if ((shot as Map<String, dynamic>)['path_full'] case final String url
+            when url.startsWith('http'))
+          url,
+    ].take(8).toList();
+
     return SteamDetails(
       description: cleanHtml(data['short_description'] as String? ?? ''),
       tags: [...genres, ...couch],
       trailerUrl: trailer,
+      screenshots: screenshots,
     );
   }
 
@@ -221,22 +244,29 @@ class CoverDownloadError implements Exception {
   const CoverDownloadError(this.reason);
 }
 
-class _SteamResult {
-  final int appId;
+enum GameMetadataSource { steam, igdb }
+
+class _SearchResultItem {
   final String name;
+  final GameMetadataSource source;
+  final String coverUrl;
+  final String? headerUrl;
+  final int? steamAppId;
+  final int? igdbId;
 
-  const _SteamResult(this.appId, this.name);
-
-  /// Portrait library art (600x900); some apps only have the wide header.
-  String get coverUrl =>
-      'https://cdn.cloudflare.steamstatic.com/steam/apps/$appId/library_600x900.jpg';
-  String get headerUrl =>
-      'https://cdn.cloudflare.steamstatic.com/steam/apps/$appId/header.jpg';
+  const _SearchResultItem({
+    required this.name,
+    required this.source,
+    required this.coverUrl,
+    this.headerUrl,
+    this.steamAppId,
+    this.igdbId,
+  });
 }
 
-/// Find a cover for a game: Steam store search (official art, no API key
-/// needed), a Google Images search in the browser, or a pasted image link.
-/// Pops the downloaded file's path.
+/// Find a cover for a game: Unified search across Steam store and IGDB,
+/// Google Images in the browser, or a pasted image link.
+/// Pops the downloaded file's path and game details.
 class CoverSearchDialog extends StatefulWidget {
   final String initialQuery;
 
@@ -251,7 +281,8 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
     text: widget.initialQuery,
   );
   final TextEditingController _link = TextEditingController();
-  List<_SteamResult> _results = const [];
+  final IgdbService _igdbService = IgdbService();
+  List<_SearchResultItem> _results = const [];
   bool _searching = false;
   bool _downloading = false;
   String? _message;
@@ -276,6 +307,37 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
       _searching = true;
       _message = null;
     });
+
+    try {
+      final steamFuture = _searchSteam(term);
+      final igdbFuture = _searchIgdb(term);
+
+      final responses = await Future.wait([steamFuture, igdbFuture]);
+      final steamResults = responses[0];
+      final igdbResults = responses[1];
+
+      final results = <_SearchResultItem>[];
+      final maxLen = math.max(steamResults.length, igdbResults.length);
+      for (var i = 0; i < maxLen; i++) {
+        if (i < steamResults.length) results.add(steamResults[i]);
+        if (i < igdbResults.length) results.add(igdbResults[i]);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        if (results.isEmpty) _message = context.l10n.session.coverNoResults;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message = context.l10n.session.coverSearchError);
+      }
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  Future<List<_SearchResultItem>> _searchSteam(String term) async {
     try {
       final uri = Uri.https('store.steampowered.com', '/api/storesearch/', {
         'term': term,
@@ -287,24 +349,42 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
           ((jsonDecode(response.body) as Map<String, dynamic>)['items']
               as List<dynamic>? ??
           const []);
-      final results = [
+      return [
         for (final item in items.take(12))
-          _SteamResult(item['id'] as int, item['name'] as String? ?? ''),
+          if (item['id'] is int)
+            _SearchResultItem(
+              name: item['name'] as String? ?? '',
+              source: GameMetadataSource.steam,
+              steamAppId: item['id'] as int,
+              coverUrl:
+                  'https://cdn.cloudflare.steamstatic.com/steam/apps/${item['id']}/library_600x900.jpg',
+              headerUrl:
+                  'https://cdn.cloudflare.steamstatic.com/steam/apps/${item['id']}/header.jpg',
+            ),
       ];
-      if (!mounted) return;
-      setState(() {
-        _results = results;
-        if (results.isEmpty) _message = context.l10n.session.coverNoResults;
-      });
     } catch (_) {
-      if (mounted)
-        setState(() => _message = context.l10n.session.coverSearchError);
-    } finally {
-      if (mounted) setState(() => _searching = false);
+      return const [];
     }
   }
 
-  Future<void> _use(String url, [String? fallbackUrl, int? steamAppId]) async {
+  Future<List<_SearchResultItem>> _searchIgdb(String term) async {
+    try {
+      final list = await _igdbService.search(term);
+      return [
+        for (final item in list)
+          _SearchResultItem(
+            name: item.name,
+            source: GameMetadataSource.igdb,
+            igdbId: item.id,
+            coverUrl: item.coverUrl,
+          ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _useItem(_SearchResultItem result) async {
     setState(() {
       _downloading = true;
       _message = null;
@@ -312,13 +392,33 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
     try {
       String path;
       try {
-        path = await CoverStore.download(url, _query.text);
+        path = await CoverStore.download(result.coverUrl, _query.text);
       } catch (_) {
-        if (fallbackUrl == null) rethrow;
-        path = await CoverStore.download(fallbackUrl, _query.text);
+        if (result.headerUrl == null) rethrow;
+        path = await CoverStore.download(result.headerUrl!, _query.text);
       }
+
+      GameDetails? details;
+      if (result.source == GameMetadataSource.steam && result.steamAppId != null) {
+        details = await SteamDetails.fetch(result.steamAppId!);
+      } else if (result.source == GameMetadataSource.igdb && result.igdbId != null) {
+        final igdb = await _igdbService.fetchGameDetails(result.igdbId!);
+        if (igdb != null) {
+          details = GameDetails(
+            description: igdb.description,
+            tags: igdb.tags,
+            trailerUrl: igdb.trailerUrl,
+            screenshots: igdb.screenshots,
+          );
+        }
+      }
+
       if (mounted) {
-        Navigator.of(context).pop(CoverPick(path, steamAppId: steamAppId));
+        Navigator.of(context).pop(CoverPick(
+          path,
+          steamAppId: result.steamAppId,
+          details: details,
+        ));
       }
     } on CoverDownloadError catch (e) {
       if (mounted) {
@@ -333,6 +433,32 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
       if (mounted) {
         setState(() => _message = context.l10n.session.coverDownloadError);
       }
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  Future<void> _useLink() async {
+    final link = _link.text.trim();
+    if (link.isEmpty) return;
+    setState(() {
+      _downloading = true;
+      _message = null;
+    });
+    try {
+      final path = await CoverStore.download(link, _query.text);
+      if (mounted) Navigator.of(context).pop(CoverPick(path));
+    } on CoverDownloadError catch (e) {
+      if (mounted) {
+        final strings = context.l10n.session;
+        setState(() => _message = switch (e.reason) {
+          CoverError.invalidLink => strings.coverInvalidLink,
+          CoverError.notAnImage => strings.coverNotAnImage,
+          CoverError.unreachable => strings.coverDownloadError,
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _message = context.l10n.session.coverDownloadError);
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
@@ -394,8 +520,7 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
                 for (final result in _results)
                   _CoverOption(
                     result: result,
-                    onTap: () =>
-                        _use(result.coverUrl, result.headerUrl, result.appId),
+                    onTap: () => _useItem(result),
                   ),
               ],
             ),
@@ -454,11 +579,6 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
     );
   }
 
-  void _useLink() {
-    final link = _link.text.trim();
-    if (link.isNotEmpty) _use(link);
-  }
-
   Widget _field(
     TextEditingController controller, {
     String? hint,
@@ -485,15 +605,16 @@ class _CoverSearchDialogState extends State<CoverSearchDialog> {
 }
 
 class _CoverOption extends StatelessWidget {
-  final _SteamResult result;
+  final _SearchResultItem result;
   final VoidCallback onTap;
 
   const _CoverOption({required this.result, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final isSteam = result.source == GameMetadataSource.steam;
     return Tooltip(
-      message: result.name,
+      message: '${result.name} (${isSteam ? "Steam" : "IGDB"})',
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
@@ -508,25 +629,65 @@ class _CoverOption extends StatelessWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(9),
-              child: Image.network(
-                result.coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, _, __) => Image.network(
-                  result.headerUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, _, __) => ColoredBox(
-                    color: AppColors.lightColor,
-                    child: Center(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    result.coverUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, _, __) {
+                      if (result.headerUrl != null) {
+                        return Image.network(
+                          result.headerUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, _, __) => _fallback(context),
+                        );
+                      }
+                      return _fallback(context);
+                    },
+                  ),
+                  Positioned(
+                    top: 4,
+                    left: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isSteam
+                            ? const Color(0xFF1B2838)
+                            : const Color(0xFF9146FF),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.white38, width: 1),
+                      ),
                       child: Text(
-                        result.name,
-                        textAlign: TextAlign.center,
-                        style: _captionStyle,
+                        isSteam ? 'Steam' : 'IGDB',
+                        style: const TextStyle(
+                          fontFamily: 'momo',
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback(BuildContext context) {
+    return ColoredBox(
+      color: AppColors.lightColor,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Text(
+            result.name,
+            textAlign: TextAlign.center,
+            style: _captionStyle,
           ),
         ),
       ),

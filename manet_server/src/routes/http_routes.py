@@ -1,6 +1,7 @@
 
 import asyncio
 from io import BytesIO
+from pathlib import Path
 import uuid
 
 from aiohttp import web
@@ -8,7 +9,7 @@ from aiohttp import web
 from src.services.qr_service import generate_qr_code_image
 from src.lifecycle.process_exit import exit_process
 from src.core.game_library import GameValidationError
-from src.services.window_placement import bring_to_front, list_displays
+from src.services.window_placement import list_displays
 from src.services.controller_inventory import build_inventory, close_other_servers, snapshot_own_pads
 from src.services.connection_service import ConnectionService
 from src.services.network_diagnostics_service import NetworkDiagnosticsService
@@ -577,10 +578,14 @@ class HTTPRoutes:
         return web.Response(body=shot, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     async def session_focus_game_handler(self, request):
-        running = self.session.running
-        pids = running.alive_pids() if running and running.tracked else set()
-        focused = await asyncio.to_thread(bring_to_front, pids)
+        focused = await asyncio.to_thread(self.session.focus_game)
         return web.json_response({"success": focused})
+
+    async def session_game_window_handler(self, request):
+        """The game's window handle, so the desktop can give it the focus
+        itself while it is still the foreground app."""
+        hwnd = await asyncio.to_thread(self.session.game_window)
+        return web.json_response({"hwnd": hwnd})
 
     async def session_cancel_tournament_handler(self, request):
         self.session.cancel_tournament()
@@ -607,8 +612,47 @@ class HTTPRoutes:
                 self.session.set_match_seconds(float(data["matchSeconds"]))
             except (TypeError, ValueError):
                 return _bad_request("invalid_matchSeconds")
+        if "freeModeEnabled" in data:
+            self.session.set_free_mode_enabled(data["freeModeEnabled"] is True)
         self.session.broadcast()
-        return web.json_response({"success": True, "matchSeconds": self.session.match_seconds})
+        return web.json_response({
+            "success": True,
+            "matchSeconds": self.session.match_seconds,
+            "freeModeEnabled": self.session.free_mode_enabled,
+        })
+
+    async def session_free_mode_handler(self, request):
+        ok = self.session.enter_free_mode()
+        return web.json_response({"success": ok}, status=200 if ok else 409)
+
+    async def session_details_handler(self, request):
+        """The desktop resolved a player's Info press over a game."""
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        game_id = data.get("gameId")
+        ok = self.session.show_details(
+            str(data.get("deviceId") or ""), str(game_id) if game_id else None
+        )
+        return web.json_response({"success": ok}, status=200 if ok else 409)
+
+    async def session_lobby_request_handler(self, request):
+        """A player's cursor pressed "back to lobby" on the desktop."""
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        ok = self.session.request_lobby(str(data.get("deviceId") or ""))
+        return web.json_response({"success": ok}, status=200 if ok else 409)
+
+    async def game_cover_handler(self, request):
+        """Cover image of a game, for phones showing its details."""
+        game = self.session.library.get(request.match_info.get("game_id", ""))
+        path = Path(game.get("coverPath") or "") if game else None
+        if not path or not path.is_file():
+            return web.json_response({"success": False, "code": "no_cover"}, status=404)
+        return web.FileResponse(path, headers={"Cache-Control": "max-age=300"})
 
     async def session_place_overlay_handler(self, request):
         placed = await self.session.place_overlay_window()

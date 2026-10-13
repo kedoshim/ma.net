@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -6,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/session_models.dart';
 import '../../services/host_api_service.dart';
 import '../../theme/app_colors.dart';
+import '../../models/player_face.dart';
 import '../../widgets/player_face_indicator.dart';
 
 /// Pieces of the game library screen: bigger game cards, the filter/sort bar,
@@ -23,8 +25,20 @@ class LibraryFilter {
   const LibraryFilter({
     this.fitsOnly = false,
     this.tags = const {},
-    this.sort = LibrarySort.alphabetical,
+    this.sort = LibrarySort.recent,
   });
+
+  static LibrarySort parseSort(String value) => switch (value) {
+    'alphabetical' => LibrarySort.alphabetical,
+    'players' => LibrarySort.players,
+    _ => LibrarySort.recent,
+  };
+
+  static String serializeSort(LibrarySort sort) => switch (sort) {
+    LibrarySort.alphabetical => 'alphabetical',
+    LibrarySort.players => 'players',
+    LibrarySort.recent => 'recent',
+  };
 
   bool get isFiltering => fitsOnly || tags.isNotEmpty;
 
@@ -65,10 +79,7 @@ class LibraryFilter {
       if (fit != 0) return fit;
       return switch (sort) {
         LibrarySort.alphabetical => byName(a, b),
-        LibrarySort.recent =>
-          b.addedAt.compareTo(a.addedAt) != 0
-              ? b.addedAt.compareTo(a.addedAt)
-              : byName(a, b),
+        LibrarySort.recent => _byRecent(a, b, byName),
         LibrarySort.players =>
           b.maxPlayers != a.maxPlayers
               ? b.maxPlayers - a.maxPlayers
@@ -76,6 +87,17 @@ class LibraryFilter {
       };
     });
     return shown;
+  }
+
+  static int _byRecent(
+    GameEntry a,
+    GameEntry b,
+    int Function(GameEntry, GameEntry) byName,
+  ) {
+    final played = b.lastPlayedAt.compareTo(a.lastPlayedAt);
+    if (played != 0) return played;
+    final added = b.addedAt.compareTo(a.addedAt);
+    return added != 0 ? added : byName(a, b);
   }
 
   /// The library's most used tags (lower-cased key -> label as written).
@@ -98,9 +120,56 @@ class LibraryFilter {
   }
 }
 
-/// Outline color for something hovered by player cursors.
+/// Outline color for something hovered by player cursors (the interface
+/// only uses white and the highlight color; player colors stay on faces).
 Color _hoverColor(List<DeviceModel> hoveredBy, Color fallback) =>
-    hoveredBy.isEmpty ? fallback : hoveredBy.first.color;
+    hoveredBy.isEmpty ? fallback : AppColors.highlightColor;
+
+/// Splits [games] into columns of [perColumn] for the horizontal grid.
+/// With [centerOut] the first games land in the middle column and the rest
+/// alternate right and left of it (so the most recent games are where the
+/// library starts). Returns the columns left to right and the index of the
+/// column to start centered on.
+({List<List<GameEntry>> columns, int start}) layoutColumns(
+  List<GameEntry> games, {
+  int perColumn = 2,
+  bool centerOut = true,
+}) {
+  final chunks = <List<GameEntry>>[
+    for (var i = 0; i < games.length; i += perColumn)
+      games.sublist(i, math.min(i + perColumn, games.length)),
+  ];
+  if (!centerOut || chunks.length < 3) {
+    return (columns: chunks, start: 0);
+  }
+  // chunk 0 in the middle, then 1 to its right, 2 to its left, ...
+  final left = <List<GameEntry>>[];
+  final right = <List<GameEntry>>[];
+  for (var i = 1; i < chunks.length; i++) {
+    (i.isOdd ? right : left).add(chunks[i]);
+  }
+  return (
+    columns: [...left.reversed, chunks.first, ...right],
+    start: left.length,
+  );
+}
+
+/// How hard the cursors push the grid sideways: each cursor inside an edge
+/// zone (within [zone] of the left/right side of [grid], or past it, e.g.
+/// pinned at the screen's edge) adds its depth (0..1), negative on the left.
+/// Opposite pushes cancel out.
+double edgePushForce(Iterable<Offset> cursors, Rect grid, double zone) {
+  var force = 0.0;
+  for (final c in cursors) {
+    if (c.dy < grid.top || c.dy > grid.bottom) continue;
+    if (c.dx < grid.left + zone) {
+      force -= ((grid.left + zone - c.dx) / zone).clamp(0.0, 1.0);
+    } else if (c.dx > grid.right - zone) {
+      force += ((c.dx - (grid.right - zone)) / zone).clamp(0.0, 1.0);
+    }
+  }
+  return force;
+}
 
 // ------------------------------------------------------------ player count
 
@@ -171,6 +240,7 @@ class LibraryChip extends StatelessWidget {
   final bool selected;
   final List<DeviceModel> hoveredBy;
   final VoidCallback onTap;
+  final Color? backgroundColor;
 
   const LibraryChip({
     super.key,
@@ -179,6 +249,7 @@ class LibraryChip extends StatelessWidget {
     required this.hoveredBy,
     required this.onTap,
     this.icon,
+    this.backgroundColor,
   });
 
   @override
@@ -195,7 +266,9 @@ class LibraryChip extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: selected ? AppColors.highlightColor : AppColors.lightColor,
+              color: selected
+                  ? AppColors.highlightColor
+                  : (backgroundColor ?? AppColors.lightColor),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _hoverColor(hoveredBy, AppColors.textPrimary),
@@ -227,6 +300,8 @@ abstract final class LibraryTargets {
   static String tag(String key) => 'tag:$key';
   static String game(String id) => 'game:$id';
   static String info(String id) => 'info:$id';
+  static const lobby = 'nav:lobby';
+  static const freeMode = 'nav:free';
   static const panel = 'panel';
   static const panelVote = 'panel:vote';
   static const panelTrailer = 'panel:trailer';
@@ -302,175 +377,186 @@ class LibraryFilterBar extends StatelessWidget {
 // -------------------------------------------------------------------- card
 
 class LibraryGameCard extends StatelessWidget {
-  static const double width = 232;
-  static const double coverHeight = 210;
   static const double borderWidth = 4;
   static const double radius = 18;
+  static const double nameHeight = 40;
 
   final GameEntry game;
   final int playerCount;
+  final double width;
+  final double height;
+
+  /// Players whose vote is stuck on this card, as round stickers.
   final List<DeviceModel> voters;
   final List<DeviceModel> hoveredBy;
-  final List<DeviceModel> infoHoveredBy;
   final bool isCountdownTarget;
-  final GlobalKey? infoKey;
+  final bool coverOnly;
   final VoidCallback onTap;
-  final VoidCallback onInfo;
+  final VoidCallback? onSecondaryTap;
 
   const LibraryGameCard({
     super.key,
     required this.game,
     required this.playerCount,
+    required this.width,
+    required this.height,
     required this.voters,
     required this.hoveredBy,
-    required this.infoHoveredBy,
     required this.isCountdownTarget,
+    this.coverOnly = true,
     required this.onTap,
-    required this.onInfo,
-    this.infoKey,
+    this.onSecondaryTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
     final fits = game.fits(playerCount);
-    final hovered = [...hoveredBy, ...infoHoveredBy];
-    final highlighted = hovered.isNotEmpty || isCountdownTarget;
-    final borderColor = isCountdownTarget
+    final highlighted = hoveredBy.isNotEmpty || isCountdownTarget;
+    final borderColor = highlighted
         ? AppColors.highlightColor
-        : _hoverColor(hovered, AppColors.textPrimary);
+        : AppColors.textPrimary;
+    final sticker = math.min(64.0, height * 0.2);
+
+    Widget innerContent;
+    if (coverOnly) {
+      innerContent = GameCover(game: game);
+    } else {
+      innerContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final coverWidth = math.min(
+                  box.maxHeight * 2 / 3,
+                  box.maxWidth * 0.55,
+                );
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: coverWidth,
+                      child: GameCover(game: game),
+                    ),
+                    if (box.maxWidth - coverWidth > 60) ...[
+                      Container(
+                        width: borderWidth,
+                        color: borderColor,
+                      ),
+                      Expanded(
+                        child: GameExtras(game: game),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+          Container(
+            height: borderWidth,
+            color: borderColor,
+          ),
+          SizedBox(
+            height: nameHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  game.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _cardTitleStyle,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    Widget cardBody = Container(
+      padding: const EdgeInsets.all(borderWidth),
+      decoration: BoxDecoration(
+        color: borderColor,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(
+          radius - borderWidth,
+        ),
+        child: ColoredBox(
+          color: AppColors.lightColor,
+          child: innerContent,
+        ),
+      ),
+    );
+
+    if (!fits) {
+      const grayscaleMatrix = <double>[
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0,      0,      0,      1, 0,
+      ];
+      cardBody = ColorFiltered(
+        colorFilter: const ColorFilter.matrix(grayscaleMatrix),
+        child: Opacity(
+          opacity: 0.38,
+          child: cardBody,
+        ),
+      );
+    }
+
+    final tooltipMessage = coverOnly
+        ? '${game.name} · ${strings.clickToPlay}'
+        : strings.clickToPlay;
 
     return Tooltip(
-      message: strings.clickToPlay,
+      message: tooltipMessage,
       waitDuration: const Duration(milliseconds: 600),
       child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+        cursor: fits ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
         child: GestureDetector(
           onTap: onTap,
+          onSecondaryTap: onSecondaryTap,
           child: AnimatedScale(
-            scale: highlighted ? 1.05 : 1.0,
+            scale: highlighted ? 1.04 : 1.0,
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutBack,
-            child: Opacity(
-              opacity: fits ? 1 : 0.45,
-              // Same border thickness on every side: the content sits inside
-              // the border and no offset shadow thickens one edge.
-              child: Container(
-                width: width,
-                padding: const EdgeInsets.all(borderWidth),
-                decoration: BoxDecoration(
-                  color: borderColor,
-                  borderRadius: BorderRadius.circular(radius),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(radius - borderWidth),
-                  child: ColoredBox(
-                    color: AppColors.lightColor,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(child: cardBody),
+                  // Votes: round stickers stuck at the bottom of the cover.
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    bottom: coverOnly ? 8 : nameHeight + borderWidth + 8,
+                    child: Wrap(
+                      spacing: -sticker * 0.25,
+                      runSpacing: -sticker * 0.3,
                       children: [
-                        SizedBox(
-                          height: coverHeight,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              GameCover(game: game),
-                              Positioned(
-                                left: 8,
-                                top: 8,
-                                child: _FitBadge(
-                                  game: game,
-                                  players: playerCount,
-                                ),
-                              ),
-                              Positioned(
-                                right: 8,
-                                top: 8,
-                                child: _InfoButton(
-                                  key: infoKey,
-                                  hoveredBy: infoHoveredBy,
-                                  onTap: onInfo,
-                                ),
-                              ),
-                            ],
+                        for (final voter in voters)
+                          VoteSticker(
+                            key: ValueKey('sticker_${voter.id}'),
+                            device: voter,
+                            size: sticker,
                           ),
-                        ),
-                        Container(height: borderWidth, color: borderColor),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                game.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _cardTitleStyle,
-                              ),
-                              const SizedBox(height: 3),
-                              SizedBox(
-                                height: 32,
-                                child: Text(
-                                  game.description.isEmpty
-                                      ? strings.noDescription
-                                      : game.description,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: _captionStyle,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              SizedBox(
-                                height: 22,
-                                child: ClipRect(
-                                  child: Wrap(
-                                    spacing: 4,
-                                    runSpacing: 4,
-                                    children: [
-                                      for (final tag in game.tags.take(3))
-                                        _TagPill(tag),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              SizedBox(
-                                height: 28,
-                                child: Row(
-                                  children: [
-                                    for (final voter in voters.take(6))
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 4,
-                                        ),
-                                        child: TweenAnimationBuilder<double>(
-                                          key: ValueKey('vote_${voter.id}'),
-                                          tween: Tween(begin: 0.2, end: 1),
-                                          duration: const Duration(
-                                            milliseconds: 420,
-                                          ),
-                                          curve: Curves.elasticOut,
-                                          builder: (context, scale, child) =>
-                                              Transform.scale(
-                                                scale: scale,
-                                                child: child,
-                                              ),
-                                          child: PlayerFaceIndicator(
-                                            face: voter.face,
-                                            size: 26,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),
-                ),
+                  if (voters.isNotEmpty)
+                    Positioned(
+                      right: -8,
+                      top: -8,
+                      child: VoteCountBadge(count: voters.length),
+                    ),
+                ],
               ),
             ),
           ),
@@ -480,76 +566,70 @@ class LibraryGameCard extends StatelessWidget {
   }
 }
 
-/// Players supported, green when the session fits.
-class _FitBadge extends StatelessWidget {
-  final GameEntry game;
-  final int players;
+/// A player's vote: their face squashed into a round sticker stuck to the
+/// card. It lands flattened and springs back round, with a little tilt.
+class VoteSticker extends StatelessWidget {
+  final DeviceModel device;
+  final double size;
 
-  const _FitBadge({required this.game, required this.players});
+  const VoteSticker({super.key, required this.device, required this.size});
 
   @override
   Widget build(BuildContext context) {
-    final strings = context.l10n.session;
-    final fits = game.fits(players);
+    // Each player's sticker always sits at the same slight angle.
+    final tilt = ((device.id.hashCode % 21) - 10) / 60;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 650),
+      builder: (context, t, child) {
+        final squash = Curves.elasticOut.transform(t);
+        return Transform.rotate(
+          angle: tilt,
+          child: Transform.scale(
+            scaleX: 1.6 - 0.6 * squash,
+            scaleY: 0.4 + 0.6 * squash,
+            child: child,
+          ),
+        );
+      },
+      child: FaceSticker(face: device.face, size: size),
+    );
+  }
+}
+
+/// A face as a round sticker with a black border.
+class FaceSticker extends StatelessWidget {
+  final PlayerFaceData face;
+  final double size;
+
+  const FaceSticker({super.key, required this.face, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: fits ? const Color(0xFF9BE59B) : AppColors.lightColor,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.textPrimary, width: 2),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            fits ? Icons.check_rounded : Icons.person_rounded,
-            size: 15,
-            color: AppColors.textPrimary,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            strings.playersShort(game.minPlayers, game.maxPlayers),
-            style: _buttonStyle.copyWith(fontSize: 12),
-          ),
+        color: face.color,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.textPrimary, width: 3),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(1, 2)),
         ],
       ),
-    );
-  }
-}
-
-class _InfoButton extends StatelessWidget {
-  final List<DeviceModel> hoveredBy;
-  final VoidCallback onTap;
-
-  const _InfoButton({super.key, required this.hoveredBy, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: context.l10n.session.gameDetails,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedScale(
-          scale: hoveredBy.isNotEmpty ? 1.2 : 1,
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutBack,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: hoveredBy.isNotEmpty
-                  ? AppColors.highlightColor
-                  : AppColors.lightColor,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: _hoverColor(hoveredBy, AppColors.textPrimary),
-                width: 3,
-              ),
-            ),
-            child: const Icon(
-              Icons.info_outline_rounded,
-              size: 20,
-              color: AppColors.textPrimary,
+      padding: EdgeInsets.all(size * 0.18),
+      child: FittedBox(
+        child: Transform.rotate(
+          angle: playerFaceRotationAngle(face.rotation),
+          child: Text(
+            face.faceText,
+            maxLines: 1,
+            style: TextStyle(
+              fontFamily: 'monomaniac',
+              fontFamilyFallback: const ['noto_symbols'],
+              fontSize: size * 0.5,
+              height: 0.9,
+              color: Colors.black.withValues(alpha: 0.85),
             ),
           ),
         ),
@@ -557,6 +637,104 @@ class _InfoButton extends StatelessWidget {
     );
   }
 }
+
+/// The wide part of a card: the game's extra images (a big one and up to
+/// two small ones), or its description and tags when it has none.
+class GameExtras extends StatelessWidget {
+  final GameEntry game;
+
+  const GameExtras({super.key, required this.game});
+
+  @override
+  Widget build(BuildContext context) {
+    final shots = game.screenshots;
+    if (shots.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                game.description.isEmpty
+                    ? context.l10n.session.noDescription
+                    : game.description,
+                overflow: TextOverflow.fade,
+                style: _captionStyle.copyWith(fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [for (final tag in game.tags.take(3)) _TagPill(tag)],
+            ),
+          ],
+        ),
+      );
+    }
+    Widget image(String url) => Image.network(
+      url,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (_, _, _) =>
+          ColoredBox(color: AppColors.highlightColor.withValues(alpha: 0.25)),
+    );
+    final small = shots.skip(1).take(2).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 3, child: image(shots.first)),
+        if (small.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Expanded(
+            flex: 2,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (i, url) in small.indexed) ...[
+                  if (i > 0) const SizedBox(width: 3),
+                  Expanded(child: image(url)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Number of votes on a card, in its top-right corner.
+class VoteCountBadge extends StatelessWidget {
+  final int count;
+
+  const VoteCountBadge({super.key, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(count),
+      tween: Tween(begin: 1.6, end: 1),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) =>
+          Transform.scale(scale: scale, child: child),
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.highlightColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.textPrimary, width: 3),
+        ),
+        child: Text('$count', style: _numberStyle),
+      ),
+    );
+  }
+}
+
 
 class _TagPill extends StatelessWidget {
   final String tag;
@@ -743,19 +921,11 @@ class GameDetailsPanel extends StatelessWidget {
                   children: [
                     Text(game.name, style: _titleStyle),
                     const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        _FitBadge(game: game, players: playerCount),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            fits
-                                ? strings.fitsSession(playerCount)
-                                : strings.doesNotFit(playerCount),
-                            style: _captionStyle,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      fits
+                          ? strings.fitsSession(playerCount)
+                          : strings.doesNotFit(playerCount),
+                      style: _captionStyle,
                     ),
                     if (game.tags.isNotEmpty) ...[
                       const SizedBox(height: 10),

@@ -124,6 +124,8 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
   int? playerIndex;
   MovementMode _movementMode = MovementMode.fixedJoystick;
+  MovementMode _overlayMovementMode = MovementMode.dpad;
+  MovementMode _menuMovementMode = MovementMode.floatingJoystick;
   String _rightLayoutMode = 'columns';
   bool _mouseModeOwned = false;
   String? _mouseModeOwnerName;
@@ -154,6 +156,19 @@ class _ControllerScreenState extends State<ControllerScreen>
   // Who sits where (from the server) and this phone's device id.
   Map<String, dynamic> _seats = const {};
   String? _me;
+  // Lobby / game selection state for the menu buttons.
+  bool _ready = false;
+  String? _myVote;
+  DateTime? _lobbyCountdownEndsAt;
+  Map<String, dynamic>? _lobbyRequest;
+  // A game's details shown over the stick while the server says this phone
+  // is reading them.
+  Map<String, dynamic>? _details;
+  String? _readingId;
+  Uri? _serverBase;
+  // The "back to the lobby?" question currently on screen.
+  BuildContext? _lobbyDialogContext;
+  double? _lobbyDialogFor;
   String? playerName;
   double leftStickSensitivity = 1.0;
   double rightStickSensitivity = 1.0;
@@ -494,7 +509,14 @@ class _ControllerScreenState extends State<ControllerScreen>
       _overlayMine = false;
       _overlayOwnerName = null;
       _sessionPhase = 'lobby';
+      _ready = false;
+      _myVote = null;
+      _lobbyCountdownEndsAt = null;
+      _lobbyRequest = null;
+      _details = null;
+      _readingId = null;
     });
+    _closeLobbyDialog();
 
     _clearPlayerSlot();
     _autoConnectEnabled = false;
@@ -678,6 +700,11 @@ class _ControllerScreenState extends State<ControllerScreen>
     unawaited(_recordSuccessfulConnection());
 
     GamepadInputEngine.instance.init(_send);
+    unawaited(
+      ControllerConnectionManager.instance.httpBase().then((base) {
+        if (mounted) setState(() => _serverBase = base);
+      }),
+    );
 
     _send({'type': 'face_update', ..._playerFace.toJson()});
     if (_isMouseModeVisible) {
@@ -754,7 +781,27 @@ class _ControllerScreenState extends State<ControllerScreen>
             _menuMode = data['menu'] == true;
             _seats = (data['seats'] as Map<String, dynamic>?) ?? const {};
             _me = data['me'] as String?;
+            _ready = data['ready'] == true;
+            _myVote = data['myVote'] as String?;
+            final countdown = data['lobbyCountdownEndsAt'] as num?;
+            _lobbyCountdownEndsAt = countdown == null
+                ? null
+                : DateTime.fromMillisecondsSinceEpoch((countdown * 1000).round());
+            _lobbyRequest = data['lobbyRequest'] as Map<String, dynamic>?;
+            _readingId = data['reading'] as String?;
+            if (_readingId == null) _details = null;
           });
+          _syncLobbyDialog();
+          break;
+        case 'game_details':
+          final game = data['game'] as Map<String, dynamic>?;
+          if (game != null) {
+            HapticsManager.instance.softTap();
+            setState(() {
+              _details = game;
+              _readingId = game['id'] as String?;
+            });
+          }
           break;
         case 'swap_offer':
           unawaited(_showSwapOffer(data));
@@ -1009,8 +1056,10 @@ class _ControllerScreenState extends State<ControllerScreen>
   Future<void> _showSwapOffer(Map<String, dynamic> data) async {
     HapticsManager.instance.connectionPulse();
     final from = (data['from'] as Map<String, dynamic>?) ?? const {};
+    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
     final accept = await showDialog<bool>(
-      context: context,
+      context: dialogContext,
+      useRootNavigator: false,
       builder: (_) => SwapOfferDialog(
         from: from,
         fromSlot: data['fromSlot'] as int?,
@@ -1029,6 +1078,58 @@ class _ControllerScreenState extends State<ControllerScreen>
         style: const TextStyle(fontFamily: 'momo', fontWeight: FontWeight.bold),
       ),
     ));
+  }
+
+  /// Shows the "back to the lobby?" question when someone else asks, and
+  /// takes it away once answered or when the request ends.
+  void _syncLobbyDialog() {
+    final request = _lobbyRequest;
+    final ask = request != null &&
+        _menuMode &&
+        request['mine'] != true &&
+        request['myAnswer'] == null;
+    final id = (request?['endsAt'] as num?)?.toDouble();
+    if (!ask || (_lobbyDialogFor != null && _lobbyDialogFor != id)) {
+      _closeLobbyDialog();
+    }
+    if (!ask || _lobbyDialogFor == id) return;
+    _lobbyDialogFor = id;
+    HapticsManager.instance.connectionPulse();
+    unawaited(
+      showDialog<bool>(
+        context: _controllerNavigatorKey.currentContext ?? context,
+        useRootNavigator: false,
+        builder: (dialogContext) {
+          _lobbyDialogContext = dialogContext;
+          return LobbyRequestDialog(request: request);
+        },
+      ).then((answer) {
+        _lobbyDialogContext = null;
+        if (answer != null) {
+          _send({'type': 'lobby_answer', 'accept': answer});
+        }
+      }),
+    );
+  }
+
+  void _closeLobbyDialog() {
+    final dialog = _lobbyDialogContext;
+    _lobbyDialogContext = null;
+    _lobbyDialogFor = null;
+    if (dialog != null && dialog.mounted) Navigator.of(dialog).pop();
+  }
+
+  void _requestLobby() {
+    HapticsManager.instance.softTap();
+    _send({'type': 'lobby_request'});
+  }
+
+  void _closeDetails() {
+    setState(() {
+      _details = null;
+      _readingId = null;
+    });
+    _send({'type': 'details_close'});
   }
 
   void _pressHome() {
@@ -1430,6 +1531,10 @@ class _ControllerScreenState extends State<ControllerScreen>
       playerName = await prefs.getPlayerName();
       final modeIndex = await prefs.getMovementMode();
       _movementMode = MovementMode.values[modeIndex];
+      final overlayModeIndex = await prefs.getOverlayMovementMode();
+      _overlayMovementMode = MovementMode.values[overlayModeIndex];
+      final menuModeIndex = await prefs.getMenuMovementMode();
+      _menuMovementMode = MovementMode.values[menuModeIndex];
       _rightLayoutMode = await prefs.getRightLayoutMode();
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
 
@@ -1586,6 +1691,9 @@ class _ControllerScreenState extends State<ControllerScreen>
       case ControllerScreenMode.gameplay:
         if (_connectionState == ControllerConnectionState.connected) {
           if (_menuMode) {
+            final isOverlay = _overlayOpen && _overlayMine;
+            final currentMode =
+                isOverlay ? _overlayMovementMode : _menuMovementMode;
             return ControllerMenuView(
               menuContext: _overlayOpen
                   ? (_overlayMine ? MenuContext.overlay : MenuContext.playground)
@@ -1594,6 +1702,21 @@ class _ControllerScreenState extends State<ControllerScreen>
                       'tournament' => MenuContext.tournament,
                       _ => MenuContext.lobby,
                     },
+              movementMode: currentMode,
+              onMovementModeChanged: (mode) {
+                setState(() {
+                  if (isOverlay) {
+                    _overlayMovementMode = mode;
+                  } else {
+                    _menuMovementMode = mode;
+                  }
+                });
+                if (isOverlay) {
+                  PreferencesService.instance.setOverlayMovementMode(mode.index);
+                } else {
+                  PreferencesService.instance.setMenuMovementMode(mode.index);
+                }
+              },
               ownerName: _overlayOwnerName,
               playerFace: _playerFace,
               onStickChanged: _onStickChanged,
@@ -1601,6 +1724,19 @@ class _ControllerScreenState extends State<ControllerScreen>
               onButtonStateChanged: _sendButton,
               onOpenAvatar: _enterFaceMode,
               onOpenSeats: _openSeats,
+              ready: _ready,
+              hasVote: _myVote != null,
+              lobbyCountdownEndsAt: _lobbyCountdownEndsAt,
+              lobbyRequest: _lobbyRequest,
+              onBackToLobby: _requestLobby,
+              details: _details != null && _readingId == _details!['id']
+                  ? _details
+                  : null,
+              serverBase: _serverBase,
+              onCloseDetails: _closeDetails,
+              playerName: playerName,
+              onNameChanged: _updatePlayerName,
+              onRequestRandomName: _requestRandomName,
             );
           }
         }

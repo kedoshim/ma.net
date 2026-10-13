@@ -39,6 +39,22 @@ abstract class MenuStrings {
   String swapAccepted(String name);
   String swapDeclined(String name);
   String get tournamentHint;
+  String get betterInApp;
+  String get ready;
+  String get notReady;
+  String get waitingOthers;
+  String startingIn(int seconds);
+  String get face;
+  String get cancelSelection;
+  String get info;
+  String get cancel;
+  String get backToLobby;
+  String lobbyWaiting(int yes, int needed);
+  String lobbyRequestOffer(String name);
+  String get stayHere;
+  String get goBack;
+  String playersRange(int min, int max);
+  String get noDescription;
 }
 
 abstract class CommonStrings {

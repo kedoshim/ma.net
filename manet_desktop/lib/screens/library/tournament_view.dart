@@ -15,7 +15,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/comic_burst.dart';
 import '../../widgets/juicy_widgets.dart';
 import '../home_page/gamepad_state.dart';
-import 'library_view.dart' show PlayerCursor;
+import '../../widgets/player_cursor.dart';
 
 /// Elimination tournament between the games voted in the library. The server
 /// runs the bracket and the clock (manet_server/src/core/tournament.py); this

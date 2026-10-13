@@ -20,6 +20,19 @@ class ControllerConnectionManager {
     return ws!;
   }
 
+  /// The host's HTTP address (same host and port as the socket), e.g. for
+  /// game covers.
+  Future<Uri> httpBase() async {
+    final prefs = PreferencesService.instance;
+    final isHttps =
+        await prefs.getServerHttps() ?? (Uri.base.scheme == 'https');
+    return Uri(
+      scheme: isHttps ? 'https' : 'http',
+      host: await prefs.getServerHost() ?? Uri.base.host,
+      port: await prefs.getServerPort() ?? Uri.base.port,
+    );
+  }
+
   Future<WebSocketService> _createConnection() async {
     final prefs = PreferencesService.instance;
 

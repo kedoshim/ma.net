@@ -9,9 +9,8 @@ import '../utils/win32_focus.dart';
 import 'host_api_service.dart';
 
 /// Desktop side of the couch session: follows the server's session state and
-/// game library, reports whether the MaNet window is in front (which decides
-/// if phone input drives the menus or the games), and gets the window out of
-/// the way while a game runs.
+/// game library, reports whether the MaNet window is in front, and gets the
+/// window out of the way while a game runs (or in free mode).
 class SessionController extends ChangeNotifier with WindowListener {
   SessionController(this._api);
 
@@ -125,17 +124,30 @@ class SessionController extends ChangeNotifier with WindowListener {
 
   /// Gets MaNet out of the game's way. window_manager refuses to minimize a
   /// full screen window, so full screen is dropped first (it comes back when
-  /// MaNet shows up again). With [focusGame], the server then brings the game
-  /// window to the front so it gets the keyboard/controller focus back.
+  /// MaNet shows up again).
+  ///
+  /// With [focusGame], MaNet hands the focus to the game window *before*
+  /// minimizing: Windows always lets the foreground app do that, while
+  /// minimizing first would activate whatever window is next in line and
+  /// lock the game out. The server's focus call is only the fallback.
   Future<void> _stepAside({bool focusGame = false}) async {
     if (await windowManager.isFullScreen()) {
       await windowManager.setFullScreen(false);
       // Let the style change land before minimizing.
       await Future.delayed(const Duration(milliseconds: 120));
     }
-    if (focusGame) allowForegroundHandOff();
-    await windowManager.minimize();
+    var focused = false;
     if (focusGame) {
+      allowForegroundHandOff();
+      try {
+        final hwnd = await _api.gameWindow();
+        if (hwnd != null) focused = focusWindow(hwnd);
+      } catch (e) {
+        debugPrint('[SESSION] could not get the game window: $e');
+      }
+    }
+    await windowManager.minimize();
+    if (focusGame && !focused) {
       try {
         await _api.focusGame();
       } catch (e) {
@@ -205,6 +217,15 @@ class SessionController extends ChangeNotifier with WindowListener {
   Future<void> cancelTournament() => _api.cancelTournament();
   Future<void> tournamentVote(String deviceId, String? side) =>
       _api.tournamentVote(deviceId, side);
+  Future<void> enterFreeMode() => _api.enterFreeMode();
+  Future<void> showDetails(String deviceId, String? gameId) =>
+      _api.showDetails(deviceId, gameId);
+  Future<void> requestLobby(String deviceId) => _api.requestLobby(deviceId);
+
+  Future<void> setFreeModeEnabled(bool enabled) async {
+    await AppPreferences.setFreeModeEnabled(enabled);
+    await _api.setFreeModeEnabled(enabled);
+  }
 
   Future<void> setMatchSeconds(int seconds) async {
     await AppPreferences.setMatchSeconds(seconds);
@@ -217,6 +238,10 @@ class SessionController extends ChangeNotifier with WindowListener {
       final seconds = await AppPreferences.matchSeconds();
       if (seconds != snapshot.matchSeconds.round()) {
         await _api.setMatchSeconds(seconds);
+      }
+      final freeMode = await AppPreferences.freeModeEnabled();
+      if (freeMode != snapshot.freeModeEnabled) {
+        await _api.setFreeModeEnabled(freeMode);
       }
     } catch (e) {
       debugPrint('[SESSION] settings push failed: $e');

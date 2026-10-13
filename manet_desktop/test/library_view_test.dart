@@ -5,12 +5,17 @@ import 'package:manet_desktop/l10n/app_localizations.dart';
 import 'package:manet_desktop/models/player_face.dart';
 import 'package:manet_desktop/models/session_models.dart';
 import 'package:manet_desktop/screens/home_page/gamepad_state.dart';
+import 'package:manet_desktop/screens/library/library_browser.dart';
 import 'package:manet_desktop/screens/library/library_view.dart';
 import 'package:manet_desktop/services/host_api_service.dart';
 import 'package:manet_desktop/services/session_controller.dart';
 
 void main() {
   testWidgets('LibraryView renders game cards and responds to countdown', (tester) async {
+    // MaNet runs full screen on a TV.
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final api = HostApiService(host: '127.0.0.1', port: 8765);
     final sessionController = SessionController(api);
     final gamepadState = GamepadState(api);
@@ -54,11 +59,7 @@ void main() {
           ],
           child: const MaterialApp(
             home: Scaffold(
-              body: SizedBox(
-                width: 1280,
-                height: 800,
-                child: LibraryView(),
-              ),
+              body: LibraryView(),
             ),
           ),
         ),
@@ -68,7 +69,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Test Party Game'), findsOneWidget);
+    expect(find.byType(LibraryGameCard), findsOneWidget);
     expect(find.byType(LibraryView), findsOneWidget);
   });
 }

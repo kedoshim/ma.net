@@ -229,28 +229,6 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
     widget.onMovementModeChanged(nextMode);
   }
 
-  IconData _getNextModeIcon(MovementMode mode) {
-    switch (mode) {
-      case MovementMode.dpad:
-        return Icons.control_camera_rounded;
-      case MovementMode.fixedJoystick:
-        return Icons.touch_app_rounded;
-      case MovementMode.floatingJoystick:
-        return Icons.gamepad_outlined;
-    }
-  }
-
-  String _getNextModeLabel(BuildContext context, MovementMode mode) {
-    switch (mode) {
-      case MovementMode.dpad:
-        return context.l10n.joystick.changeToFixed;
-      case MovementMode.fixedJoystick:
-        return context.l10n.joystick.changeToFloating;
-      case MovementMode.floatingJoystick:
-        return context.l10n.joystick.changeToDpad;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -278,7 +256,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                     Expanded(
                       flex: 12,
                       child: widget.movementMode == MovementMode.dpad
-                          ? _ControllerDpad(
+                          ? ControllerDpad(
                               onButtonStateChanged: widget.onButtonStateChanged,
                             )
                           : widget.movementMode == MovementMode.floatingJoystick
@@ -310,30 +288,9 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                                   padding: const EdgeInsets.only(top: 0),
                                   child: Container(
                                     alignment: Alignment.topCenter,
-                                    child: SizedBox(
-                                      width: 32,
-                                      height: 48,
-                                      child: Material(
-                                        color: AppColors.backgroundColor.withValues(
-                                          alpha: 0.05,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          side: const BorderSide(
-                                            color: Colors.transparent,
-                                            width: AppColors.borderThickness,
-                                          ),
-                                        ),
-                                        child: IconButton(
-                                          icon: Icon(
-                                            _getNextModeIcon(widget.movementMode),
-                                            size: 18,
-                                          ),
-                                          splashRadius: 10,
-                                          onPressed: _toggleMovementMode,
-                                          tooltip: _getNextModeLabel(context, widget.movementMode),
-                                        ),
-                                      ),
+                                    child: MovementModeToggleButton(
+                                      mode: widget.movementMode,
+                                      onToggle: _toggleMovementMode,
                                     ),
                                   ),
                                 ),
@@ -851,7 +808,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                             child: SizedBox(
                               width: 250,
                               height: 268,
-                              child: _ControllerDpad(
+                              child: ControllerDpad(
                                 onButtonStateChanged: widget.onButtonStateChanged,
                                 isMini: true,
                               ),
@@ -1125,20 +1082,23 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
   }
 }
 
-class _ControllerDpad extends StatefulWidget {
-  const _ControllerDpad({
+class ControllerDpad extends StatefulWidget {
+  const ControllerDpad({
+    super.key,
     required this.onButtonStateChanged,
     this.isMini = false,
+    this.centered = false,
   });
 
   final ControllerButtonStateCallback onButtonStateChanged;
   final bool isMini;
+  final bool centered;
 
   @override
-  State<_ControllerDpad> createState() => _ControllerDpadState();
+  State<ControllerDpad> createState() => _ControllerDpadState();
 }
 
-class _ControllerDpadState extends State<_ControllerDpad> {
+class _ControllerDpadState extends State<ControllerDpad> {
   List<String> _activeDirections = [];
   int? _pointerId;
 
@@ -1149,7 +1109,9 @@ class _ControllerDpadState extends State<_ControllerDpad> {
   static const double diagonalConeHalfWidthDegrees = 15.0;
 
   void _updateDirection(Offset localPosition, Size size) {
-    final center = Offset(144.0, size.height - 137.0);
+    final center = widget.centered || widget.isMini
+        ? Offset(size.width / 2, size.height / 2)
+        : Offset(144.0, size.height - 137.0);
     final delta = localPosition - center;
 
     if (delta.distance < 30) {
@@ -1205,7 +1167,6 @@ class _ControllerDpadState extends State<_ControllerDpad> {
       }
 
       _activeDirections = newDirs;
-      HapticsManager.instance.softTap();
       setState(() {});
     }
   }
@@ -1295,6 +1256,21 @@ class _ControllerDpadState extends State<_ControllerDpad> {
         onPointerUp: _handlePointerUp,
         onPointerCancel: _handlePointerCancel,
         child: dpadWidget,
+      );
+    }
+
+    if (widget.centered) {
+      return Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _handlePointerDown,
+        onPointerMove: _handlePointerMove,
+        onPointerUp: _handlePointerUp,
+        onPointerCancel: _handlePointerCancel,
+        child: RepaintBoundary(
+          child: Center(
+            child: dpadWidget,
+          ),
+        ),
       );
     }
 
@@ -1459,7 +1435,8 @@ class _CenterAction extends StatelessWidget {
   }
 }
 
-void _showEditNameDialog(
+/// Dialog to type a name (or draw a random one from the host).
+void showEditNameDialog(
   BuildContext context,
   String currentName,
   ValueChanged<String> onNameChanged,
@@ -1779,7 +1756,7 @@ class _PlayerNameWidget extends StatelessWidget {
     final displayName = name ?? context.l10n.editName.noName;
 
     return GestureDetector(
-      onTap: () => _showEditNameDialog(
+      onTap: () => showEditNameDialog(
         context,
         displayName,
         onNameChanged,

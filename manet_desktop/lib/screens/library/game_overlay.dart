@@ -419,14 +419,16 @@ class _GameOverlayState extends State<GameOverlay>
     final session = context.read<SessionController>();
     final running = session.snapshot.runningGame;
     final tracked = running?.tracked ?? false;
+    final freeMode = session.snapshot.freeMode;
 
     String label(_OverlayItem item) => switch (item) {
       _OverlayItem.resume => strings.overlayResume,
       _OverlayItem.addPlayers => strings.overlayAddPlayers,
       _OverlayItem.layout => strings.overlayLayout,
       _OverlayItem.switchGame => strings.overlaySwitchGame,
-      _OverlayItem.closeGame =>
-        tracked ? strings.closeGame : strings.returnToLobby,
+      _OverlayItem.closeGame => freeMode
+          ? strings.leaveFreeMode
+          : (tracked ? strings.closeGame : strings.returnToLobby),
     };
 
     IconData icon(_OverlayItem item) => switch (item) {

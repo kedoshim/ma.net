@@ -8,27 +8,37 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../l10n/strings.dart';
 import '../../models/session_models.dart';
 import '../../services/host_api_service.dart';
 import '../../services/session_controller.dart';
+import '../../services/sound_effect_service.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/app_preferences.dart';
 import '../../widgets/juicy_widgets.dart';
 import '../../widgets/layout_editor_view.dart';
 import '../../models/controller_branding.dart';
 import 'cover_search_dialog.dart';
 
-/// The host's list of registered games, with add / edit / delete.
-class ManageGamesDialog extends StatelessWidget {
+/// The host's management dialog with tabs for registered games and launcher settings.
+class ManageGamesDialog extends StatefulWidget {
   final PresetCatalog? presetCatalog;
 
   const ManageGamesDialog({super.key, this.presetCatalog});
+
+  @override
+  State<ManageGamesDialog> createState() => _ManageGamesDialogState();
+}
+
+class _ManageGamesDialogState extends State<ManageGamesDialog> {
+  int _selectedTab = 0;
 
   Future<void> _edit(BuildContext context, [GameEntry? game]) async {
     await showDialog(
       context: context,
       builder: (_) => ChangeNotifierProvider.value(
         value: context.read<SessionController>(),
-        child: GameEditorDialog(game: game, presetCatalog: presetCatalog),
+        child: GameEditorDialog(game: game, presetCatalog: widget.presetCatalog),
       ),
     );
   }
@@ -61,74 +71,319 @@ class ManageGamesDialog extends StatelessWidget {
     }
   }
 
+  Widget _buildTabBar(SessionStrings strings) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.textPrimary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.textPrimary, width: 2.5),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _tabButton(
+              index: 0,
+              label: strings.tabGames,
+              icon: Icons.sports_esports_rounded,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _tabButton(
+              index: 1,
+              label: strings.tabLauncher,
+              icon: Icons.tune_rounded,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabButton({
+    required int index,
+    required String label,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedTab == index;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () {
+          if (_selectedTab != index) {
+            SoundEffectService.instance.playThemeSelect();
+            setState(() => _selectedTab = index);
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.highlightColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: isSelected
+                ? Border.all(color: AppColors.textPrimary, width: 2.5)
+                : Border.all(color: Colors.transparent, width: 2.5),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: AppColors.textPrimary),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: _buttonStyle.copyWith(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGamesTab(
+    BuildContext context,
+    SessionStrings strings,
+    List<GameEntry> games,
+  ) {
+    if (games.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        child: Center(
+          child: Text(strings.emptyLibrary, style: _bodyStyle),
+        ),
+      );
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 360),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            for (final game in games)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    _Thumb(path: game.coverPath),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            game.name,
+                            style: _bodyStyle.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            strings.playersRange(
+                              game.minPlayers,
+                              game.maxPlayers,
+                            ),
+                            style: _captionStyle,
+                          ),
+                        ],
+                      ),
+                    ),
+                    JuicyIconButton(
+                      size: 36,
+                      borderRadius: 10,
+                      icon: const Icon(Icons.edit_rounded, size: 18),
+                      onTap: () => _edit(context, game),
+                    ),
+                    const SizedBox(width: 6),
+                    JuicyIconButton(
+                      size: 36,
+                      borderRadius: 10,
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      onTap: () => _delete(context, game),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionSelector<T>({
+    required String label,
+    required T current,
+    required List<({T value, String title, IconData icon})> options,
+    required ValueChanged<T> onSelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: _bodyStyle.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final opt in options)
+              JuicyCard(
+                isSelected: current == opt.value,
+                selectedColor: AppColors.highlightColor,
+                borderRadius: 14,
+                borderThickness: 3,
+                onTap: () {
+                  SoundEffectService.instance.playThemeSelect();
+                  onSelected(opt.value);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(opt.icon, size: 18, color: AppColors.textPrimary),
+                      const SizedBox(width: 8),
+                      Text(
+                        opt.title,
+                        style: _buttonStyle.copyWith(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLauncherTab(BuildContext context, SessionStrings strings) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ValueListenableBuilder<String>(
+            valueListenable: AppPreferences.cardStyleNotifier,
+            builder: (context, cardStyle, _) => _buildOptionSelector<String>(
+              label: strings.cardStyleLabel,
+              current: cardStyle,
+              options: [
+                (
+                  value: 'cover_only',
+                  title: strings.cardStyleCoverOnly,
+                  icon: Icons.image_rounded,
+                ),
+                (
+                  value: 'classic',
+                  title: strings.cardStyleClassic,
+                  icon: Icons.view_sidebar_rounded,
+                ),
+              ],
+              onSelected: (val) => AppPreferences.setCardStyle(val),
+            ),
+          ),
+          const SizedBox(height: 18),
+          ValueListenableBuilder<int>(
+            valueListenable: AppPreferences.gridRowsNotifier,
+            builder: (context, rows, _) => _buildOptionSelector<int>(
+              label: strings.gridDensityLabel,
+              current: rows,
+              options: [
+                (
+                  value: 1,
+                  title: strings.gridRows1,
+                  icon: Icons.table_rows_rounded,
+                ),
+                (
+                  value: 2,
+                  title: strings.gridRows2,
+                  icon: Icons.grid_view_rounded,
+                ),
+                (
+                  value: 3,
+                  title: strings.gridRows3,
+                  icon: Icons.density_small_rounded,
+                ),
+              ],
+              onSelected: (val) => AppPreferences.setGridRows(val),
+            ),
+          ),
+          const SizedBox(height: 18),
+          ValueListenableBuilder<String>(
+            valueListenable: AppPreferences.sortOrderNotifier,
+            builder: (context, sortOrder, _) => _buildOptionSelector<String>(
+              label: strings.sortOrderLabel,
+              current: sortOrder,
+              options: [
+                (
+                  value: 'recent',
+                  title: strings.sortRecent,
+                  icon: Icons.history_rounded,
+                ),
+                (
+                  value: 'alphabetical',
+                  title: strings.sortAlphabetical,
+                  icon: Icons.sort_by_alpha_rounded,
+                ),
+                (
+                  value: 'players',
+                  title: strings.sortPlayers,
+                  icon: Icons.group_rounded,
+                ),
+              ],
+              onSelected: (val) => AppPreferences.setSortOrder(val),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
     final games = context.watch<SessionController>().games;
 
     return JuicyDialog(
-      title: strings.gamesTitle,
-      maxWidth: 560,
+      title: strings.manageGamesAndLauncher,
+      maxWidth: 580,
       actions: [
+        if (_selectedTab == 0)
+          JuicyButton(
+            onPressed: () => _edit(context),
+            backgroundColor: AppColors.highlightColor,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(strings.addGame, style: _buttonStyle),
+          ),
         JuicyButton(
-          onPressed: () => _edit(context),
-          backgroundColor: AppColors.highlightColor,
+          onPressed: () => Navigator.pop(context),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Text(strings.addGame, style: _buttonStyle),
+          child: Text(strings.cancel, style: _buttonStyle),
         ),
       ],
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (games.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(strings.emptyLibrary, style: _bodyStyle),
-            ),
-          for (final game in games)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  _Thumb(path: game.coverPath),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          game.name,
-                          style: _bodyStyle.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          strings.playersRange(
-                            game.minPlayers,
-                            game.maxPlayers,
-                          ),
-                          style: _captionStyle,
-                        ),
-                      ],
-                    ),
-                  ),
-                  JuicyIconButton(
-                    size: 36,
-                    borderRadius: 10,
-                    icon: const Icon(Icons.edit_rounded, size: 18),
-                    onTap: () => _edit(context, game),
-                  ),
-                  const SizedBox(width: 6),
-                  JuicyIconButton(
-                    size: 36,
-                    borderRadius: 10,
-                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                    onTap: () => _delete(context, game),
-                  ),
-                ],
-              ),
-            ),
+          _buildTabBar(strings),
+          const SizedBox(height: 16),
+          if (_selectedTab == 0)
+            _buildGamesTab(context, strings, games)
+          else
+            _buildLauncherTab(context, strings),
         ],
       ),
     );
@@ -174,12 +429,17 @@ class GameEditorDialog extends StatefulWidget {
 }
 
 class _GameEditorDialogState extends State<GameEditorDialog> {
+  static const int _maxPlayersLimit = 16;
+
   late final TextEditingController _name;
   late final TextEditingController _path;
   late final TextEditingController _arguments;
   late final TextEditingController _description;
   late final TextEditingController _tags;
   late final TextEditingController _trailer;
+  // Extra images (links, one per line): shown on the card and on the
+  // phones with the details. A Steam cover fills them in.
+  late final TextEditingController _images;
   bool _fetchingSteam = false;
   late String _coverPath;
   late int _minPlayers;
@@ -204,6 +464,9 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _description = TextEditingController(text: game?.description ?? '');
     _tags = TextEditingController(text: game?.tags.join(', ') ?? '');
     _trailer = TextEditingController(text: game?.trailerUrl ?? '');
+    _images = TextEditingController(
+      text: (game?.screenshots ?? const []).join('\n'),
+    );
     _coverPath = game?.coverPath ?? '';
     _minPlayers = game?.minPlayers ?? 1;
     _maxPlayers = game?.maxPlayers ?? 4;
@@ -241,6 +504,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _description.dispose();
     _tags.dispose();
     _trailer.dispose();
+    _images.dispose();
     super.dispose();
   }
 
@@ -278,7 +542,22 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     );
     if (pick == null || !mounted) return;
     setState(() => _coverPath = pick.path);
-    if (pick.steamAppId != null) await _fillFromSteam(pick.steamAppId!);
+    if (pick.details != null) {
+      _applyDetails(pick.details!);
+    } else if (pick.steamAppId != null) {
+      await _fillFromSteam(pick.steamAppId!);
+    }
+  }
+
+  void _applyDetails(GameDetails details) {
+    if (_description.text.trim().isEmpty) {
+      _description.text = details.description;
+    }
+    if (_tags.text.trim().isEmpty) _tags.text = details.tags.join(', ');
+    if (_trailer.text.trim().isEmpty) _trailer.text = details.trailerUrl;
+    if (_images.text.trim().isEmpty) {
+      _images.text = details.screenshots.join('\n');
+    }
   }
 
   /// A Steam cover also brings the store's description, genres and trailer;
@@ -290,11 +569,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     setState(() {
       _fetchingSteam = false;
       if (details == null) return;
-      if (_description.text.trim().isEmpty) {
-        _description.text = details.description;
-      }
-      if (_tags.text.trim().isEmpty) _tags.text = details.tags.join(', ');
-      if (_trailer.text.trim().isEmpty) _trailer.text = details.trailerUrl;
+      _applyDetails(details);
     });
   }
 
@@ -383,6 +658,11 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
       ],
       trailerUrl: _trailer.text.trim(),
       addedAt: widget.game?.addedAt ?? 0,
+      lastPlayedAt: widget.game?.lastPlayedAt ?? 0,
+      screenshots: [
+        for (final line in _images.text.split(RegExp(r'[\n,]')))
+          if (line.trim().startsWith('http')) line.trim(),
+      ],
     );
     try {
       await context.read<SessionController>().saveGame(game);
@@ -497,6 +777,8 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
               _smallButton(strings.searchTrailer, _searchTrailer),
             ],
           ),
+          _label(strings.gameImages),
+          _field(_images, hint: strings.gameImagesHint, lines: 2),
           Row(
             children: [
               Expanded(
@@ -575,7 +857,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
                   final start = _rules.isEmpty
                       ? _minPlayers
                       : _rules.last.maxPlayers + 1;
-                  final from = start.clamp(1, 8);
+                  final from = start.clamp(1, _maxPlayersLimit);
                   _rules = [
                     ..._rules,
                     GameRule(
@@ -777,7 +1059,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
 
   Widget _intDropdown(int value, ValueChanged<int> onChanged) => _dropdown<int>(
     value: value,
-    items: {for (var i = 1; i <= 8; i++) i: '$i'},
+    items: {for (var i = 1; i <= _maxPlayersLimit; i++) i: '$i'},
     onChanged: (v) => onChanged(v ?? value),
   );
 

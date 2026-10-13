@@ -121,6 +121,14 @@ void main() {
         'name': 'Aventura Solo', 'path': Platform.resolvedExecutable, 'minPlayers': 1, 'maxPlayers': 1,
         'tags': ['Aventura'],
       }))['game'];
+      // Enough games to fill the strip and scroll it sideways.
+      for (var i = 1; i <= 30; i++) {
+        await post('/api/games', {
+          'name': 'Jogo Extra $i', 'path': Platform.resolvedExecutable,
+          if (i.isEven) 'coverPath': icon,
+          'minPlayers': 1, 'maxPlayers': 4, 'tags': [if (i % 3 == 0) 'Luta' else 'Festa'],
+        });
+      }
     });
 
     await tester.pumpWidget(
@@ -149,9 +157,13 @@ void main() {
     await settle();
     await shot('3_lobby_all_ready');
 
-    // Phase 3: START with everyone ready opens the library.
-    phones[0].press('START');
+    // Phase 3: everyone ready counts down 5 s, then the library opens.
     await settle(1200);
+    await shot('3b_lobby_countdown');
+    phones[1].press('Y');
+    await settle(300);
+    await shot('3c_lobby_emote');
+    await settle(4500);
     await shot('4_library');
 
     // Ana steers right and up for a moment, then votes with A.
@@ -172,6 +184,30 @@ void main() {
     });
     await settle();
     await shot('6_library_votes');
+    // Carla reads a game's details on her phone, then pushes the strip right.
+    await tester.runAsync(
+      () => post('/api/session/details', {'deviceId': 'fake3', 'gameId': kart['id']}),
+    );
+    await settle();
+    await shot('6b_library_reading');
+    await tester.runAsync(
+      () => post('/api/session/details', {'deviceId': 'fake3', 'gameId': null}),
+    );
+    phones[2].stick(1, 0);
+    await settle(3000);
+    await shot('6c_library_pushed');
+    // Ana takes her vote back and pushes the other way while Carla keeps
+    // pushing: the strip stays still.
+    await tester.runAsync(
+      () => post('/api/session/vote', {'deviceId': 'fake1', 'gameId': null}),
+    );
+    await settle(300);
+    phones[0].stick(-1, 0);
+    await settle(2500);
+    await shot('6d_library_tug_of_war');
+    phones[0].stick(0, 0);
+    phones[2].stick(0, 0);
+    await settle(300);
     await tester.runAsync(() async {
       await post('/api/session/vote', {'deviceId': 'fake3', 'gameId': party['id']});
     });

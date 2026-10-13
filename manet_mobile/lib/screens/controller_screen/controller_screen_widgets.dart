@@ -5,6 +5,7 @@ import '../../models/player_face.dart';
 import '../../services/network_discovery_service.dart';
 import '../../theme/app_colors.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/preferences_service.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../widgets/juicy_widgets.dart';
 import 'controller_screen_types.dart';
@@ -431,6 +432,68 @@ class MultipleHostsOverlay extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class MovementModeToggleButton extends StatelessWidget {
+  const MovementModeToggleButton({
+    super.key,
+    required this.mode,
+    required this.onToggle,
+  });
+
+  final MovementMode mode;
+  final VoidCallback onToggle;
+
+  static IconData getNextModeIcon(MovementMode mode) {
+    switch (mode) {
+      case MovementMode.dpad:
+        return Icons.control_camera_rounded;
+      case MovementMode.fixedJoystick:
+        return Icons.touch_app_rounded;
+      case MovementMode.floatingJoystick:
+        return Icons.gamepad_outlined;
+    }
+  }
+
+  static String getNextModeLabel(BuildContext context, MovementMode mode) {
+    switch (mode) {
+      case MovementMode.dpad:
+        return context.l10n.joystick.changeToFixed;
+      case MovementMode.fixedJoystick:
+        return context.l10n.joystick.changeToFloating;
+      case MovementMode.floatingJoystick:
+        return context.l10n.joystick.changeToDpad;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 32,
+      height: 48,
+      child: Material(
+        color: AppColors.backgroundColor.withValues(
+          alpha: 0.05,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(
+            color: Colors.transparent,
+            width: AppColors.borderThickness,
+          ),
+        ),
+        child: IconButton(
+          icon: Icon(
+            getNextModeIcon(mode),
+            size: 18,
+          ),
+          splashRadius: 10,
+          onPressed: onToggle,
+          tooltip: getNextModeLabel(context, mode),
         ),
       ),
     );

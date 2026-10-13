@@ -82,6 +82,17 @@ def normalize_game(data: dict, game_id: str | None = None) -> dict:
     except (TypeError, ValueError):
         added_at = time.time()
 
+    try:
+        last_played_at = max(0.0, float(data.get("lastPlayedAt") or 0))
+    except (TypeError, ValueError):
+        last_played_at = 0.0
+
+    screenshots = []
+    for url in data.get("screenshots") or []:
+        url = str(url).strip()
+        if url.startswith(("http://", "https://")) and url not in screenshots:
+            screenshots.append(url)
+
     display = data.get("display")
     display = int(display) if isinstance(display, (int, float)) and display >= 0 else None
 
@@ -109,6 +120,11 @@ def normalize_game(data: dict, game_id: str | None = None) -> dict:
         "tags": tags[:12],
         "trailerUrl": str(data.get("trailerUrl") or "").strip(),
         "addedAt": added_at,
+        # When MaNet last launched it: the library starts centered on the
+        # most recently played games.
+        "lastPlayedAt": last_played_at,
+        # Image URLs shown on a player's phone with the game details.
+        "screenshots": screenshots[:8],
     }
 
 
@@ -169,13 +185,26 @@ class GameLibraryStore:
     def update(self, game_id: str, data: dict) -> dict | None:
         for index, existing in enumerate(self._games):
             if existing["id"] == game_id:
-                if isinstance(data, dict) and not data.get("addedAt"):
-                    data = {**data, "addedAt": existing.get("addedAt")}
+                if isinstance(data, dict):
+                    for key in ("addedAt", "lastPlayedAt"):
+                        if not data.get(key):
+                            data = {**data, key: existing.get(key)}
                 game = normalize_game(data, game_id)
                 self._games[index] = game
                 self._save()
                 return dict(game)
         return None
+
+    def touch(self, game_id: str):
+        """Remember that the game was just played."""
+        for game in self._games:
+            if game["id"] == game_id:
+                game["lastPlayedAt"] = time.time()
+                try:
+                    self._save()
+                except Exception:
+                    LOGGER.exception("Failed to save the game library")
+                return
 
     def delete(self, game_id: str) -> bool:
         before = len(self._games)

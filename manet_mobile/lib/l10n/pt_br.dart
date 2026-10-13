@@ -49,9 +49,9 @@ class PtBrMenuStrings implements MenuStrings {
   @override
   String get avatar => 'Avatar';
   @override
-  String get lobbyHint => 'Selecionar quando estiver pronto';
+  String get lobbyHint => 'Aperte Pronto quando estiver pronto';
   @override
-  String get libraryHint => 'Mova o cursor e selecione um jogo';
+  String get libraryHint => 'Leve o cursor até um jogo e escolha';
   @override
   String get overlayHint => 'Escolha uma opção no menu da TV';
   @override
@@ -92,6 +92,38 @@ class PtBrMenuStrings implements MenuStrings {
   @override
   String get tournamentHint =>
       'Torneio! Leve seu rostinho para o lado do jogo que você quer jogar.';
+  @override
+  String get betterInApp => 'É melhor no aplicativo';
+  @override
+  String get ready => 'Pronto';
+  @override
+  String get notReady => 'Não estou pronto';
+  @override
+  String get waitingOthers => 'Esperando os outros…';
+  @override
+  String startingIn(int seconds) => 'Todo mundo pronto! Começando em $seconds…';
+  @override
+  String get face => 'Rosto';
+  @override
+  String get cancelSelection => 'Cancelar seleção';
+  @override
+  String get info => 'Info';
+  @override
+  String get cancel => 'Cancelar';
+  @override
+  String get backToLobby => 'Voltar ao lobby';
+  @override
+  String lobbyWaiting(int yes, int needed) => 'Aguardando $yes/$needed';
+  @override
+  String lobbyRequestOffer(String name) => '$name quer voltar ao lobby. Vamos voltar?';
+  @override
+  String get stayHere => 'Ficar';
+  @override
+  String get goBack => 'Voltar';
+  @override
+  String playersRange(int min, int max) => min == max ? '$min jogadores' : '$min–$max jogadores';
+  @override
+  String get noDescription => 'Ainda sem descrição.';
 }
 
 class PtBrCommonStrings implements CommonStrings {

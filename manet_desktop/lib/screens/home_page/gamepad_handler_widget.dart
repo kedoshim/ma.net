@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import '../../widgets/comic_burst.dart';
+import '../../widgets/player_cursor.dart' show EmoteWiggle;
 import 'lobby_ready_banner.dart';
 import 'lobby_toolbar.dart';
 import 'package:manet_desktop/services/session_controller.dart';
@@ -749,6 +750,30 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
   DeviceModel? _disappearingDevice;
   bool _wasReady = false;
   int _readyBopTrigger = 0;
+  // The blank (emote) button on the phone makes the face dance.
+  int _emoteTrigger = 0;
+  StreamSubscription<PadButtonEvent>? _buttons;
+
+  @override
+  void initState() {
+    super.initState();
+    _buttons = Provider.of<GamepadState>(context, listen: false)
+        .buttonEvents
+        .listen((event) {
+          if (event.pressed &&
+              event.button == 'Y' &&
+              event.deviceId == widget.slotModel.device?.id &&
+              mounted) {
+            setState(() => _emoteTrigger++);
+          }
+        });
+  }
+
+  @override
+  void dispose() {
+    _buttons?.cancel();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant ControllerSlotWidget oldWidget) {
@@ -887,10 +912,11 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                                           input: input,
                                           size: widget.scale.half,
                                           isOnPool: false,
+                                          emoteTrigger: _emoteTrigger,
                                         ),
                                       ),
                                     ),
-                                  ),
+                                  )
                                 ),
                               ),
                             ),
@@ -913,10 +939,11 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                                       input: input,
                                       size: widget.scale.half,
                                       isOnPool: false,
+                                      emoteTrigger: _emoteTrigger,
                                     ),
                                   ),
                                 ),
-                              ),
+                              )
                             ),
                           ),
                   ),
@@ -1400,6 +1427,9 @@ class DeviceInputIndicator extends StatelessWidget {
   final DeviceInputState input;
   final double size;
   final bool isOnPool;
+  /// Bumped by the player's emote button: only the face dances, the name
+  /// stays put.
+  final int emoteTrigger;
 
   const DeviceInputIndicator({
     super.key,
@@ -1407,6 +1437,7 @@ class DeviceInputIndicator extends StatelessWidget {
     required this.input,
     required this.size,
     this.isOnPool = false,
+    this.emoteTrigger = 0,
   });
 
   @override
@@ -1436,7 +1467,10 @@ class DeviceInputIndicator extends StatelessWidget {
         ? null
         : AppTheme.primaryText.withValues(alpha: 0.25);
 
-    final faceWidget = SizedBox(
+    final faceWidget = EmoteWiggle(
+      trigger: emoteTrigger,
+      alignment: Alignment.center,
+      child: SizedBox(
       width: size,
       height: size,
       child: TweenAnimationBuilder<Offset>(
@@ -1487,6 +1521,7 @@ class DeviceInputIndicator extends StatelessWidget {
           );
         },
       ),
+    ),
     );
 
     final nameWidget = SizedBox(

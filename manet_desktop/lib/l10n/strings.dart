@@ -103,6 +103,21 @@ abstract class SessionStrings {
   String get closeGame;
   String get returnToLobby;
   String get gamesTitle;
+  String get tabGames;
+  String get tabLauncher;
+  String get launcherSettingsTitle;
+  String get cardStyleLabel;
+  String get cardStyleCoverOnly;
+  String get cardStyleClassic;
+  String get gridDensityLabel;
+  String get gridRows1;
+  String get gridRows2;
+  String get gridRows3;
+  String get sortOrderLabel;
+  String get sortRecent;
+  String get sortAlphabetical;
+  String get sortPlayers;
+  String get manageGamesAndLauncher;
   String get addGame;
   String get editGame;
   String get gameName;
@@ -187,6 +202,8 @@ abstract class SessionStrings {
   String get gameTagsHint;
   String get gameTrailer;
   String get gameTrailerHint;
+  String get gameImages;
+  String get gameImagesHint;
   String get searchTrailer;
   String get steamInfoLoading;
   String get tournamentTitle;
@@ -199,6 +216,15 @@ abstract class SessionStrings {
   String tournamentDraw(String game);
   String tournamentChampion(String game);
   String get tournamentCancel;
+  String get lobbyCountdown;
+  String get freeMode;
+  String get freeModeHint;
+  String get leaveFreeMode;
+  String lobbyRequest(String name, int yes, int needed);
+  String get statusChoosing;
+  String statusReading(String game);
+  String get statusWantsLobby;
+  String votedCount(int voted, int total);
 }
 
 abstract class ControllersStrings {
@@ -282,6 +308,8 @@ abstract class SettingsStrings {
   String get fullScreenTitle;
   String get matchSecondsTitle;
   String matchSecondsValue(int seconds);
+  String get freeModeTitle;
+  String get freeModeHint;
 }
 
 abstract class SlotsStrings {

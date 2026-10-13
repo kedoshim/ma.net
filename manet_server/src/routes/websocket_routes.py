@@ -292,6 +292,12 @@ class WebSocketRoutes:
                         self.session.answer_swap(
                             device_id, str(data.get("from") or ""), data.get("accept") is True
                         )
+                    elif msg_type == "lobby_request":
+                        self.session.request_lobby(device_id)
+                    elif msg_type == "lobby_answer":
+                        self.session.answer_lobby(device_id, data.get("accept") is True)
+                    elif msg_type == "details_close":
+                        self.session.show_details(device_id, None)
                     elif msg_type == "request_slot":
                         dev_name = self.manager.connected_devices.get(device_id, {}).get("name", player_name)
                         LOG.info("Device %s (%s) requested slot", device_id, dev_name)

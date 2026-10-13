@@ -11,6 +11,7 @@ import '../../utils/demo_config.dart';
 import '../../l10n/app_localizations.dart';
 
 import '../../models/controller_branding.dart';
+import '../../models/session_models.dart';
 import '../../theme/app_theme.dart';
 import '../../services/host_api_service.dart';
 import '../../services/host_window_service.dart';
@@ -22,6 +23,7 @@ import '../start_page/mode_selection_dialog.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/server_options_popup.dart';
 import '../../widgets/controllers_panel_dialog.dart';
+import '../library/manage_games_dialog.dart';
 import '../../widgets/app_error_widget.dart';
 import 'lobby_toolbar.dart';
 import 'session_stage.dart';
@@ -809,6 +811,27 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                             ],
                             _buildControllersButton(),
                             const SizedBox(width: 8),
+                            Tooltip(
+                              message: context.l10n.session.manageGamesAndLauncher,
+                              child: JuicyIconButton(
+                                size: 48,
+                                borderRadius: 14,
+                                icon: const Icon(Icons.edit_rounded),
+                                onTap: () {
+                                  SoundEffectService.instance.playOptionsButton();
+                                  showDialog(
+                                    context: context,
+                                    builder: (_) => ChangeNotifierProvider.value(
+                                      value: _session,
+                                      child: ManageGamesDialog(
+                                        presetCatalog: _presetCatalog,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
                             JuicyIconButton(
                               size: 48,
                               borderRadius: 14,
@@ -823,6 +846,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         _reservationTimeoutMinutes,
                                     onMatchSecondsChanged: (seconds) =>
                                         _session.setMatchSeconds(seconds),
+                                    onFreeModeChanged: (enabled) =>
+                                        _session.setFreeModeEnabled(enabled),
                                     onThemeChanged: (theme) async {
                                       setState(() => _currentTheme = theme);
                                       try {
@@ -922,11 +947,28 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Flexible(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: dynamicHorizontalPadding,
-                                vertical: isCompact ? 16.0 : 50.0,
-                              ),
+                            child: ListenableBuilder(
+                              listenable: _session,
+                              builder: (context, child) {
+                                // The game selection takes the whole
+                                // window; the lobby keeps its margins.
+                                final lobby =
+                                    _session.snapshot.phase ==
+                                        SessionPhase.lobby ||
+                                    _session.snapshot.phase ==
+                                        SessionPhase.inGame;
+                                return AnimatedPadding(
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOutCubic,
+                                  padding: lobby
+                                      ? EdgeInsets.symmetric(
+                                          horizontal: dynamicHorizontalPadding,
+                                          vertical: isCompact ? 16.0 : 50.0,
+                                        )
+                                      : EdgeInsets.zero,
+                                  child: child,
+                                );
+                              },
                               child: Row(
                                 mainAxisSize: MainAxisSize.max,
                                 children: [

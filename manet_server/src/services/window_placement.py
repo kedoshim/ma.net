@@ -54,6 +54,11 @@ if sys.platform == "win32":
     user32.SetWindowPos.argtypes = [
         wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT,
     ]
+    user32.IsWindow.argtypes = [wintypes.HWND]
+    user32.BringWindowToTop.argtypes = [wintypes.HWND]
+    user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    user32.keybd_event.argtypes = [wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, ctypes.c_size_t]
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 else:  # pragma: no cover - the server only runs on Windows
     user32 = None
 
@@ -119,9 +124,28 @@ def list_displays() -> list[dict]:
     return monitors
 
 
+class _WINDOWPLACEMENT(ctypes.Structure):
+    _fields_ = [
+        ("length", wintypes.UINT),
+        ("flags", wintypes.UINT),
+        ("showCmd", wintypes.UINT),
+        ("ptMinPosition", wintypes.POINT),
+        ("ptMaxPosition", wintypes.POINT),
+        ("rcNormalPosition", wintypes.RECT),
+    ]
+
+
 def _window_rect(hwnd):
+    """Window rectangle; for a minimized window, where it will be restored
+    (full screen games often minimize themselves when they lose focus)."""
     rect = wintypes.RECT()
-    user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    if user32.IsIconic(hwnd):
+        placement = _WINDOWPLACEMENT()
+        placement.length = ctypes.sizeof(_WINDOWPLACEMENT)
+        if user32.GetWindowPlacement(hwnd, ctypes.byref(placement)):
+            rect = placement.rcNormalPosition
+    else:
+        user32.GetWindowRect(hwnd, ctypes.byref(rect))
     return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
 
 
@@ -207,28 +231,6 @@ async def enforce_placement(running, display_index: int | None, fullscreen: bool
             placed_at = None
 
 
-def game_monitor(pids: set[int]) -> dict | None:
-    """Monitor showing the game (its main window, else the foreground one)."""
-    if user32 is None:
-        return None
-    hwnd = find_main_window(pids) if pids else None
-    hwnd = hwnd or user32.GetForegroundWindow()
-    if not hwnd:
-        return None
-    return _monitor_info(user32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
-
-
-def foreground_pid() -> int | None:
-    if user32 is None:
-        return None
-    hwnd = user32.GetForegroundWindow()
-    if not hwnd:
-        return None
-    pid = wintypes.DWORD()
-    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-    return pid.value or None
-
-
 def move_to_monitor(pid: int, monitor: dict) -> bool:
     """Move a process's main window onto `monitor` (centered, same size),
     so the desktop can then go full screen there."""
@@ -267,16 +269,60 @@ def capture_game_screen(monitor: dict | None) -> bytes | None:
 
 
 SW_RESTORE = 9
+VK_MENU = 0x12
+KEYEVENTF_KEYUP = 0x0002
 
 
-def bring_to_front(pids: set[int]) -> bool:
-    """Give the game window the foreground again (after the overlay closes).
-    Works because the desktop app allowed it right before stepping aside."""
-    if user32 is None or not pids:
-        return False
-    hwnd = find_main_window(pids)
+def foreground_window() -> tuple[int | None, int | None]:
+    """(hwnd, pid) of the window in front."""
+    if user32 is None:
+        return None, None
+    hwnd = user32.GetForegroundWindow()
     if not hwnd:
+        return None, None
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return hwnd, pid.value or None
+
+
+def is_window(hwnd) -> bool:
+    return bool(user32 is not None and hwnd and user32.IsWindow(hwnd))
+
+
+def window_monitor(hwnd) -> dict | None:
+    """Monitor of `hwnd` (a minimized window counts where it was)."""
+    if not is_window(hwnd):
+        return None
+    return _monitor_info(user32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+
+
+def focus_window(hwnd) -> bool:
+    """Bring `hwnd` to the front, restoring it if minimized. Windows only
+    lets the foreground process do this freely, so when the plain call is
+    refused it uses the usual workarounds: a synthetic ALT tap (unlocks
+    SetForegroundWindow) and attaching to the foreground thread's input."""
+    if not is_window(hwnd):
         return False
     if user32.IsIconic(hwnd):
         user32.ShowWindow(hwnd, SW_RESTORE)
-    return bool(user32.SetForegroundWindow(hwnd))
+    if user32.SetForegroundWindow(hwnd) and user32.GetForegroundWindow() == hwnd:
+        return True
+
+    user32.keybd_event(VK_MENU, 0, 0, 0)
+    user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+    if user32.SetForegroundWindow(hwnd) and user32.GetForegroundWindow() == hwnd:
+        return True
+
+    front = user32.GetForegroundWindow()
+    front_thread = user32.GetWindowThreadProcessId(front, None) if front else 0
+    own_thread = kernel32.GetCurrentThreadId()
+    attached = bool(front_thread) and front_thread != own_thread and bool(
+        user32.AttachThreadInput(own_thread, front_thread, True)
+    )
+    try:
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(own_thread, front_thread, False)
+    return user32.GetForegroundWindow() == hwnd
