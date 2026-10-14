@@ -13,6 +13,21 @@ abstract class AppStrings {
   AndroidOnboardingStrings get androidOnboarding;
   MenuStrings get menu;
   RelayStrings get relay;
+  AccessStrings get access;
+}
+
+/// Joining a room with a password or the host's approval.
+abstract class AccessStrings {
+  String get passwordTitle;
+  String get passwordHint;
+  String get passwordField;
+  String get enter;
+  String wrongPassword(int attemptsLeft);
+  String get pendingTitle;
+  String get pendingBody;
+  String deniedTitle(String? reason);
+  String deniedBody(String? reason);
+  String get tryAgain;
 }
 
 /// Physical gamepad relay (a real controller attached to the phone/computer).

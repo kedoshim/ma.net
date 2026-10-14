@@ -54,6 +54,7 @@ class HTTPRoutes:
         connection_service: ConnectionService,
         diagnostics_service: NetworkDiagnosticsService,
         tunnel_service=None,
+        access_gate=None,
     ):
         self.manager = manager
         self.admin_panel = admin_panel
@@ -62,6 +63,7 @@ class HTTPRoutes:
         self.connection_service = connection_service
         self.diagnostics_service = diagnostics_service
         self.tunnel_service = tunnel_service
+        self.access_gate = access_gate
         self.session = manager.session
         # QR rendering is CPU-bound; the URL rarely changes.
         self._qr_cache: dict[str, bytes] = {}
@@ -114,6 +116,65 @@ class HTTPRoutes:
     async def online_stop_handler(self, request):
         await self.tunnel_service.stop()
         return web.json_response({"success": True, **self.tunnel_service.snapshot()})
+
+
+    async def access_handler(self, request):
+        return web.json_response({"success": True, **self.access_gate.to_payload()})
+
+
+    async def access_settings_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        self.access_gate.configure(
+            lan=data.get("lanMode"),
+            online=data.get("onlineMode"),
+            password=data.get("password") if "password" in data else None,
+        )
+        return web.json_response({"success": True, **self.access_gate.to_payload()})
+
+
+    async def access_answer_handler(self, request):
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        device_id = data.get("deviceId")
+        if not isinstance(device_id, str) or not device_id:
+            return _bad_request("invalid_deviceId")
+        found = self.access_gate.answer(device_id, data.get("accept") is True, data.get("ban") is True)
+        return web.json_response({"success": found})
+
+
+    async def access_kick_handler(self, request):
+        """Removes a connected phone; with `ban` it can't come back this
+        session."""
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        device_id = data.get("deviceId")
+        if not isinstance(device_id, str) or not device_id:
+            return _bad_request("invalid_deviceId")
+        ban = data.get("ban") is True
+        if device_id in self.access_gate.pending:
+            self.access_gate.answer(device_id, False, ban)
+        else:
+            self.access_gate.kick(device_id, ban)
+        ws = self.manager.device_ws_map.get(device_id)
+        if ws is not None and not ws.closed:
+            try:
+                await ws.send_json({"type": "access_denied", "reason": "banned" if ban else "kicked"})
+            except Exception:
+                pass
+            await ws.close()
+        return web.json_response({"success": True})
+
+
+    async def access_unban_handler(self, request):
+        self.access_gate.unban_all()
+        return web.json_response({"success": True, **self.access_gate.to_payload()})
 
 
     async def connection_info_handler(self, request):

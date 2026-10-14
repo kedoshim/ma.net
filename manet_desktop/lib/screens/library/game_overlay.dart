@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/host_api_service.dart';
 import '../../services/online_service.dart';
+import '../../widgets/player_kick_menu.dart';
 import '../../services/session_controller.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/player_face_indicator.dart';
@@ -649,7 +650,7 @@ class _SeatSquare extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
-    return Container(
+    final square = Container(
       width: 92,
       height: 108,
       padding: const EdgeInsets.all(8),
@@ -686,6 +687,10 @@ class _SeatSquare extends StatelessWidget {
         ],
       ),
     );
+    final seated = device;
+    return seated == null
+        ? square
+        : KickMenuRegion(deviceId: seated.id, name: seated.name, child: square);
   }
 }
 

@@ -13,6 +13,7 @@ from src.cli.debug_cli import DebugCLI
 from src.services.connection_service import ConnectionService
 from src.services.network_diagnostics_service import NetworkDiagnosticsService
 from src.services.tunnel_service import TunnelService
+from src.core.access_control import AccessGate
 from src.app.security import admin_auth_middleware, load_admin_token, requires_admin
 
 import logging
@@ -37,6 +38,9 @@ def create_app(config):
         admin_panel.broadcast_event({"type": "online_status", **snapshot})
 
     tunnel_service = TunnelService(config.http_port, on_change=on_tunnel_change)
+    access_gate = AccessGate(
+        on_change=lambda payload: admin_panel.broadcast_event({"type": "access_update", **payload})
+    )
 
     LOG.info("Creating aiohttp web application...")
     app = web.Application(middlewares=[admin_auth_middleware(load_admin_token())])
@@ -58,6 +62,7 @@ def create_app(config):
         connection_service,
         diagnostics_service,
         tunnel_service,
+        access_gate,
     )
 
     websocket_routes = WebSocketRoutes(
@@ -67,6 +72,7 @@ def create_app(config):
         connection_service,
         manager.session,
         tunnel_service,
+        access_gate,
     )
 
     file_routes = FileRoutes()

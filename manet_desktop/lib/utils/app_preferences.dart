@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
+import '../services/access_service.dart' show AccessMode;
 
 /// Host-side preferences that persist between sessions.
 class AppPreferences {
@@ -11,7 +12,9 @@ class AppPreferences {
   static const _consoleModeKey = 'console_mode';
   static const _lobbyStartRuleKey = 'lobby_start_rule';
   static const _mousePasswordKey = 'mouse_password';
-  static const _onlineWarningSeenKey = 'online_warning_seen';
+  static const _accessModeLanKey = 'access_mode_lan';
+  static const _accessModeOnlineKey = 'access_mode_online';
+  static const _roomPasswordKey = 'room_password';
   static const _launcherCardStyleKey = 'launcher_card_style';
   static const _launcherGridRowsKey = 'launcher_grid_rows';
   static const _launcherSortOrderKey = 'launcher_sort_order';
@@ -124,15 +127,39 @@ class AppPreferences {
     await prefs.setString(_mousePasswordKey, value.trim());
   }
 
-  /// Whether the "anyone with the link can join" notice was confirmed.
-  static Future<bool> onlineWarningSeen() async {
+  /// Who may join from the local network (default: anyone).
+  static Future<AccessMode> accessModeLan() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_onlineWarningSeenKey) ?? false;
+    return _accessMode(prefs.getString(_accessModeLanKey), AccessMode.open);
   }
 
-  static Future<void> setOnlineWarningSeen() async {
+  static Future<void> setAccessModeLan(AccessMode mode) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onlineWarningSeenKey, true);
+    await prefs.setString(_accessModeLanKey, mode.name);
+  }
+
+  /// Who may join through "Play online" (default: the host approves).
+  static Future<AccessMode> accessModeOnline() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _accessMode(prefs.getString(_accessModeOnlineKey), AccessMode.approval);
+  }
+
+  static Future<void> setAccessModeOnline(AccessMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_accessModeOnlineKey, mode.name);
+  }
+
+  static AccessMode _accessMode(String? value, AccessMode fallback) =>
+      AccessMode.values.firstWhere((mode) => mode.name == value, orElse: () => fallback);
+
+  static Future<String> roomPassword() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_roomPasswordKey) ?? '';
+  }
+
+  static Future<void> setRoomPassword(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_roomPasswordKey, value.trim());
   }
 
   static Future<void> setLobbyStartRule(String value) async {

@@ -14,6 +14,7 @@ import '../../widgets/player_face_indicator.dart';
 import '../library/face_playground.dart';
 import 'gamepad_state.dart';
 import 'qr_code_container.dart';
+import '../../widgets/player_kick_menu.dart';
 
 /// Faces in the lobby are bigger than in the overlay's playground.
 const double _faceRadius = 50;
@@ -310,6 +311,7 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
               if (gamepads.deviceById(forming[i]) case final device?)
                 _FormingFace(
                   key: ValueKey('blob-${forming[i]}'),
+                  deviceId: device.id,
                   center: spots[i],
                   size: blobSize,
                   face: device.face,
@@ -323,6 +325,8 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
               if (gamepads.deviceById(pills[i]) case final device?)
                 _ReadyPill(
                   key: ValueKey('pill-${pills[i]}'),
+                  deviceId: device.id,
+                  name: device.name,
                   top: size.height * 0.24 + i * _pillStep(size, pills.length),
                   height: math.min(100, _pillStep(size, pills.length) - 14),
                   face: device.face,
@@ -566,6 +570,7 @@ class _PlayHintState extends State<_PlayHint>
 /// that keeps changing, as if being formed. When the player checks in it
 /// turns into a circle ([morphStart]) and the playground takes over.
 class _FormingFace extends StatelessWidget {
+  final String deviceId;
   final Offset center;
   final double size;
   final PlayerFaceData face;
@@ -577,6 +582,7 @@ class _FormingFace extends StatelessWidget {
 
   const _FormingFace({
     super.key,
+    required this.deviceId,
     required this.center,
     required this.size,
     required this.face,
@@ -593,7 +599,7 @@ class _FormingFace extends StatelessWidget {
       left: center.dx - 110,
       top: center.dy - size / 2 - 34,
       width: 220,
-      child: IgnorePointer(
+      child: KickMenuRegion(deviceId: deviceId, name: name, child: IgnorePointer(
         child: ValueListenableBuilder<double>(
           valueListenable: time,
           builder: (context, t, _) {
@@ -673,7 +679,7 @@ class _FormingFace extends StatelessWidget {
             );
           },
         ),
-      ),
+      )),
     );
   }
 }
@@ -741,12 +747,16 @@ class _BlobPainter extends CustomPainter {
 /// A ready player: a pill stuck to the right edge with their face and an
 /// arrow; it slides in from outside the screen.
 class _ReadyPill extends StatelessWidget {
+  final String deviceId;
+  final String name;
   final double top;
   final double height;
   final PlayerFaceData face;
 
   const _ReadyPill({
     super.key,
+    required this.deviceId,
+    required this.name,
     required this.top,
     required this.height,
     required this.face,
@@ -765,7 +775,7 @@ class _ReadyPill extends StatelessWidget {
       top: top,
       width: width,
       height: height,
-      child: TweenAnimationBuilder<double>(
+      child: KickMenuRegion(deviceId: deviceId, name: name, child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 1, end: 0),
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutBack,
@@ -793,7 +803,7 @@ class _ReadyPill extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 }

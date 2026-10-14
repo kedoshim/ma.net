@@ -10,7 +10,8 @@ from src.input.input_handler import apply_button, apply_stick, apply_right_stick
 from src.input.keyboard_controller import KeyboardController
 from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
-from src.app.security import request_origin
+from src.app.security import client_ip, request_origin
+from src.core.access_control import ADMITTED, BANNED, MODE_PASSWORD
 
 LOG = logging.getLogger("websocket")
 
@@ -25,6 +26,9 @@ WS_HEARTBEAT_SECONDS = 10.0
 MAX_MESSAGES_PER_SECOND = 300
 MAX_FLOODED_SECONDS = 5
 
+# How long a phone may sit on the password or approval screen.
+ACCESS_WAIT_SECONDS = 180.0
+
 MAX_DEVICE_ID_LENGTH = 64
 MAX_NAME_LENGTH = 15
 MAX_FIELD_LENGTH = 32
@@ -35,8 +39,10 @@ def _clip(value, limit):
 
 
 class WebSocketRoutes:
-    def __init__(self, ws_endpoint, manager, admin_panel, connection_service, session, tunnel_service=None):
+    def __init__(self, ws_endpoint, manager, admin_panel, connection_service, session,
+                 tunnel_service=None, access_gate=None):
         self.tunnel_service = tunnel_service
+        self.access_gate = access_gate
         self.manager = manager
         self.admin_panel = admin_panel
         self.session = session
@@ -88,6 +94,14 @@ class WebSocketRoutes:
             })
             await ws.close()
             return ws
+
+        if self.access_gate is not None:
+            admitted, player_name = await self._admit(
+                ws, request, device_id, player_name, customization, lang, online
+            )
+            if not admitted:
+                await ws.close()
+                return ws
 
         if not online:
             self.connection_service.mark_success_for_ip(local_ip)
@@ -488,6 +502,101 @@ class WebSocketRoutes:
 
 
 
+    async def _admit(self, ws, request, device_id, player_name, customization, lang, online):
+        """Applies the room's join rule before the phone is registered.
+        Returns (admitted, name to register with)."""
+        gate = self.access_gate
+        origin = "online" if online else "lan"
+        ip = client_ip(request)
+        verdict = gate.check(device_id, origin, ip)
+        if verdict == ADMITTED:
+            return True, player_name
+        if verdict == BANNED:
+            await self._deny(ws, "banned")
+            return False, player_name
+        if verdict == MODE_PASSWORD:
+            return await self._wait_for_password(ws, device_id, ip), player_name
+        return await self._wait_for_approval(ws, device_id, player_name, customization, lang, origin)
+
+    async def _wait_for_password(self, ws, device_id, ip) -> bool:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + ACCESS_WAIT_SECONDS
+        await ws.send_json({"type": "access_required", "mode": "password"})
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                await self._deny(ws, "timeout")
+                return False
+            try:
+                msg = await ws.receive(timeout=remaining)
+            except asyncio.TimeoutError:
+                continue
+            if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED, WSMsgType.ERROR):
+                return False
+            if msg.type != WSMsgType.TEXT:
+                continue
+            try:
+                data = json.loads(msg.data)
+            except Exception:
+                continue
+            if not isinstance(data, dict) or data.get("type") != "access_password":
+                continue
+            result, left = self.access_gate.try_password(device_id, ip, data.get("password"))
+            if result == "ok":
+                await ws.send_json({"type": "access_granted"})
+                return True
+            if result == "locked":
+                await self._deny(ws, "too_many_attempts")
+                return False
+            await ws.send_json({"type": "access_password_wrong", "attemptsLeft": left})
+
+    async def _wait_for_approval(self, ws, device_id, player_name, customization, lang, origin):
+        if not player_name:
+            from src.core.name_generator import NameGenerator
+            player_name = NameGenerator.generate(lang)
+        identity = {
+            key: customization[key]
+            for key in ("color", "faceText", "faceRotation")
+            if customization.get(key)
+        }
+        decision = self.access_gate.request_approval(device_id, player_name, origin, identity)
+        await ws.send_json({"type": "access_pending"})
+
+        async def watch_socket():
+            # Keeps reading (pongs, the phone giving up) until it closes.
+            async for _ in ws:
+                pass
+
+        watcher = asyncio.create_task(watch_socket())
+        try:
+            done, _ = await asyncio.wait(
+                {decision, watcher},
+                timeout=ACCESS_WAIT_SECONDS,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            watcher.cancel()
+            try:
+                await watcher
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        if decision in done and not decision.cancelled() and decision.result():
+            await ws.send_json({"type": "access_granted"})
+            return True, player_name
+        answered = decision.done()
+        self.access_gate.withdraw(device_id)
+        if watcher in done:
+            return False, player_name
+        await self._deny(ws, "rejected" if answered else "timeout")
+        return False, player_name
+
+    async def _deny(self, ws, reason: str):
+        try:
+            await ws.send_json({"type": "access_denied", "reason": reason})
+        except Exception:
+            pass
+
     async def admin_websocket_handler(self,request):
         ws = web.WebSocketResponse(heartbeat=WS_HEARTBEAT_SECONDS)
         await ws.prepare(request)
@@ -506,6 +615,8 @@ class WebSocketRoutes:
             await ws.send_json(self.session.to_payload())
             if self.tunnel_service is not None:
                 await ws.send_json({"type": "online_status", **self.tunnel_service.snapshot()})
+            if self.access_gate is not None:
+                await ws.send_json({"type": "access_update", **self.access_gate.to_payload()})
             self.admin_panel.add_client(ws)
 
             async for msg in ws:

@@ -4,6 +4,8 @@ import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
 import 'juicy_widgets.dart';
 import '../utils/app_preferences.dart';
+import '../services/access_service.dart';
+import 'online_play_button.dart' show AccessModePicker, RoomPasswordField, UnbanAllButton;
 
 class ServerOptionsPopup extends StatefulWidget {
   final ColorTheme currentTheme;
@@ -15,6 +17,8 @@ class ServerOptionsPopup extends StatefulWidget {
   final ValueChanged<bool>? onConsoleModeChanged;
   final ValueChanged<String>? onLobbyStartRuleChanged;
   final ValueChanged<String>? onMousePasswordChanged;
+  /// Join rule for the local network; the online one lives in "Play online".
+  final AccessService? access;
 
   const ServerOptionsPopup({
     super.key,
@@ -27,6 +31,7 @@ class ServerOptionsPopup extends StatefulWidget {
     this.onConsoleModeChanged,
     this.onLobbyStartRuleChanged,
     this.onMousePasswordChanged,
+    this.access,
   });
 
   @override
@@ -43,10 +48,14 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
   String _lobbyStartRule = 'majority';
   final TextEditingController _mousePassword = TextEditingController();
   bool _showPassword = false;
+  AccessMode _lanMode = AccessMode.open;
+  final TextEditingController _roomPassword = TextEditingController();
+  bool _showRoomPassword = false;
 
   @override
   void dispose() {
     _mousePassword.dispose();
+    _roomPassword.dispose();
     super.dispose();
   }
 
@@ -72,6 +81,12 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
     });
     AppPreferences.mousePassword().then((value) {
       if (mounted) _mousePassword.text = value;
+    });
+    AppPreferences.accessModeLan().then((value) {
+      if (mounted) setState(() => _lanMode = value);
+    });
+    AppPreferences.roomPassword().then((value) {
+      if (mounted) _roomPassword.text = value;
     });
   }
 
@@ -344,6 +359,51 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
                 ],
               ],
             ),
+          ],
+          if (widget.access != null) ...[
+            const SizedBox(height: 24),
+            Text(
+              context.l10n.access.lanTitle,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              context.l10n.access.lanHint,
+              style: TextStyle(
+                fontFamily: 'momo',
+                fontSize: 12,
+                color: AppColors.textPrimary.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 10),
+            AccessModePicker(
+              value: _lanMode,
+              onChanged: (mode) {
+                setState(() => _lanMode = mode);
+                widget.access!.configure(lanMode: mode);
+              },
+            ),
+            if (_lanMode == AccessMode.password) ...[
+              const SizedBox(height: 4),
+              RoomPasswordField(
+                controller: _roomPassword,
+                visible: _showRoomPassword,
+                error: _roomPassword.text.trim().isEmpty
+                    ? context.l10n.access.passwordRequired
+                    : null,
+                onToggleVisible: () =>
+                    setState(() => _showRoomPassword = !_showRoomPassword),
+                onChanged: (value) {
+                  setState(() {});
+                  widget.access!.configure(password: value);
+                },
+              ),
+            ],
+            UnbanAllButton(access: widget.access!),
           ],
           if (widget.onMousePasswordChanged != null && _consoleMode) ...[
             const SizedBox(height: 24),

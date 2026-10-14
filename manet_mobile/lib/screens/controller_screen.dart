@@ -23,6 +23,7 @@ import 'controller_screen/controller_face_view.dart';
 import 'controller_screen/controller_mouse_view.dart';
 import 'controller_screen/controller_screen_types.dart';
 import 'controller_screen/controller_screen_widgets.dart';
+import 'controller_screen/access_gate_view.dart';
 import 'qr_scanner_screen.dart';
 import '../services/gamepad_input_engine.dart';
 import '../services/physical_gamepad/physical_gamepad_relay.dart';
@@ -196,6 +197,11 @@ class _ControllerScreenState extends State<ControllerScreen>
   Timer? _handshakeTimer;
   // Completes with whether the current attempt reached the host.
   Completer<bool>? _handshakeCompleter;
+
+  // The room's join rule (password / host approval) before getting a seat.
+  AccessGateStage? _accessStage;
+  String? _accessReason;
+  int? _accessAttemptsLeft;
   bool _pulseOptionsButton = false;
 
   // Lag meter: round trips of pings to the host. A slow link (200+ ms)
@@ -514,8 +520,14 @@ class _ControllerScreenState extends State<ControllerScreen>
       return;
     }
 
-    final bool wasConnected = _hasReceivedMessage;
-    bool failedToConnect = !_hasReceivedMessage && _listenerAttached;
+    final bool turnedAway = _accessStage == AccessGateStage.denied;
+    if (!turnedAway && _accessStage != null) {
+      // Lost the connection while on the password/approval screen.
+      _accessStage = null;
+      _accessAttemptsLeft = null;
+    }
+    final bool wasConnected = _hasReceivedMessage && !turnedAway;
+    bool failedToConnect = !_hasReceivedMessage && _listenerAttached && !turnedAway;
     bool shouldShowDialog = _showDialogOnFail;
     _showDialogOnFail = false;
 
@@ -833,6 +845,63 @@ class _ControllerScreenState extends State<ControllerScreen>
     }
   }
 
+  /// Handles the join-rule messages; returns whether [message] was one.
+  bool _handleAccessMessage(String message) {
+    if (!message.contains('"access_')) return false;
+    final Map<String, dynamic> data;
+    try {
+      final decoded = jsonDecode(message);
+      if (decoded is! Map<String, dynamic>) return false;
+      data = decoded;
+    } catch (_) {
+      return false;
+    }
+    switch (data['type']) {
+      case 'access_required':
+        setState(() {
+          _accessStage = AccessGateStage.password;
+          _accessAttemptsLeft = null;
+        });
+      case 'access_password_wrong':
+        setState(() => _accessAttemptsLeft = data['attemptsLeft'] as int?);
+      case 'access_pending':
+        setState(() => _accessStage = AccessGateStage.pending);
+      case 'access_granted':
+        setState(() {
+          _accessStage = null;
+          _accessAttemptsLeft = null;
+        });
+        return true;
+      case 'access_denied':
+        HapticsManager.instance.connectionPulse();
+        setState(() {
+          _accessStage = AccessGateStage.denied;
+          _accessReason = data['reason'] as String?;
+        });
+      default:
+        return false;
+    }
+    // The host answered, so it is reachable even though it has not given
+    // us a seat yet: don't treat the wait as a failed connection.
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
+    _completeHandshake(true);
+    return true;
+  }
+
+  void _submitAccessPassword(String password) {
+    ws?.send({'type': 'access_password', 'password': password});
+  }
+
+  void _retryAfterAccessDenied() {
+    setState(() {
+      _accessStage = null;
+      _accessReason = null;
+      _accessAttemptsLeft = null;
+    });
+    _connectWebSocket();
+  }
+
   void _completeHandshake(bool reached) {
     final completer = _handshakeCompleter;
     _handshakeCompleter = null;
@@ -840,6 +909,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _handleWebSocketMessage(dynamic message) {
+    if (message is String && _handleAccessMessage(message)) return;
     if (!_hasReceivedMessage && mounted) {
       _hasReceivedMessage = true;
       _onHandshakeComplete();
@@ -2223,7 +2293,19 @@ class _ControllerScreenState extends State<ControllerScreen>
                   )
                 : null,
           ),
-          child: Stack(children: [_buildResponsiveControllerFrame()]),
+          child: Stack(
+            children: [
+              _buildResponsiveControllerFrame(),
+              if (_accessStage != null)
+                AccessGateView(
+                  stage: _accessStage!,
+                  reason: _accessReason,
+                  attemptsLeft: _accessAttemptsLeft,
+                  onSubmitPassword: _submitAccessPassword,
+                  onRetry: _retryAfterAccessDenied,
+                ),
+            ],
+          ),
         ),
       ),
     );

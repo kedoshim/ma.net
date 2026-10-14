@@ -42,6 +42,9 @@ class PtBrStrings implements AppStrings {
 
   @override
   final relay = PtBrRelayStrings();
+
+  @override
+  final access = PtBrAccessStrings();
 }
 
 class PtBrRelayStrings implements RelayStrings {
@@ -481,4 +484,40 @@ class PtBrAndroidOnboardingStrings implements AndroidOnboardingStrings {
   String get download => 'Baixar aplicativo';
   @override
   String get continueInBrowser => 'Continuar no navegador';
+}
+
+class PtBrAccessStrings implements AccessStrings {
+  @override
+  String get passwordTitle => 'Esta sala tem senha';
+  @override
+  String get passwordHint => 'Peça a senha para quem está hospedando.';
+  @override
+  String get passwordField => 'Senha';
+  @override
+  String get enter => 'Entrar';
+  @override
+  String wrongPassword(int attemptsLeft) => attemptsLeft == 1
+      ? 'Senha errada. Resta 1 tentativa.'
+      : 'Senha errada. Restam $attemptsLeft tentativas.';
+  @override
+  String get pendingTitle => 'Esperando o host';
+  @override
+  String get pendingBody => 'Seu pedido para entrar foi enviado. Fique nesta tela.';
+  @override
+  String deniedTitle(String? reason) => switch (reason) {
+    'banned' => 'Você não pode entrar nesta sala',
+    'kicked' => 'Você foi removido da sala',
+    'timeout' => 'O pedido expirou',
+    'too_many_attempts' => 'Muitas tentativas erradas',
+    _ => 'O host recusou sua entrada',
+  };
+  @override
+  String deniedBody(String? reason) => switch (reason) {
+    'banned' => 'O host bloqueou este aparelho nesta sessão.',
+    'timeout' => 'O host não respondeu a tempo. Você pode pedir de novo.',
+    'too_many_attempts' => 'Espere um minuto antes de tentar de novo.',
+    _ => 'Você pode tentar de novo se o host pedir.',
+  };
+  @override
+  String get tryAgain => 'Tentar de novo';
 }

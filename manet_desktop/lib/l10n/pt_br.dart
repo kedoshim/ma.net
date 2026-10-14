@@ -33,6 +33,8 @@ class PtBrStrings implements AppStrings {
   final SessionStrings session = PtBrSessionStrings();
   @override
   final OnlineStrings online = PtBrOnlineStrings();
+  @override
+  final AccessStrings access = PtBrAccessStrings();
 }
 
 class PtBrSessionStrings implements SessionStrings {
@@ -1085,7 +1087,9 @@ class PtBrOnlineStrings implements OnlineStrings {
     _ => 'Verifique sua internet e tente de novo.',
   };
   @override
-  String get start => 'Ficar online';
+  String get activate => 'Ativar';
+  @override
+  String get save => 'Salvar';
   @override
   String get stop => 'Desligar';
   @override
@@ -1095,13 +1099,53 @@ class PtBrOnlineStrings implements OnlineStrings {
   @override
   String get linkCopied => 'Link copiado';
   @override
-  String get scanHint => 'Aponte a câmera do celular para o QR ou abra o link.';
+  String get nowOnline => 'Online! O QR do lobby agora leva ao link público.';
   @override
-  String get warningTitle => 'Antes de ficar online';
+  String get failedToast => 'Não foi possível ficar online.';
   @override
-  String get warningBody =>
-      'Qualquer pessoa com o QR ou o link poderá entrar como jogador. '
-      'Você pode expulsar jogadores a qualquer momento, e o link muda a cada vez que você fica online.';
+  String get openWarning =>
+      'Quem vir o QR ou o link entra direto. Você pode expulsar jogadores a qualquer momento, e o link muda a cada vez que você fica online.';
+}
+
+class PtBrAccessStrings implements AccessStrings {
   @override
-  String get warningConfirm => 'Entendi, ficar online';
+  String get whoCanJoin => 'Quem pode entrar';
+  @override
+  String get lanTitle => 'Quem pode entrar pela rede local';
+  @override
+  String get lanHint => 'Para quem está no mesmo Wi-Fi. A senha é a mesma do Jogar online.';
+  @override
+  String get modeOpen => 'Qualquer pessoa';
+  @override
+  String get modeOpenHint => 'Entra direto.';
+  @override
+  String get modePassword => 'Com senha';
+  @override
+  String get modePasswordHint => 'Você passa a senha por fora, no chat por exemplo.';
+  @override
+  String get modeApproval => 'Eu aprovo';
+  @override
+  String get modeApprovalHint => 'Cada pessoa espera você aceitar aqui na tela.';
+  @override
+  String get passwordLabel => 'Senha da sala';
+  @override
+  String get passwordRequired => 'Digite uma senha';
+  @override
+  String wantsToJoin(String name) => '$name quer entrar';
+  @override
+  String get viaInternet => 'pela internet';
+  @override
+  String get viaLan => 'pela rede local';
+  @override
+  String get accept => 'Aceitar';
+  @override
+  String get reject => 'Recusar';
+  @override
+  String get ban => 'Banir';
+  @override
+  String get kick => 'Expulsar';
+  @override
+  String get kickAndBan => 'Expulsar e banir';
+  @override
+  String unbanAll(int count) => 'Desbanir todos ($count)';
 }

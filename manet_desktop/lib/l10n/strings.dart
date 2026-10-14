@@ -15,6 +15,7 @@ abstract class AppStrings {
   ControllersStrings get controllers;
   SessionStrings get session;
   OnlineStrings get online;
+  AccessStrings get access;
 }
 
 abstract class CommonStrings {
@@ -512,13 +513,37 @@ abstract class OnlineStrings {
   String get stateOnline;
   String get stateError;
   String errorDetail(String? code);
-  String get start;
+  String get activate;
+  String get save;
   String get stop;
   String get retry;
   String get copyLink;
   String get linkCopied;
-  String get scanHint;
-  String get warningTitle;
-  String get warningBody;
-  String get warningConfirm;
+  String get nowOnline;
+  String get failedToast;
+  String get openWarning;
+}
+
+/// Join rules (open / password / host approval) and the host's answers.
+abstract class AccessStrings {
+  String get whoCanJoin;
+  String get lanTitle;
+  String get lanHint;
+  String get modeOpen;
+  String get modeOpenHint;
+  String get modePassword;
+  String get modePasswordHint;
+  String get modeApproval;
+  String get modeApprovalHint;
+  String get passwordLabel;
+  String get passwordRequired;
+  String wantsToJoin(String name);
+  String get viaInternet;
+  String get viaLan;
+  String get accept;
+  String get reject;
+  String get ban;
+  String get kick;
+  String get kickAndBan;
+  String unbanAll(int count);
 }

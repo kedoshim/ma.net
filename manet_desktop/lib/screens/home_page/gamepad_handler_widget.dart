@@ -16,6 +16,7 @@ import 'lobby_ready_banner.dart';
 import 'lobby_toolbar.dart';
 import 'package:manet_desktop/services/session_controller.dart';
 import 'qr_code_container.dart';
+import '../../widgets/player_kick_menu.dart';
 
 class UIScale {
   final double slot;
@@ -918,7 +919,7 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                               ),
                             ),
                             childWhenDragging: const SizedBox.expand(),
-                            child: MouseRegion(
+                            child: KickMenuRegion(deviceId: widget.slotModel.device!.id, name: widget.slotModel.device!.name, child: MouseRegion(
                               cursor: SystemMouseCursors.click,
                               child: Center(
                                 child: DeviceJoinPopEffect(
@@ -945,7 +946,7 @@ class _ControllerSlotWidgetState extends State<ControllerSlotWidget> {
                                   )
                                 ),
                               ),
-                            ),
+                            )),
                           )
                         : Center(
                             child: DeviceJoinPopEffect(
@@ -1164,7 +1165,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                       ),
                                     ),
                                   ),
-                                  child: MouseRegion(
+                                  child: KickMenuRegion(deviceId: device.id, name: device.name, child: MouseRegion(
                                     cursor: SystemMouseCursors.click,
                                     child: DeviceJoinPopEffect(
                                       device: device,
@@ -1181,7 +1182,7 @@ class _DevicePoolAreaState extends State<DevicePoolArea> {
                                         ),
                                       ),
                                     ),
-                                  ),
+                                  )),
                                 );
                               },
                             ),

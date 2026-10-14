@@ -33,6 +33,8 @@ class EnUsStrings implements AppStrings {
   final SessionStrings session = EnUsSessionStrings();
   @override
   final OnlineStrings online = EnUsOnlineStrings();
+  @override
+  final AccessStrings access = EnUsAccessStrings();
 }
 
 class EnUsSessionStrings implements SessionStrings {
@@ -1085,7 +1087,9 @@ class EnUsOnlineStrings implements OnlineStrings {
     _ => 'Check your internet and try again.',
   };
   @override
-  String get start => 'Go online';
+  String get activate => 'Activate';
+  @override
+  String get save => 'Save';
   @override
   String get stop => 'Turn off';
   @override
@@ -1095,13 +1099,53 @@ class EnUsOnlineStrings implements OnlineStrings {
   @override
   String get linkCopied => 'Link copied';
   @override
-  String get scanHint => 'Point the phone camera at the QR or open the link.';
+  String get nowOnline => 'Online! The lobby QR now points to the public link.';
   @override
-  String get warningTitle => 'Before going online';
+  String get failedToast => 'Could not go online.';
   @override
-  String get warningBody =>
-      'Anyone with the QR or the link can join as a player. '
-      'You can kick players at any time, and the link changes every time you go online.';
+  String get openWarning =>
+      'Anyone who sees the QR or the link gets in right away. You can kick players at any time, and the link changes every time you go online.';
+}
+
+class EnUsAccessStrings implements AccessStrings {
   @override
-  String get warningConfirm => 'Got it, go online';
+  String get whoCanJoin => 'Who can join';
+  @override
+  String get lanTitle => 'Who can join from the local network';
+  @override
+  String get lanHint => 'For people on the same Wi-Fi. Uses the same password as Play online.';
+  @override
+  String get modeOpen => 'Anyone';
+  @override
+  String get modeOpenHint => 'Gets in right away.';
+  @override
+  String get modePassword => 'Password';
+  @override
+  String get modePasswordHint => 'You share the password elsewhere, in the chat for example.';
+  @override
+  String get modeApproval => 'I approve';
+  @override
+  String get modeApprovalHint => 'Each person waits for you to accept them here.';
+  @override
+  String get passwordLabel => 'Room password';
+  @override
+  String get passwordRequired => 'Enter a password';
+  @override
+  String wantsToJoin(String name) => '$name wants to join';
+  @override
+  String get viaInternet => 'over the internet';
+  @override
+  String get viaLan => 'on the local network';
+  @override
+  String get accept => 'Accept';
+  @override
+  String get reject => 'Decline';
+  @override
+  String get ban => 'Ban';
+  @override
+  String get kick => 'Kick';
+  @override
+  String get kickAndBan => 'Kick and ban';
+  @override
+  String unbanAll(int count) => 'Unban everyone ($count)';
 }

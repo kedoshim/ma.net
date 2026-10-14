@@ -36,6 +36,8 @@ import 'onboarding_overlay.dart';
 import 'qr_code_container.dart';
 import '../../widgets/juicy_widgets.dart';
 import '../../widgets/online_play_button.dart';
+import '../../widgets/join_requests_card.dart';
+import '../../services/access_service.dart';
 import '../../services/online_service.dart';
 
 class HomePageScreen extends StatelessWidget {
@@ -81,6 +83,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
 
   late final HostApiService _api;
   late final OnlineService _online;
+  late final AccessService _access;
   late final SessionController _session;
   late final GamepadState _gamepadState;
   ControllerInventory? _controllerInventory;
@@ -133,6 +136,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     SoundEffectService.instance.init();
     _api = HostApiService(host: widget.host, port: widget.port);
     _online = OnlineService.of(_api)..addListener(_handleOnlineUpdate);
+    // Created up front: it pushes the saved join rules to the server.
+    _access = AccessService.of(_api);
     _hostWindowService = HostWindowService(api: _api);
     _hostWindowService.start();
     _session = SessionController(_api)..start();
@@ -818,6 +823,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         _session.setLobbyStartRule(rule),
                                     onMousePasswordChanged: (password) =>
                                         _session.setMousePassword(password),
+                                    access: _access,
                                     onConsoleModeChanged: (enabled) async {
                                       setState(() => _consoleMode = enabled);
                                       await _session.setConsoleMode(enabled);
@@ -1295,6 +1301,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                   child: GameOverlay(presetCatalog: _presetCatalog),
                 )
               : const SizedBox.shrink(),
+        ),
+
+        // Join requests stay on top of the lobby and the in-game overlay.
+        Positioned(
+          top: 110,
+          right: 24,
+          child: JoinRequestsCard(access: _access),
         ),
       ],
     );

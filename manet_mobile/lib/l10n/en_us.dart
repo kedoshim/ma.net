@@ -42,6 +42,9 @@ class EnUsStrings implements AppStrings {
 
   @override
   final relay = EnUsRelayStrings();
+
+  @override
+  final access = EnUsAccessStrings();
 }
 
 class EnUsRelayStrings implements RelayStrings {
@@ -481,4 +484,40 @@ class EnUsAndroidOnboardingStrings implements AndroidOnboardingStrings {
   String get download => 'Download app';
   @override
   String get continueInBrowser => 'Continue in browser';
+}
+
+class EnUsAccessStrings implements AccessStrings {
+  @override
+  String get passwordTitle => 'This room has a password';
+  @override
+  String get passwordHint => 'Ask the host for the password.';
+  @override
+  String get passwordField => 'Password';
+  @override
+  String get enter => 'Join';
+  @override
+  String wrongPassword(int attemptsLeft) => attemptsLeft == 1
+      ? 'Wrong password. 1 attempt left.'
+      : 'Wrong password. $attemptsLeft attempts left.';
+  @override
+  String get pendingTitle => 'Waiting for the host';
+  @override
+  String get pendingBody => 'Your request to join was sent. Stay on this screen.';
+  @override
+  String deniedTitle(String? reason) => switch (reason) {
+    'banned' => 'You can\'t join this room',
+    'kicked' => 'You were removed from the room',
+    'timeout' => 'The request expired',
+    'too_many_attempts' => 'Too many wrong attempts',
+    _ => 'The host declined your request',
+  };
+  @override
+  String deniedBody(String? reason) => switch (reason) {
+    'banned' => 'The host blocked this device for this session.',
+    'timeout' => 'The host didn\'t answer in time. You can ask again.',
+    'too_many_attempts' => 'Wait a minute before trying again.',
+    _ => 'You can try again if the host asks you to.',
+  };
+  @override
+  String get tryAgain => 'Try again';
 }
