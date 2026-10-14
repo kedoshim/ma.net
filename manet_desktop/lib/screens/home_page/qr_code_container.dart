@@ -228,6 +228,8 @@ class _QRCodePanelState extends State<QRCodePanel> {
       subtitle = networkName.isNotEmpty ? networkName : context.l10n.qrPanel.sameNetworkLabel;
     } else if (kind == 'ethernet') {
       subtitle = context.l10n.qrPanel.ethernetNetworkLabel;
+    } else if (kind == 'internet') {
+      subtitle = QRCodePanel.displayName(context, connection);
     } else {
       subtitle = context.l10n.qrPanel.fallbackNetworkLabel;
     }
@@ -663,7 +665,7 @@ class _InteractiveLinkTextState extends State<_InteractiveLinkText> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Text(
-          widget.url.replaceAll('http://', ''),
+          widget.url.replaceFirst(RegExp('^https?://'), ''),
           overflow: TextOverflow.ellipsis,
           style: AppTheme.bodyMedium.copyWith(
             fontFamily: 'monomaniac',

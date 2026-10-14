@@ -169,6 +169,9 @@ class ConnectionStateStore:
 
 SNAPSHOT_TTL_SECONDS = 30.0
 
+# Connection id of the "Play online" tunnel (see tunnel_service).
+INTERNET_CONNECTION_ID = "internet"
+
 
 class ConnectionService:
     def __init__(self, port: int, ws_endpoint: str):
@@ -181,6 +184,8 @@ class ConnectionService:
         # Discovery shells out to PowerShell/netsh and may run on worker
         # threads; serialize it so concurrent requests share one scan.
         self._snapshot_lock = threading.RLock()
+        # Public address while "Play online" is up.
+        self.internet_url: str | None = None
 
     def get_connections_payload(self) -> dict[str, Any]:
         snapshot = self.get_snapshot()
@@ -201,6 +206,8 @@ class ConnectionService:
         return selected.to_payload(self.port, self.ws_endpoint)
 
     def get_qr_url_for_id(self, connection_id: str | None) -> str:
+        if connection_id == INTERNET_CONNECTION_ID and self.internet_url:
+            return self.internet_url
         option = self.get_connection_by_id(connection_id)
         return f"http://{option.ip}:{self.port}"
 

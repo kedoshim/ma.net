@@ -5,10 +5,11 @@ from src.core.gamepad_factory import probe_gamepad_type_cached
 from src.lifecycle.process_exit import watch_parent
 
 class AppLifecycle:
-    def __init__(self, manager, connection_service, admin_panel):
+    def __init__(self, manager, connection_service, admin_panel, tunnel_service=None):
         self.manager = manager
         self.connection_service = connection_service
         self.admin_panel = admin_panel
+        self.tunnel_service = tunnel_service
 
     def register_lifecycle(self, app):
         app.on_startup.append(self.start_background_tasks)
@@ -78,6 +79,8 @@ class AppLifecycle:
         )
 
     async def cleanup_background_tasks(self, app):
+        if self.tunnel_service is not None:
+            await self.tunnel_service.stop()
         for task_key in ("init_slots", "warm_probe", "stick_watchdog", "network_monitor"):
             task = app.get(task_key)
             if task:

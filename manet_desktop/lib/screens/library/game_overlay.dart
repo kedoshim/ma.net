@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/host_api_service.dart';
+import '../../services/online_service.dart';
 import '../../services/session_controller.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/player_face_indicator.dart';
@@ -347,11 +348,18 @@ class _GameOverlayState extends State<GameOverlay>
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: switch (_panel) {
-        _OverlayPanel.players => _PlayersPanel(
+        _OverlayPanel.players => ValueListenableBuilder<OnlineStatus>(
           key: const ValueKey('players'),
-          qrUrl: session.api.getQrCodeUrl(_connection?.id),
-          link: _connection?.url,
-          slots: context.watch<GamepadState>().slots,
+          valueListenable: OnlineService.of(session.api),
+          builder: (context, online, _) {
+            // While "Play online" is up, latecomers join through the tunnel.
+            final connection = online.connection ?? _connection;
+            return _PlayersPanel(
+              qrUrl: session.api.getQrCodeUrl(connection?.id),
+              link: connection?.url,
+              slots: context.watch<GamepadState>().slots,
+            );
+          },
         ),
         _OverlayPanel.layouts => _LayoutsPanel(
           key: const ValueKey('layouts'),
@@ -554,7 +562,6 @@ class _PlayersPanel extends StatelessWidget {
   final List<SlotModel> slots;
 
   const _PlayersPanel({
-    super.key,
     required this.qrUrl,
     this.link,
     required this.slots,

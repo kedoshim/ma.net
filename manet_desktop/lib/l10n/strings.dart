@@ -14,6 +14,7 @@ abstract class AppStrings {
   CreditsStrings get credits;
   ControllersStrings get controllers;
   SessionStrings get session;
+  OnlineStrings get online;
 }
 
 abstract class CommonStrings {
@@ -498,4 +499,26 @@ abstract class CreditsStrings {
   String get developer;
   String get description;
   String get assetsTitle;
+}
+
+/// "Play online": the Cloudflare tunnel that lets phones join over the internet.
+abstract class OnlineStrings {
+  String get buttonTooltip;
+  String get title;
+  String get subtitle;
+  String get stateOff;
+  String get stateStarting;
+  String get stateVerifying;
+  String get stateOnline;
+  String get stateError;
+  String errorDetail(String? code);
+  String get start;
+  String get stop;
+  String get retry;
+  String get copyLink;
+  String get linkCopied;
+  String get scanHint;
+  String get warningTitle;
+  String get warningBody;
+  String get warningConfirm;
 }

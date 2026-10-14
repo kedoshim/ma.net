@@ -1,0 +1,3 @@
+# Downloaded by install/fetch_cloudflared.ps1
+*.exe
+cloudflared-LICENSE.txt

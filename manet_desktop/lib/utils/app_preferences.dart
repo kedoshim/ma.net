@@ -11,6 +11,7 @@ class AppPreferences {
   static const _consoleModeKey = 'console_mode';
   static const _lobbyStartRuleKey = 'lobby_start_rule';
   static const _mousePasswordKey = 'mouse_password';
+  static const _onlineWarningSeenKey = 'online_warning_seen';
   static const _launcherCardStyleKey = 'launcher_card_style';
   static const _launcherGridRowsKey = 'launcher_grid_rows';
   static const _launcherSortOrderKey = 'launcher_sort_order';
@@ -121,6 +122,17 @@ class AppPreferences {
   static Future<void> setMousePassword(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_mousePasswordKey, value.trim());
+  }
+
+  /// Whether the "anyone with the link can join" notice was confirmed.
+  static Future<bool> onlineWarningSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_onlineWarningSeenKey) ?? false;
+  }
+
+  static Future<void> setOnlineWarningSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onlineWarningSeenKey, true);
   }
 
   static Future<void> setLobbyStartRule(String value) async {

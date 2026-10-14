@@ -35,6 +35,8 @@ import 'server_alerts.dart';
 import 'onboarding_overlay.dart';
 import 'qr_code_container.dart';
 import '../../widgets/juicy_widgets.dart';
+import '../../widgets/online_play_button.dart';
+import '../../services/online_service.dart';
 
 class HomePageScreen extends StatelessWidget {
   final String host;
@@ -78,6 +80,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   late final HostApiService _api;
+  late final OnlineService _online;
   late final SessionController _session;
   late final GamepadState _gamepadState;
   ControllerInventory? _controllerInventory;
@@ -129,6 +132,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     super.initState();
     SoundEffectService.instance.init();
     _api = HostApiService(host: widget.host, port: widget.port);
+    _online = OnlineService.of(_api)..addListener(_handleOnlineUpdate);
     _hostWindowService = HostWindowService(api: _api);
     _hostWindowService.start();
     _session = SessionController(_api)..start();
@@ -628,10 +632,16 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     }
   }
 
+  /// While "Play online" is up, the QR and join steps show the public link.
+  void _handleOnlineUpdate() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _inventoryRefreshTimer?.cancel();
     _startupPipeline.state.removeListener(_handlePipelineUpdate);
+    _online.removeListener(_handleOnlineUpdate);
     _brandingModeNotifier.dispose();
     _hostWindowService.dispose();
     _session.dispose();
@@ -763,6 +773,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               ),
                               const SizedBox(width: 8),
                             ],
+                            OnlinePlayButton(api: _api),
+                            const SizedBox(width: 8),
                             _buildControllersButton(),
                             const SizedBox(width: 8),
                             Tooltip(
@@ -1222,18 +1234,14 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                     .state
                                                     .value
                                                     .diagnosticsSnapshot,
-                                            selectedConnection: _startupPipeline
-                                                .state
-                                                .value
-                                                .selectedConnection,
-                                            qrEndpointUrl: _startupPipeline
-                                                .state
-                                                .value
-                                                .qrEndpointUrl,
-                                            qrImage: _startupPipeline
-                                                .state
-                                                .value
-                                                .qrImage,
+                                            selectedConnection: _online.value.connection ??
+                                                _startupPipeline.state.value.selectedConnection,
+                                            qrEndpointUrl: _online.value.isOnline
+                                                ? _online.qrUrl
+                                                : _startupPipeline.state.value.qrEndpointUrl,
+                                            qrImage: _online.value.isOnline
+                                                ? NetworkImage(_online.qrUrl)
+                                                : _startupPipeline.state.value.qrImage,
                                             api: _api,
                                             isLoadingConnections:
                                                 _startupPipeline

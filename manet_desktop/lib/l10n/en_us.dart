@@ -31,6 +31,8 @@ class EnUsStrings implements AppStrings {
   final ControllersStrings controllers = EnUsControllersStrings();
   @override
   final SessionStrings session = EnUsSessionStrings();
+  @override
+  final OnlineStrings online = EnUsOnlineStrings();
 }
 
 class EnUsSessionStrings implements SessionStrings {
@@ -922,6 +924,7 @@ class EnUsQrPanelStrings implements QrPanelStrings {
     'connection_label_ethernet': 'Cable',
     'connection_label_hotspot': 'Hotspot',
     'connection_label_backup': 'Extra',
+    'connection_label_internet': 'Internet',
     'ui_more_connections': 'Other ways to connect',
     'ui_more': 'More',
     'ui_copied': 'Link copied',
@@ -1055,4 +1058,50 @@ class EnUsCreditsStrings implements CreditsStrings {
   String get description => 'MaNet was built with a simple idea: playing with local friends should require less hassle and bring more fun. :)';
   @override
   String get assetsTitle => 'Third-party assets:';
+}
+
+class EnUsOnlineStrings implements OnlineStrings {
+  @override
+  String get buttonTooltip => 'Play online';
+  @override
+  String get title => 'Play online';
+  @override
+  String get subtitle =>
+      'Creates a public link so people far away can join from their phone, for example while watching your stream.';
+  @override
+  String get stateOff => 'Off';
+  @override
+  String get stateStarting => 'Opening connection...';
+  @override
+  String get stateVerifying => 'Testing the link...';
+  @override
+  String get stateOnline => 'Online';
+  @override
+  String get stateError => 'Could not go online';
+  @override
+  String errorDetail(String? code) => switch (code) {
+    'cloudflared_missing' => 'The online connection component is missing. Reinstall MaNet.',
+    'unreachable' => 'The link was created but did not respond. Check your internet and try again.',
+    _ => 'Check your internet and try again.',
+  };
+  @override
+  String get start => 'Go online';
+  @override
+  String get stop => 'Turn off';
+  @override
+  String get retry => 'Try again';
+  @override
+  String get copyLink => 'Copy link';
+  @override
+  String get linkCopied => 'Link copied';
+  @override
+  String get scanHint => 'Point the phone camera at the QR or open the link.';
+  @override
+  String get warningTitle => 'Before going online';
+  @override
+  String get warningBody =>
+      'Anyone with the QR or the link can join as a player. '
+      'You can kick players at any time, and the link changes every time you go online.';
+  @override
+  String get warningConfirm => 'Got it, go online';
 }

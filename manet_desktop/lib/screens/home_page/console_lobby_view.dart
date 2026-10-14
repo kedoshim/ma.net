@@ -456,10 +456,13 @@ class _JoinSteps extends StatelessWidget {
     final strings = context.l10n.session;
     final conn = connection;
     final parts = conn?.displayNameKey.split('__') ?? const <String>[];
-    final network = parts.length > 1 && parts[1].isNotEmpty
+    // Over the internet there is no network to join first.
+    final network = conn == null || conn.kind == 'internet'
+        ? ''
+        : parts.length > 1 && parts[1].isNotEmpty
         ? parts[1]
-        : (conn == null ? '' : QRCodePanel.displayName(context, conn));
-    final link = conn?.url.replaceAll('http://', '') ?? '';
+        : QRCodePanel.displayName(context, conn);
+    final link = conn?.url.replaceFirst(RegExp('^https?://'), '') ?? '';
     final steps = [
       if (network.isNotEmpty)
         conn?.kind == 'wifi'

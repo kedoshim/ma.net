@@ -53,6 +53,7 @@ class HTTPRoutes:
         ws_endpoint,
         connection_service: ConnectionService,
         diagnostics_service: NetworkDiagnosticsService,
+        tunnel_service=None,
     ):
         self.manager = manager
         self.admin_panel = admin_panel
@@ -60,6 +61,7 @@ class HTTPRoutes:
         self.ws_endpoint = ws_endpoint
         self.connection_service = connection_service
         self.diagnostics_service = diagnostics_service
+        self.tunnel_service = tunnel_service
         self.session = manager.session
         # QR rendering is CPU-bound; the URL rarely changes.
         self._qr_cache: dict[str, bytes] = {}
@@ -98,6 +100,20 @@ class HTTPRoutes:
         are left behind in Windows)."""
         exit_process(self.manager, asyncio.get_running_loop(), "requested by host")
         return web.json_response({'success': True})
+
+
+    async def online_status_handler(self, request):
+        return web.json_response({"success": True, **self.tunnel_service.snapshot()})
+
+
+    async def online_start_handler(self, request):
+        self.tunnel_service.start()
+        return web.json_response({"success": True, **self.tunnel_service.snapshot()})
+
+
+    async def online_stop_handler(self, request):
+        await self.tunnel_service.stop()
+        return web.json_response({"success": True, **self.tunnel_service.snapshot()})
 
 
     async def connection_info_handler(self, request):

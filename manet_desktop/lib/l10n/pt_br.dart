@@ -31,6 +31,8 @@ class PtBrStrings implements AppStrings {
   final ControllersStrings controllers = PtBrControllersStrings();
   @override
   final SessionStrings session = PtBrSessionStrings();
+  @override
+  final OnlineStrings online = PtBrOnlineStrings();
 }
 
 class PtBrSessionStrings implements SessionStrings {
@@ -922,6 +924,7 @@ class PtBrQrPanelStrings implements QrPanelStrings {
     'connection_label_ethernet': 'Cabo',
     'connection_label_hotspot': 'Hotspot',
     'connection_label_backup': 'Extra',
+    'connection_label_internet': 'Internet',
     'ui_more_connections': 'Outras formas de conectar',
     'ui_more': 'Mais',
     'ui_copied': 'Link copiado',
@@ -1055,4 +1058,50 @@ class PtBrCreditsStrings implements CreditsStrings {
   String get description => 'O MaNet foi criado com uma ideia simples em mente: jogar com amigos locais deve ser simples, direto e muito divertido. :)';
   @override
   String get assetsTitle => 'Recursos de terceiros:';
+}
+
+class PtBrOnlineStrings implements OnlineStrings {
+  @override
+  String get buttonTooltip => 'Jogar online';
+  @override
+  String get title => 'Jogar online';
+  @override
+  String get subtitle =>
+      'Gera um link público para quem está longe entrar pelo celular, por exemplo assistindo sua live.';
+  @override
+  String get stateOff => 'Desligado';
+  @override
+  String get stateStarting => 'Abrindo conexão...';
+  @override
+  String get stateVerifying => 'Testando o link...';
+  @override
+  String get stateOnline => 'Online';
+  @override
+  String get stateError => 'Não foi possível ficar online';
+  @override
+  String errorDetail(String? code) => switch (code) {
+    'cloudflared_missing' => 'O componente de conexão online não foi encontrado. Reinstale o MaNet.',
+    'unreachable' => 'O link foi criado, mas não respondeu. Verifique sua internet e tente de novo.',
+    _ => 'Verifique sua internet e tente de novo.',
+  };
+  @override
+  String get start => 'Ficar online';
+  @override
+  String get stop => 'Desligar';
+  @override
+  String get retry => 'Tentar de novo';
+  @override
+  String get copyLink => 'Copiar link';
+  @override
+  String get linkCopied => 'Link copiado';
+  @override
+  String get scanHint => 'Aponte a câmera do celular para o QR ou abra o link.';
+  @override
+  String get warningTitle => 'Antes de ficar online';
+  @override
+  String get warningBody =>
+      'Qualquer pessoa com o QR ou o link poderá entrar como jogador. '
+      'Você pode expulsar jogadores a qualquer momento, e o link muda a cada vez que você fica online.';
+  @override
+  String get warningConfirm => 'Entendi, ficar online';
 }

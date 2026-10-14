@@ -10,6 +10,7 @@ from src.input.input_handler import apply_button, apply_stick, apply_right_stick
 from src.input.keyboard_controller import KeyboardController
 from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
+from src.app.security import request_origin
 
 LOG = logging.getLogger("websocket")
 
@@ -34,7 +35,8 @@ def _clip(value, limit):
 
 
 class WebSocketRoutes:
-    def __init__(self, ws_endpoint, manager, admin_panel, connection_service, session):
+    def __init__(self, ws_endpoint, manager, admin_panel, connection_service, session, tunnel_service=None):
+        self.tunnel_service = tunnel_service
         self.manager = manager
         self.admin_panel = admin_panel
         self.session = session
@@ -68,6 +70,8 @@ class WebSocketRoutes:
         peer = request.remote
         sockname = request.transport.get_extra_info("sockname")
         local_ip = sockname[0] if isinstance(sockname, tuple) and sockname else None
+        # Through the tunnel every peer is cloudflared on loopback.
+        online = request_origin(request) == "online"
 
         device_id = request.query.get("deviceId")
         player_name = _clip(request.query.get("name"), MAX_NAME_LENGTH)
@@ -85,7 +89,8 @@ class WebSocketRoutes:
             await ws.close()
             return ws
 
-        self.connection_service.mark_success_for_ip(local_ip)
+        if not online:
+            self.connection_service.mark_success_for_ip(local_ip)
         self.manager.register_device(device_id, player_name, customization, lang=lang)
         resolved_name = self.manager.connected_devices[device_id]["name"]
         previous_ws = self.manager.register_device_ws(device_id, ws)
@@ -137,7 +142,8 @@ class WebSocketRoutes:
         # the physical-pad relay must not offer itself automatically there.
         await ws.send_json({
             "type": "client_info",
-            "sameMachine": peer is not None and (peer == local_ip or peer in ("127.0.0.1", "::1")),
+            "sameMachine": not online and peer is not None
+                and (peer == local_ip or peer in ("127.0.0.1", "::1")),
         })
         self.admin_panel.broadcast_update()
 
@@ -294,7 +300,7 @@ class WebSocketRoutes:
                         await ws.send_json({"type": "pong", "t": data.get("t")})
 
                     elif msg_type == "network_hint":
-                        hint = await asyncio.to_thread(
+                        hint = None if online else await asyncio.to_thread(
                             self._hotspot_hint, local_ip, sockname[1] if isinstance(sockname, tuple) else None
                         )
                         await ws.send_json({"type": "network_hint", "hotspot": hint})
@@ -498,6 +504,8 @@ class WebSocketRoutes:
                 }
             })
             await ws.send_json(self.session.to_payload())
+            if self.tunnel_service is not None:
+                await ws.send_json({"type": "online_status", **self.tunnel_service.snapshot()})
             self.admin_panel.add_client(ws)
 
             async for msg in ws:
