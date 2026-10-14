@@ -471,12 +471,12 @@ class _QRCodePanelState extends State<QRCodePanel> {
       width: double.infinity,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.screenBackground,
-        borderRadius: BorderRadius.circular(widget.scale.eighth * 1.5),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(widget.scale.eighth * 0.8),
         border: Border.all(color: AppColors.textPrimary, width: 5),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(widget.scale.eighth * 1.5 - 5),
+        borderRadius: BorderRadius.circular(widget.scale.eighth * 0.8 - 5),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isHorizontal =

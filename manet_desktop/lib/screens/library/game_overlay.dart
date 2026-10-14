@@ -613,7 +613,7 @@ class _PlayersPanel extends StatelessWidget {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.textPrimary, width: 3),
               ),
               child: Image.network(qrUrl, fit: BoxFit.contain),
