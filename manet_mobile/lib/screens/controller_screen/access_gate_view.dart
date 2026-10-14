@@ -178,8 +178,8 @@ class _AccessGateViewState extends State<AccessGateView> {
                 constraints: const BoxConstraints(maxWidth: 360),
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppColors.screenBackground,
-                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: AppColors.textPrimary,
                     width: AppColors.borderThickness,
