@@ -148,6 +148,11 @@ class _LobbyCountdownBarState extends State<_LobbyCountdownBar>
       decoration: BoxDecoration(
         color: AppColors.lightColor,
         borderRadius: BorderRadius.circular(18),
+      ),
+      // The border goes on top: the draining fill used to paint over it at
+      // the rounded ends, so it looked cut.
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.textPrimary, width: 2.5),
       ),
       clipBehavior: Clip.antiAlias,

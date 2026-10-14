@@ -12,6 +12,9 @@ class ServerOptionsPopup extends StatefulWidget {
   final ValueChanged<int> onTimeoutChanged;
   final ValueChanged<int>? onMatchSecondsChanged;
   final ValueChanged<bool>? onFreeModeChanged;
+  final ValueChanged<bool>? onConsoleModeChanged;
+  final ValueChanged<String>? onLobbyStartRuleChanged;
+  final ValueChanged<String>? onMousePasswordChanged;
 
   const ServerOptionsPopup({
     super.key,
@@ -21,6 +24,9 @@ class ServerOptionsPopup extends StatefulWidget {
     required this.onTimeoutChanged,
     this.onMatchSecondsChanged,
     this.onFreeModeChanged,
+    this.onConsoleModeChanged,
+    this.onLobbyStartRuleChanged,
+    this.onMousePasswordChanged,
   });
 
   @override
@@ -33,6 +39,16 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
   bool _fullScreen = true;
   int _matchSeconds = 10;
   bool _freeMode = true;
+  bool _consoleMode = true;
+  String _lobbyStartRule = 'majority';
+  final TextEditingController _mousePassword = TextEditingController();
+  bool _showPassword = false;
+
+  @override
+  void dispose() {
+    _mousePassword.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -47,6 +63,15 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
     });
     AppPreferences.freeModeEnabled().then((value) {
       if (mounted) setState(() => _freeMode = value);
+    });
+    AppPreferences.consoleMode().then((value) {
+      if (mounted) setState(() => _consoleMode = value);
+    });
+    AppPreferences.lobbyStartRule().then((value) {
+      if (mounted) setState(() => _lobbyStartRule = value);
+    });
+    AppPreferences.mousePassword().then((value) {
+      if (mounted) _mousePassword.text = value;
     });
   }
 
@@ -223,7 +248,153 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
               ],
             ),
           ],
-          if (widget.onFreeModeChanged != null) ...[
+          if (widget.onConsoleModeChanged != null) ...[
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.l10n.settings.consoleModeTitle,
+                        style: const TextStyle(
+                          fontFamily: 'momo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        context.l10n.settings.consoleModeHint,
+                        style: TextStyle(
+                          fontFamily: 'momo',
+                          fontSize: 12,
+                          color: AppColors.textPrimary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                JuicyToggle(
+                  value: _consoleMode,
+                  onChanged: (value) {
+                    SoundEffectService.instance.playThemeSelect();
+                    setState(() {
+                      _consoleMode = value;
+                      if (!value) _freeMode = true;
+                    });
+                    widget.onConsoleModeChanged!(value);
+                  },
+                ),
+              ],
+            ),
+          ],
+          if (widget.onLobbyStartRuleChanged != null && _consoleMode) ...[
+            const SizedBox(height: 24),
+            Text(
+              context.l10n.settings.lobbyStartTitle,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              context.l10n.settings.lobbyStartHint,
+              style: TextStyle(
+                fontFamily: 'momo',
+                fontSize: 12,
+                color: AppColors.textPrimary.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                for (final (rule, label) in [
+                  ('majority', context.l10n.settings.lobbyStartMajority),
+                  ('all', context.l10n.settings.lobbyStartAll),
+                ]) ...[
+                  JuicyCard(
+                    isSelected: _lobbyStartRule == rule,
+                    selectedColor: AppColors.highlightColor,
+                    backgroundColor: AppColors.lightColor,
+                    borderRadius: 12,
+                    borderThickness: 3.0,
+                    onTap: () {
+                      SoundEffectService.instance.playThemeSelect();
+                      setState(() => _lobbyStartRule = rule);
+                      widget.onLobbyStartRuleChanged!(rule);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontFamily: 'momo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+              ],
+            ),
+          ],
+          if (widget.onMousePasswordChanged != null && _consoleMode) ...[
+            const SizedBox(height: 24),
+            Text(
+              context.l10n.settings.mousePasswordTitle,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              context.l10n.settings.mousePasswordHint,
+              style: TextStyle(
+                fontFamily: 'momo',
+                fontSize: 12,
+                color: AppColors.textPrimary.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _mousePassword,
+              obscureText: !_showPassword,
+              onChanged: widget.onMousePasswordChanged,
+              style: const TextStyle(fontFamily: 'momo', fontSize: 14, color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: AppColors.lightColor,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _showPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    color: AppColors.textPrimary,
+                  ),
+                  onPressed: () => setState(() => _showPassword = !_showPassword),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.textPrimary, width: 2),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.textPrimary, width: 2),
+                ),
+              ),
+            ),
+          ],
+          // Tool mode always has free mode; the choice only exists in
+          // console mode.
+          if (widget.onFreeModeChanged != null && _consoleMode) ...[
             const SizedBox(height: 24),
             Row(
               children: [

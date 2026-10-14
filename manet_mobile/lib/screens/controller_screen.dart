@@ -25,6 +25,8 @@ import 'controller_screen/controller_screen_types.dart';
 import 'controller_screen/controller_screen_widgets.dart';
 import 'qr_scanner_screen.dart';
 import '../services/gamepad_input_engine.dart';
+import '../services/physical_gamepad/physical_gamepad_relay.dart';
+import '../widgets/physical_pad_widgets.dart';
 import '../services/connection_diagnostics_service.dart';
 import '../widgets/disconnect_dialog.dart';
 import '../utils/platform_detector.dart';
@@ -158,6 +160,13 @@ class _ControllerScreenState extends State<ControllerScreen>
   String? _me;
   // Lobby / game selection state for the menu buttons.
   bool _ready = false;
+  // Console mode: check-in (name + face) before the lobby playground, and
+  // the lineup when a game has fewer seats than players.
+  bool _consoleMode = false;
+  bool _checkedIn = false;
+  bool _inPlayZone = false;
+  bool _benched = false;
+  Map<String, dynamic>? _lineup;
   String? _myVote;
   DateTime? _lobbyCountdownEndsAt;
   Map<String, dynamic>? _lobbyRequest;
@@ -189,6 +198,21 @@ class _ControllerScreenState extends State<ControllerScreen>
   Completer<bool>? _handshakeCompleter;
   bool _pulseOptionsButton = false;
 
+  // Lag meter: round trips of pings to the host. A slow link (200+ ms)
+  // suggests the PC's own hotspot, once per session.
+  static const int _slowPingMs = 200;
+  Timer? _pingTimer;
+  final List<int> _pings = [];
+  bool _lagWarned = false;
+
+  // Relay mode (a physical pad attached to this device plays through MaNet).
+  // A browser on the MaNet PC itself also sees MaNet's own virtual pads.
+  bool _sameMachine = false;
+  // New pads are only offered once the host said where this client runs.
+  bool _clientInfoKnown = false;
+  bool _padDialogOpen = false;
+  String? _relayPadName;
+
   bool get _isTemporaryModeActive =>
       _activeMode != ControllerScreenMode.gameplay;
 
@@ -209,7 +233,11 @@ class _ControllerScreenState extends State<ControllerScreen>
       DeviceOrientation.landscapeLeft,
     ]);
     HapticsManager.instance.init();
+    PhysicalGamepadRelay.instance
+      ..addListener(_onRelayChanged)
+      ..start();
     _checkSetupRequired();
+    _pingTimer = Timer.periodic(const Duration(seconds: 3), (_) => _sendPing());
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
         _checkAndShowAndroidOnboarding();
@@ -221,7 +249,11 @@ class _ControllerScreenState extends State<ControllerScreen>
   void dispose() {
     _backgroundReconnectTimer?.cancel();
     _handshakeTimer?.cancel();
+    _pingTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    PhysicalGamepadRelay.instance
+      ..removeListener(_onRelayChanged)
+      ..detach();
     _faceController.dispose();
     ControllerConnectionManager.instance.disconnect();
     _discoveryService.stopScanning();
@@ -510,6 +542,9 @@ class _ControllerScreenState extends State<ControllerScreen>
       _overlayOwnerName = null;
       _sessionPhase = 'lobby';
       _ready = false;
+      _checkedIn = false;
+      _inPlayZone = false;
+      _lineup = null;
       _myVote = null;
       _lobbyCountdownEndsAt = null;
       _lobbyRequest = null;
@@ -524,6 +559,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     _lastSentRightStick = null;
 
     GamepadInputEngine.instance.dispose();
+    PhysicalGamepadRelay.instance.detach();
+    _clientInfoKnown = false;
 
     if (failedToConnect) {
       if (shouldShowDialog) {
@@ -684,6 +721,83 @@ class _ControllerScreenState extends State<ControllerScreen>
     ws?.send(payload);
   }
 
+  void _onRelayChanged() {
+    if (!mounted) return;
+    final relay = PhysicalGamepadRelay.instance;
+    final activeName = relay.activePad?.name;
+    final lostPad = _relayPadName;
+    if (lostPad != null && activeName == null && relay.pads.every((p) => p.name != lostPad)) {
+      _showControllerSnackBar(SnackBar(content: Text(context.l10n.relay.disconnected(lostPad))));
+    }
+    _relayPadName = activeName;
+    _maybeOfferPad();
+  }
+
+  /// Asks once per pad whether to play with a newly connected controller.
+  void _maybeOfferPad() {
+    if (!mounted || _padDialogOpen || !_clientInfoKnown) return;
+    if (_connectionState != ControllerConnectionState.connected) return;
+    final pad = PhysicalGamepadRelay.instance.pendingOffer;
+    if (pad == null) return;
+    unawaited(_offerPad(pad));
+  }
+
+  Future<void> _offerPad(PadInfo pad) async {
+    final relay = PhysicalGamepadRelay.instance;
+    relay.markOffered(pad.id);
+    _padDialogOpen = true;
+    HapticsManager.instance.connectionPulse();
+    final use = await showDialog<bool>(
+      context: _controllerNavigatorKey.currentContext ?? context,
+      useRootNavigator: false,
+      builder: (_) => PhysicalPadOfferDialog(pad: pad, sameMachine: _sameMachine),
+    );
+    _padDialogOpen = false;
+    if (!mounted) return;
+    if (use == true && relay.pads.any((p) => p.id == pad.id)) {
+      relay.enable(pad.id);
+    } else {
+      _maybeOfferPad();
+    }
+  }
+
+  /// The chip's "use physical controller": straight in with a single pad,
+  /// otherwise pick one. On the MaNet PC it always asks (virtual pads).
+  Future<void> _usePhysicalPad() async {
+    final relay = PhysicalGamepadRelay.instance;
+    final pads = relay.pads;
+    if (pads.isEmpty || _padDialogOpen) return;
+    PadInfo? pad = pads.length == 1 ? pads.first : null;
+    if (pad == null) {
+      _padDialogOpen = true;
+      pad = await showDialog<PadInfo>(
+        context: _controllerNavigatorKey.currentContext ?? context,
+        useRootNavigator: false,
+        builder: (_) => PhysicalPadPickerDialog(pads: pads),
+      );
+      _padDialogOpen = false;
+      if (pad == null || !mounted) return;
+    }
+    if (_sameMachine) {
+      await _offerPad(pad);
+    } else {
+      relay.enable(pad.id);
+    }
+  }
+
+  Widget _buildPhysicalPadChip() {
+    if (_connectionState != ControllerConnectionState.connected ||
+        _activeMode != ControllerScreenMode.gameplay) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Center(child: PhysicalPadChip(onUse: _usePhysicalPad)),
+    );
+  }
+
   void _sendQuickAction(String actionId) {
     _send({'type': 'quick_action', 'action': actionId});
   }
@@ -700,6 +814,13 @@ class _ControllerScreenState extends State<ControllerScreen>
     unawaited(_recordSuccessfulConnection());
 
     GamepadInputEngine.instance.init(_send);
+    PhysicalGamepadRelay.instance.attach(_send);
+    // Older hosts don't send client_info; offer pads anyway after a moment.
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted || _clientInfoKnown) return;
+      _clientInfoKnown = true;
+      _maybeOfferPad();
+    });
     unawaited(
       ControllerConnectionManager.instance.httpBase().then((base) {
         if (mounted) setState(() => _serverBase = base);
@@ -771,6 +892,18 @@ class _ControllerScreenState extends State<ControllerScreen>
           _ingestFaceData(data);
           _ingestNameData(data['name']);
           break;
+        case 'pong':
+          _onPong(data);
+          break;
+        case 'client_info':
+          _sameMachine = data['sameMachine'] == true;
+          _clientInfoKnown = true;
+          PhysicalGamepadRelay.instance.autoOffer = !_sameMachine;
+          _maybeOfferPad();
+          break;
+        case 'network_hint':
+          _showLagWarning(data['hotspot'] as Map<String, dynamic>?);
+          break;
         case 'session_phase':
           setState(() {
             _sessionPhase = data['phase'] as String? ?? 'lobby';
@@ -782,6 +915,11 @@ class _ControllerScreenState extends State<ControllerScreen>
             _seats = (data['seats'] as Map<String, dynamic>?) ?? const {};
             _me = data['me'] as String?;
             _ready = data['ready'] == true;
+            _consoleMode = data['consoleMode'] == true;
+            _checkedIn = data['checkedIn'] == true;
+            _inPlayZone = data['inPlayZone'] == true;
+            _benched = data['benched'] == true;
+            _lineup = data['lineup'] as Map<String, dynamic>?;
             _myVote = data['myVote'] as String?;
             final countdown = data['lobbyCountdownEndsAt'] as num?;
             _lobbyCountdownEndsAt = countdown == null
@@ -856,6 +994,18 @@ class _ControllerScreenState extends State<ControllerScreen>
       unawaited(_exitMouseMode(send: false));
       _mouseModeOwnerName = data['ownerName'] as String?;
     }
+    if (code == 'mouse_password_required' || code == 'mouse_password_wrong') {
+      unawaited(_exitMouseMode(send: false));
+      if (mounted) unawaited(_askMousePassword(wrong: code == 'mouse_password_wrong'));
+      return;
+    }
+    if (code == 'mouse_password_unset') {
+      unawaited(_exitMouseMode(send: false));
+      if (mounted) {
+        _showControllerSnackBar(SnackBar(content: Text(context.l10n.menu.mousePasswordUnset)));
+      }
+      return;
+    }
 
     if (code == null || !mounted) {
       return;
@@ -875,6 +1025,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       final weak = (data['weak'] as num?)?.toDouble() ?? 0;
       final strong = (data['strong'] as num?)?.toDouble() ?? 0;
       HapticsManager.instance.onRumble(weak, strong);
+      PhysicalGamepadRelay.instance.rumble(weak, strong);
     } catch (_) {}
   }
 
@@ -1011,12 +1162,116 @@ class _ControllerScreenState extends State<ControllerScreen>
     _updatePlayerFace(nextFace);
   }
 
-  Future<void> _enterMouseMode() async {
+  void _sendPing() {
+    if (_connectionState != ControllerConnectionState.connected) {
+      _pings.clear();
+      return;
+    }
+    _send({'type': 'ping', 't': DateTime.now().millisecondsSinceEpoch});
+  }
+
+  void _onPong(Map<String, dynamic> data) {
+    final sent = data['t'] as num?;
+    if (sent == null) return;
+    _pings.add(DateTime.now().millisecondsSinceEpoch - sent.toInt());
+    if (_pings.length > 5) _pings.removeAt(0);
+    if (_lagWarned || _pings.length < 5) return;
+    final sorted = [..._pings]..sort();
+    if (sorted[2] >= _slowPingMs) {
+      // Steady lag (median of the last 5), not one hiccup.
+      _lagWarned = true;
+      _send({'type': 'network_hint'});
+    }
+  }
+
+  void _showLagWarning(Map<String, dynamic>? hotspot) {
+    if (!mounted) return;
+    final strings = context.l10n.menu;
+    final ping = ([..._pings]..sort())[_pings.length ~/ 2];
+    final name = hotspot?['name'] as String? ?? '';
+    final url = hotspot?['url'] as String? ?? '';
+    final advice = hotspot == null
+        ? strings.lagTipRouter
+        : strings.lagTipHotspot(name, url.replaceFirst('http://', ''));
+    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+    showDialog<void>(
+      context: dialogContext,
+      useRootNavigator: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.lightColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.textPrimary, width: AppColors.borderThickness),
+        ),
+        title: Text(strings.lagTitle(ping)),
+        content: Text(advice),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.lagOk),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _enterMouseMode({String? password}) async {
     setState(() {
       _activeMode = ControllerScreenMode.mouse;
       _mouseModeOwnerName = null;
     });
-    _send({'type': 'set_mouse_mode', 'active': true});
+    _send({
+      'type': 'set_mouse_mode',
+      'active': true,
+      if (password != null) 'password': password,
+    });
+  }
+
+  /// Console mode: mouse mode needs the host's password.
+  Future<void> _askMousePassword({required bool wrong}) async {
+    final strings = context.l10n.menu;
+    final controller = TextEditingController();
+    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+    final password = await showDialog<String>(
+      context: dialogContext,
+      useRootNavigator: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.lightColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.textPrimary, width: AppColors.borderThickness),
+        ),
+        title: Text(strings.mousePasswordTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(wrong ? strings.mousePasswordWrong : strings.mousePasswordHint),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              onSubmitted: (value) => Navigator.of(context).pop(value),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: Text(strings.mousePasswordEnter),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (password != null && password.isNotEmpty && mounted) {
+      unawaited(_enterMouseMode(password: password));
+    }
   }
 
   Future<void> _exitMouseMode({bool send = true}) async {
@@ -1698,10 +1953,21 @@ class _ControllerScreenState extends State<ControllerScreen>
               menuContext: _overlayOpen
                   ? (_overlayMine ? MenuContext.overlay : MenuContext.playground)
                   : switch (_sessionPhase) {
+                      'in_game' => MenuContext.loading,
                       'library' => MenuContext.library,
                       'tournament' => MenuContext.tournament,
+                      'lineup' => MenuContext.lineup,
+                      _ when _consoleMode && !_checkedIn => MenuContext.checkIn,
                       _ => MenuContext.lobby,
                     },
+              consoleLobby: _consoleMode,
+              inPlayZone: _inPlayZone,
+              benched: _benched && _gameRunning,
+              onCheckIn: () => _send({'type': 'check_in'}),
+              onCheckOut: () => _send({'type': 'check_out'}),
+              lineup: _lineup,
+              onLineupPick: (value) => _send({'type': 'lineup_pick', 'value': value}),
+              onOpenOptions: _showOptionsDialog,
               movementMode: currentMode,
               onMovementModeChanged: (mode) {
                 setState(() {
@@ -1851,6 +2117,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                       child: Stack(
                         children: [
                           _buildControllerSurface(),
+                          _buildPhysicalPadChip(),
                           if (_connectionState ==
                               ControllerConnectionState.multipleHostsFound)
                             MultipleHostsOverlay(
@@ -1870,6 +2137,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                 return Stack(
                   children: [
                     _buildControllerSurface(),
+                    _buildPhysicalPadChip(),
                     if (_connectionState ==
                         ControllerConnectionState.multipleHostsFound)
                       MultipleHostsOverlay(

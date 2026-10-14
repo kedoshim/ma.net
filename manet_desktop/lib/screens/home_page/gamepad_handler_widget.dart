@@ -404,6 +404,12 @@ class AdaptiveStageLayout extends StatelessWidget {
   final Future<void> Function() onRefreshDiagnostics;
   final Widget? lobbyToolbar;
 
+  /// Console mode: the whole stage is this scene (face playground with the
+  /// QR card in the middle), built with the QR card and the connection the
+  /// phones should join.
+  final Widget Function(Widget Function(double size) qrCard, ConnectionInfo? connection)?
+  consoleStage;
+
   const AdaptiveStageLayout({
     super.key,
     required this.connectionSnapshot,
@@ -417,6 +423,7 @@ class AdaptiveStageLayout extends StatelessWidget {
     required this.onSelectConnection,
     required this.onRefreshDiagnostics,
     this.lobbyToolbar,
+    this.consoleStage,
   });
 
   @override
@@ -424,6 +431,25 @@ class AdaptiveStageLayout extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > constraints.maxHeight * 1.35;
+        if (consoleStage != null) {
+          return consoleStage!(
+            (size) => QRCodePanel(
+              connectionSnapshot: connectionSnapshot,
+              diagnosticsSnapshot: diagnosticsSnapshot,
+              selectedConnection: selectedConnection,
+              qrEndpointUrl: qrEndpointUrl,
+              qrImage: qrImage,
+              api: api,
+              isLoadingConnection: isLoadingConnections,
+              isLoadingDiagnostics: isLoadingDiagnostics,
+              scale: UIScale(size),
+              onSelectConnection: onSelectConnection,
+              onRefreshDiagnostics: onRefreshDiagnostics,
+              compact: true,
+            ),
+            selectedConnection,
+          );
+        }
         if (isWide) {
           return WideStageLayout(
             connectionSnapshot: connectionSnapshot,

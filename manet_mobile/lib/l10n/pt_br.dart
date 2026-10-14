@@ -39,9 +39,87 @@ class PtBrStrings implements AppStrings {
 
   @override
   final menu = PtBrMenuStrings();
+
+  @override
+  final relay = PtBrRelayStrings();
+}
+
+class PtBrRelayStrings implements RelayStrings {
+  @override
+  String get title => 'Controle encontrado!';
+  @override
+  String offer(String padName) => '"$padName" está conectado aqui. Quer jogar com ele? Os botões dele vão para o MaNet como se fossem desta tela.';
+  @override
+  String get sameMachineWarning => 'Este navegador está no mesmo PC do MaNet, que também mostra os controles virtuais do MaNet. Escolha só um controle de verdade.';
+  @override
+  String get padAnswerHint => 'Aperte A no controle para usar, B para recusar.';
+  @override
+  String get use => 'Usar controle';
+  @override
+  String get notNow => 'Agora não';
+  @override
+  String get usePad => 'Usar controle físico';
+  @override
+  String active(String padName) => 'Jogando com $padName';
+  @override
+  String get stop => 'Parar';
+  @override
+  String disconnected(String padName) => '$padName desconectou. Voltando para a tela.';
+  @override
+  String get pickTitle => 'Qual controle?';
 }
 
 class PtBrMenuStrings implements MenuStrings {
+  @override
+  String get enter => 'Entrar';
+  @override
+  String newSeat(int seat) => 'P$seat · novo controle';
+  @override
+  String lagTitle(int ms) => 'Conexão lenta (~$ms ms)';
+  @override
+  String lagTipHotspot(String name, String address) => 'Este PC tem uma rede própria, mais rápida: conecte o Wi-Fi do celular em ${name.isEmpty ? 'o hotspot do PC' : name} e abra $address.';
+  @override
+  String get lagTipRouter => 'O controle pode atrasar. Tente ficar mais perto do roteador, ou ligar o hotspot (roteador) do PC.';
+  @override
+  String get lagOk => 'Entendi';
+  @override
+  String get mousePasswordTitle => 'Senha do modo mouse';
+  @override
+  String get mousePasswordHint => 'Peça a senha pra quem cuida do ma•net';
+  @override
+  String get mousePasswordWrong => 'Senha errada';
+  @override
+  String get mousePasswordUnset => 'O modo mouse precisa de uma senha: defina nas configurações do ma•net no PC.';
+  @override
+  String get mousePasswordEnter => 'Entrar';
+  @override
+  String get checkInTitle => 'Monte seu rostinho';
+  @override
+  String get checkInHint => 'Escolha um nome e um rosto pra entrar';
+  @override
+  String get checkInButton => 'Pronto, quero jogar!';
+  @override
+  String get editFace => 'Editar rosto';
+  @override
+  String get consoleLobbyHint => 'Leve seu rosto pra direita →';
+  @override
+  String get consoleWaitingHint => 'Esperando os outros...';
+  @override
+  String get lineupChooseHint => 'Ande até um lado: jogar agora ou banco';
+  @override
+  String get lineupPickDedanha => 'Quantos dedos?';
+  @override
+  String get lineupPickZerinho => 'Zerinho ou um?';
+  @override
+  String get lineupWait => 'Olha a TV...';
+  @override
+  String get lineupAnnounceDedanha => 'Dedanha! Prepare-se pra escolher de 0 a 5';
+  @override
+  String get lineupAnnounceZerinho => 'Zerinho ou um! Prepare-se pra escolher 0 ou 1';
+  @override
+  String get lineupYouPlay => 'Você joga agora!';
+  @override
+  String get lineupYouBench => 'Você começa no banco';
   @override
   String get select => 'Selecionar';
   @override
@@ -61,6 +139,10 @@ class PtBrMenuStrings implements MenuStrings {
   @override
   String get jump => 'Pular';
   @override
+  String get loadingHint => 'O jogo está abrindo... pula aí enquanto isso!';
+  @override
+  String get showGame => 'Já abriu';
+  @override
   String get seat => 'Lugar';
   @override
   String get seatsTitle => 'Lugares';
@@ -74,6 +156,8 @@ class PtBrMenuStrings implements MenuStrings {
   String get swap => 'Trocar';
   @override
   String get freeSeat => 'Livre';
+  @override
+  String get sitHere => 'Sentar aqui';
   @override
   String get goToBench => 'Ir pro banco';
   @override

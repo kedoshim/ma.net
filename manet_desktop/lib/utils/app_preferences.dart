@@ -8,6 +8,9 @@ class AppPreferences {
   static const _fullScreenKey = 'full_screen';
   static const _matchSecondsKey = 'tournament_match_seconds';
   static const _freeModeKey = 'free_mode_enabled';
+  static const _consoleModeKey = 'console_mode';
+  static const _lobbyStartRuleKey = 'lobby_start_rule';
+  static const _mousePasswordKey = 'mouse_password';
   static const _launcherCardStyleKey = 'launcher_card_style';
   static const _launcherGridRowsKey = 'launcher_grid_rows';
   static const _launcherSortOrderKey = 'launcher_sort_order';
@@ -87,6 +90,42 @@ class AppPreferences {
   static Future<void> setFreeModeEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_freeModeKey, value);
+  }
+
+  /// Console mode: no slot settings, virtual pads are created when a game
+  /// starts. Off = tool mode, the technical lobby with every setting.
+  static Future<bool> consoleMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_consoleModeKey) ?? true;
+  }
+
+  static Future<void> setConsoleMode(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_consoleModeKey, value);
+  }
+
+  /// Console lobby: the game selection starts when the "majority" (default)
+  /// or "all" of the players walked out through the right edge.
+  static Future<String> lobbyStartRule() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_lobbyStartRuleKey) == 'all' ? 'all' : 'majority';
+  }
+
+  /// Console mode: password a phone needs for mouse mode (empty: mouse
+  /// mode only in free mode).
+  static Future<String> mousePassword() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_mousePasswordKey) ?? '';
+  }
+
+  static Future<void> setMousePassword(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_mousePasswordKey, value.trim());
+  }
+
+  static Future<void> setLobbyStartRule(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lobbyStartRuleKey, value == 'all' ? 'all' : 'majority');
   }
 
   /// Re-applies the full screen preference (e.g. after coming back from a

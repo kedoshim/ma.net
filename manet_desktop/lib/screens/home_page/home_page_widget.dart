@@ -30,6 +30,7 @@ import 'session_stage.dart';
 import '../../services/session_controller.dart';
 import '../../utils/app_preferences.dart';
 import '../library/game_overlay.dart';
+import 'console_lobby_view.dart';
 import 'server_alerts.dart';
 import 'onboarding_overlay.dart';
 import 'qr_code_container.dart';
@@ -80,6 +81,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   late final SessionController _session;
   late final GamepadState _gamepadState;
   ControllerInventory? _controllerInventory;
+  String? _gamepadLimitMessage;
+  // Console mode hides the technical lobby toolbar (tool mode shows it).
+  bool _consoleMode = true;
   Timer? _inventoryRefreshTimer;
   late final HostWindowService _hostWindowService;
 
@@ -93,35 +97,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   late final ValueNotifier<ControllerBrandingMode> _brandingModeNotifier;
   bool _isShowingNoNetworkDialog = false;
   int _reservationTimeoutMinutes = 5;
-
-  String get _xinput4PlusAlertMsg => context.l10n.alerts.xinputLimitWarning;
-
-  void _syncAlerts({bool notify = true}) {
-    final hasXinputAlert = _alerts.any(
-      (a) => a.message == _xinput4PlusAlertMsg,
-    );
-
-    if (_controllerMode == 'x360' && _slots > 4) {
-      if (!hasXinputAlert) {
-        if (notify) {
-          _addAlert(_xinput4PlusAlertMsg);
-        } else {
-          _alerts.insert(
-            0,
-            ServerAlert(message: _xinput4PlusAlertMsg, isError: false),
-          );
-        }
-      }
-    } else if (hasXinputAlert) {
-      if (notify) {
-        setState(
-          () => _alerts.removeWhere((a) => a.message == _xinput4PlusAlertMsg),
-        );
-      } else {
-        _alerts.removeWhere((a) => a.message == _xinput4PlusAlertMsg);
-      }
-    }
-  }
 
   // 2. Variável de estado para a animação do botão de modo
   ModeChangeState _modeChangeState = ModeChangeState.idle;
@@ -174,7 +149,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
               setState(() {
                 _controllerMode = newMode;
               });
-              _syncAlerts();
               _brandingModeNotifier.value = ControllerBranding.modeFromWire(
                 newMode,
               );
@@ -183,63 +157,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
         }
       },
       onGamepadLimitReached: (message) {
-        if (mounted) {
-          _addAlert(message, isError: false);
-          ScaffoldMessenger.of(context).clearSnackBars();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 8),
-              content: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.screenBackground,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.textPrimary, width: 4),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: AppColors.textPrimary,
-                      offset: Offset(4, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.highlightColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.warning_amber_rounded,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        message,
-                        style: AppTheme.bodyMedium.copyWith(
-                          fontFamily: 'momo',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
+        // Shown in the controllers panel; the header button gets the badge.
+        if (mounted) setState(() => _gamepadLimitMessage = message);
+        _scheduleInventoryRefresh();
       },
     )..initialize();
     _startupPipeline = StartupConnectionPipeline(
@@ -257,13 +177,15 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     _startupPipeline.initialize();
     _loadTheme();
     _loadReservationTimeout();
+    AppPreferences.consoleMode().then((value) {
+      if (mounted) setState(() => _consoleMode = value);
+    });
     _loadPresets();
     _scheduleInventoryRefresh();
     _controllerMode = widget.initialControllerMode ?? _controllerMode;
     _brandingModeNotifier = ValueNotifier(
       ControllerBranding.modeFromWire(_controllerMode),
     );
-    _syncAlerts(notify: false);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       OnboardingOverlay.checkAndShow(context);
@@ -294,6 +216,11 @@ class _HomePageWidgetState extends State<HomePageWidget> {
       builder: (context) => ControllersPanelDialog(
         api: _api,
         initialInventory: _controllerInventory,
+        plannedPads: _consoleMode ? 0 : _slots,
+        limitMessage: _gamepadLimitMessage,
+        onDismissLimit: () {
+          if (mounted) setState(() => _gamepadLimitMessage = null);
+        },
         onInventoryChanged: (inventory) {
           if (mounted) setState(() => _controllerInventory = inventory);
         },
@@ -302,7 +229,12 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   }
 
   Widget _buildControllersButton() {
-    final hasConflicts = _controllerInventory?.hasConflicts ?? false;
+    final hasConflicts = ControllerDiagnosis(
+      inventory: _controllerInventory,
+      controllerMode: _controllerMode,
+      plannedPads: _consoleMode ? 0 : _slots,
+      limitMessage: _gamepadLimitMessage,
+    ).needsAttention;
     return Tooltip(
       message: context.l10n.controllers.tooltip,
       child: Stack(
@@ -669,7 +601,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
           _controllerMode = chosen;
           _modeChangeState = ModeChangeState.success;
         });
-        _syncAlerts();
         _brandingModeNotifier.value = ControllerBranding.modeFromWire(chosen);
 
         // Aguarda 2 segundos para exibir o check de sucesso antes de sumir
@@ -809,6 +740,29 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               ),
                               const SizedBox(width: 8),
                             ],
+                            if (_consoleMode) ...[
+                              Tooltip(
+                                message: context.l10n.qrPanel.helpButtonLabel,
+                                child: JuicyIconButton(
+                                  size: 48,
+                                  borderRadius: 14,
+                                  backgroundColor: AppColors.highlightColor,
+                                  icon: const Icon(Icons.help_outline_rounded),
+                                  onTap: () {
+                                    SoundEffectService.instance.playOptionsButton();
+                                    QRCodePanel.showHelp(
+                                      context,
+                                      scale: UIScale(220),
+                                      connection: _startupPipeline
+                                          .state
+                                          .value
+                                          .selectedConnection,
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             _buildControllersButton(),
                             const SizedBox(width: 8),
                             Tooltip(
@@ -848,6 +802,22 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         _session.setMatchSeconds(seconds),
                                     onFreeModeChanged: (enabled) =>
                                         _session.setFreeModeEnabled(enabled),
+                                    onLobbyStartRuleChanged: (rule) =>
+                                        _session.setLobbyStartRule(rule),
+                                    onMousePasswordChanged: (password) =>
+                                        _session.setMousePassword(password),
+                                    onConsoleModeChanged: (enabled) async {
+                                      setState(() => _consoleMode = enabled);
+                                      await _session.setConsoleMode(enabled);
+                                      if (!enabled) {
+                                        // Tool mode: apply the lobby's slot
+                                        // settings again.
+                                        await _api.resetControllers(
+                                          slots: _slots,
+                                          fixed: _locked,
+                                        );
+                                      }
+                                    },
                                     onThemeChanged: (theme) async {
                                       setState(() => _currentTheme = theme);
                                       try {
@@ -952,9 +922,12 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               builder: (context, child) {
                                 // The game selection takes the whole
                                 // window; the lobby keeps its margins.
+                                // The console lobby is one edge-to-edge
+                                // scene.
                                 final lobby =
-                                    _session.snapshot.phase ==
-                                        SessionPhase.lobby ||
+                                    (_session.snapshot.phase ==
+                                            SessionPhase.lobby &&
+                                        !_consoleMode) ||
                                     _session.snapshot.phase ==
                                         SessionPhase.inGame;
                                 return AnimatedPadding(
@@ -980,7 +953,14 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         child: SessionStage(
                                           presetCatalog: _presetCatalog,
                                           lobby: AdaptiveStageLayout(
-                                            lobbyToolbar: LobbyToolbar(
+                                            consoleStage: _consoleMode
+                                                ? (qrCard, connection) =>
+                                                      ConsoleLobbyView(
+                                                        qrCard: qrCard,
+                                                        connection: connection,
+                                                      )
+                                                : null,
+                                            lobbyToolbar: _consoleMode ? null : LobbyToolbar(
                                               serverSlots: _slots,
                                               serverLocked: _locked,
                                               controllerMode: _controllerMode,
@@ -1179,8 +1159,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                   _slots = newSlots;
                                                   _locked = newLocked;
                                                 });
-
-                                                _syncAlerts();
 
                                                 try {
                                                   await _api.resetControllers(

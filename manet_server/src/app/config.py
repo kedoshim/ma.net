@@ -17,6 +17,9 @@ class ServerConfig:
     max_slots: int = 8
     controller_type: ControllerType = "mixed"
     auto_expand_slots: bool = False
+    # Console mode: no fixed slot count; seats appear as phones join and
+    # their virtual pads are plugged in when a game starts.
+    console_mode: bool = False
     slot_reservation_timeout: int = 300
     is_demo: bool = False
     # Desktop app process that owns this server; the server exits with it.
@@ -73,4 +76,4 @@ def save_settings(settings: dict):
         path.write_text(json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8")
     except Exception as e:
         import logging
-        logging.getLogger("config").error("Failed to save settings to %s: %s", path, e)
+        logging.getLogger("config").error("Failed to save settings to %s: %s", path, e)

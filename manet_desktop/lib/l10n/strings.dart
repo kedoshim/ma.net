@@ -80,6 +80,37 @@ abstract class LobbyStrings {
 }
 
 abstract class SessionStrings {
+  String get lineupGetReady;
+  String get consoleEditing;
+  String get consolePlayTitle;
+  String get consolePlayHint;
+  String consoleStartingIn(int seconds);
+  String get consoleJoinTitle;
+  String consoleJoinWifi(String name);
+  String consoleJoinNetwork(String name);
+  String consoleJoinScan(String link);
+  String get consoleJoinFace;
+  String get lineupTitle;
+  String lineupSeats(String game, int seats);
+  String get lineupPlayNow;
+  String get lineupBench;
+  String get lineupChooseHint;
+  String get lineupDedanha;
+  String get lineupZerinho;
+  String get lineupDedanhaHint;
+  String get lineupZerinhoHint;
+  String lineupModeOut(int needed);
+  String lineupModeIn(int needed);
+  String lineupPicked(int picked, int total);
+  String lineupTotal(int total);
+  String get lineupTie;
+  String get lineupNarrow;
+  String get lineupGoesOut;
+  String get lineupGoesIn;
+  String get lineupDone;
+  String get lineupPlaying;
+  String get lineupOnBench;
+  String get lineupCancel;
   String readyPrompt(int ready, int total);
   String get allReady;
   String get controlsInBackground;
@@ -98,6 +129,11 @@ abstract class SessionStrings {
   String get cancel;
   String launchError(String code);
   String playing(String game);
+  String loadingGame(String game);
+  List<String> get loadingLines;
+  String loadingElapsed(int seconds);
+  String get loadingSlowHint;
+  String get loadingShowGame;
   String get playingHint;
   String get untrackedHint;
   String get closeGame;
@@ -206,6 +242,17 @@ abstract class SessionStrings {
   String get gameImagesHint;
   String get searchTrailer;
   String get steamInfoLoading;
+  String get fetchData;
+  String get fetchDataHint;
+  String get dataPreviewTitle;
+  String get dataPreviewHint;
+  String get dataWillReplace;
+  String get dataNothingFound;
+  String get applyData;
+  String get addImage;
+  String get addImageConfirm;
+  String get imageLinkHint;
+  String get imageLoadError;
   String get tournamentTitle;
   String tournamentIntro(int games);
   /// [matches] in this round (1 = final), [round] of [rounds].
@@ -228,6 +275,23 @@ abstract class SessionStrings {
 }
 
 abstract class ControllersStrings {
+  String get diagnosticsTitle;
+  String get allGood;
+  String predictionWarning(int pads, int free, int out);
+  String get windowsSeesTitle;
+  String get windowsSeesHint;
+  String get colDevice;
+  String get colType;
+  String get colSource;
+  String get sourceManet;
+  String get sourcePhysical;
+  String get sourceSteam;
+  String get sourceUnknown;
+  String get outOfXinput;
+  String get appsTitle;
+  String get appsHint;
+  String get appsEmpty;
+  String likelySources(String apps);
   String get title;
   String get tooltip;
   String summary(int total, int own);
@@ -300,6 +364,12 @@ abstract class HomeStrings {
 }
 
 abstract class SettingsStrings {
+  String get mousePasswordTitle;
+  String get mousePasswordHint;
+  String get lobbyStartTitle;
+  String get lobbyStartHint;
+  String get lobbyStartMajority;
+  String get lobbyStartAll;
   String get title;
   String get colorsTitle;
   String get timeoutTitle;
@@ -310,6 +380,8 @@ abstract class SettingsStrings {
   String matchSecondsValue(int seconds);
   String get freeModeTitle;
   String get freeModeHint;
+  String get consoleModeTitle;
+  String get consoleModeHint;
 }
 
 abstract class SlotsStrings {

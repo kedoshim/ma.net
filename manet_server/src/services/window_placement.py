@@ -149,6 +149,27 @@ def _window_rect(hwnd):
     return rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
 
 
+def visible_windows() -> dict:
+    """hwnd -> pid of every visible, unowned, window-sized top-level window."""
+    found = {}
+    if user32 is None:
+        return found
+    proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def visit(hwnd, _):
+        if not user32.IsWindowVisible(hwnd) or user32.GetWindow(hwnd, GW_OWNER):
+            return True
+        _, _, w, h = _window_rect(hwnd)
+        if w >= 200 and h >= 150:
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            found[hwnd] = pid.value
+        return True
+
+    user32.EnumWindows(proc(visit), 0)
+    return found
+
+
 def find_main_window(pids: set[int]):
     """Largest visible top-level window owned by any of `pids`."""
     best, best_area = None, 0
@@ -326,3 +347,19 @@ def focus_window(hwnd) -> bool:
         if attached:
             user32.AttachThreadInput(own_thread, front_thread, False)
     return user32.GetForegroundWindow() == hwnd
+
+
+def describe_window(hwnd) -> str:
+    """'process.exe "title"' for logs."""
+    if not is_window(hwnd):
+        return "?"
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    try:
+        import psutil
+        name = psutil.Process(pid.value).name()
+    except Exception:
+        name = f"pid {pid.value}"
+    title = ctypes.create_unicode_buffer(120)
+    user32.GetWindowTextW(hwnd, title, 120)
+    return f'{name} "{title.value}"'

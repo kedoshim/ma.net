@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'admin_auth.dart';
+
 /// One shared `/ws/admin` connection per server, with automatic reconnect.
 ///
 /// The lobby, the window service and the startup pipeline all listen to the
@@ -37,9 +39,11 @@ class AdminSocketService {
 
   Uri get _wsUri {
     final httpUri = Uri.parse(_baseUrl);
-    return httpUri.replace(
-      scheme: httpUri.scheme == 'https' ? 'wss' : 'ws',
-      path: '/ws/admin',
+    return AdminAuth.withToken(
+      httpUri.replace(
+        scheme: httpUri.scheme == 'https' ? 'wss' : 'ws',
+        path: '/ws/admin',
+      ),
     );
   }
 

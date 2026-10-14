@@ -25,6 +25,10 @@ class QRCodePanel extends StatefulWidget {
   final Future<void> Function(String connectionId) onSelectConnection;
   final Future<void> Function() onRefreshDiagnostics;
 
+  /// Only the title, the code and the link, always fully visible (console
+  /// lobby; help moves to the header there).
+  final bool compact;
+
   const QRCodePanel({
     super.key,
     required this.connectionSnapshot,
@@ -38,10 +42,29 @@ class QRCodePanel extends StatefulWidget {
     required this.scale,
     required this.onSelectConnection,
     required this.onRefreshDiagnostics,
+    this.compact = false,
   });
 
   @override
   State<QRCodePanel> createState() => _QRCodePanelState();
+
+  /// The connection help (FAQ) sheet, also opened from the header.
+  static Future<void> showHelp(
+    BuildContext context, {
+    required UIScale scale,
+    ConnectionInfo? connection,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.screenBackground,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(scale.quarter)),
+        side: const BorderSide(color: AppColors.textPrimary, width: 4),
+      ),
+      builder: (context) => _FaqSheet(scale: scale, selectedConnection: connection),
+    );
+  }
 
   static String t(BuildContext context, String key) =>
       context.l10n.qrPanel.textMap[key] ?? key;
@@ -239,25 +262,11 @@ class _QRCodePanelState extends State<QRCodePanel> {
     );
   }
 
-  Future<void> _showFaqSheet(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.screenBackground,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(widget.scale.quarter),
-        ),
-        side: const BorderSide(color: AppColors.textPrimary, width: 4),
-      ),
-      builder: (context) {
-        return _FaqSheet(
-          scale: widget.scale,
-          selectedConnection: _selectedConnection,
-        );
-      },
-    );
-  }
+  Future<void> _showFaqSheet(BuildContext context) => QRCodePanel.showHelp(
+    context,
+    scale: widget.scale,
+    connection: _selectedConnection,
+  );
 
   Widget _buildTitle() {
     return Column(
@@ -535,6 +544,29 @@ class _QRCodePanelState extends State<QRCodePanel> {
                     ),
                   ),
                 ],
+              );
+            }
+
+            if (widget.compact) {
+              // Shrinks to fit instead of scrolling.
+              return Padding(
+                padding: EdgeInsets.all(widget.scale.eighth),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: SizedBox(
+                    width: constraints.maxWidth - widget.scale.eighth * 2,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildEncoragementText(),
+                        SizedBox(height: widget.scale.eighth),
+                        _buildQR(constraints.maxWidth - widget.scale.eighth * 2),
+                        SizedBox(height: widget.scale.eighth * 0.5),
+                        _buildLink(connectionUrl),
+                      ],
+                    ),
+                  ),
+                ),
               );
             }
 

@@ -581,6 +581,11 @@ class HTTPRoutes:
         focused = await asyncio.to_thread(self.session.focus_game)
         return web.json_response({"success": focused})
 
+    async def session_game_ready_handler(self, request):
+        """Host: the game is up (or show the desktop anyway)."""
+        self.session.mark_game_ready(reason="host")
+        return web.json_response({"success": True})
+
     async def session_game_window_handler(self, request):
         """The game's window handle, so the desktop can give it the focus
         itself while it is still the foreground app."""
@@ -589,6 +594,31 @@ class HTTPRoutes:
 
     async def session_cancel_tournament_handler(self, request):
         self.session.cancel_tournament()
+        return web.json_response({"success": True})
+
+    async def session_lobby_zone_handler(self, request):
+        """Console lobby: whether a player's face stands in the play area."""
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        ok = self.session.set_lobby_zone(str(data.get("deviceId") or ""), data.get("inside") is True)
+        return web.json_response({"success": ok})
+
+    async def session_lineup_zone_handler(self, request):
+        """Lineup: which side ("play" / "bench") a player's face stands in."""
+        try:
+            data = await _read_json_object(request)
+        except BadRequest as e:
+            return _bad_request(str(e))
+        zone = data.get("zone")
+        ok = self.session.lineup_zone(
+            str(data.get("deviceId") or ""), zone if zone in ("play", "bench") else None
+        )
+        return web.json_response({"success": ok})
+
+    async def session_cancel_lineup_handler(self, request):
+        self.session.cancel_lineup()
         return web.json_response({"success": True})
 
     async def session_tournament_vote_handler(self, request):
@@ -614,11 +644,21 @@ class HTTPRoutes:
                 return _bad_request("invalid_matchSeconds")
         if "freeModeEnabled" in data:
             self.session.set_free_mode_enabled(data["freeModeEnabled"] is True)
+        if "mousePassword" in data:
+            self.session.mouse_password = str(data["mousePassword"] or "").strip()
+        if "lobbyStartRule" in data:
+            self.session.set_lobby_start_rule(str(data["lobbyStartRule"]))
+        if "consoleMode" in data:
+            await self.manager.set_console_mode(data["consoleMode"] is True)
+            self.admin_panel.broadcast_update()
         self.session.broadcast()
         return web.json_response({
             "success": True,
             "matchSeconds": self.session.match_seconds,
             "freeModeEnabled": self.session.free_mode_enabled,
+            "consoleMode": self.manager.console_mode,
+            "lobbyStartRule": self.session.lobby_start_rule,
+            "mousePasswordSet": bool(self.session.mouse_password),
         })
 
     async def session_free_mode_handler(self, request):

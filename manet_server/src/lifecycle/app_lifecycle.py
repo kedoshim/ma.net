@@ -26,6 +26,21 @@ class AppLifecycle:
         async def init_slots_task():
             import logging
             logger = logging.getLogger("app_lifecycle")
+            if self.manager.console_mode:
+                # Console mode: no pads up front; phones get seats as they join.
+                logger.info("Console mode: virtual pads are created when a game starts")
+                for device_id, device_info in list(self.manager.connected_devices.items()):
+                    if device_id not in self.manager.device_map:
+                        slot = self.manager.assign_slot(device_id, device_info.get("name"))
+                        if slot:
+                            self.manager.notify_device(device_id, {
+                                "type": "assigned",
+                                "slot": slot.slot_id,
+                                **self.manager.get_slot_identity(slot),
+                                "total_slots": len(self.manager.slots)
+                            })
+                self.admin_panel.broadcast_update()
+                return
             logger.info("Initializing %d gamepad slots in background...", self.manager.config.initial_slots)
             async with self.manager._slot_lock:
                 for i in range(self.manager.config.initial_slots):

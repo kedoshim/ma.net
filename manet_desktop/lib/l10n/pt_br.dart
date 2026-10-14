@@ -35,6 +35,68 @@ class PtBrStrings implements AppStrings {
 
 class PtBrSessionStrings implements SessionStrings {
   @override
+  String get lineupGetReady => 'Preparem-se!';
+  @override
+  String get consoleEditing => 'editando rostinho...';
+  @override
+  String get consolePlayTitle => 'Jogar';
+  @override
+  String get consolePlayHint => 'Entre aqui para selecionar um jogo';
+  @override
+  String consoleStartingIn(int seconds) => 'Começando em $seconds...';
+  @override
+  String get consoleJoinTitle => 'Como entrar';
+  @override
+  String consoleJoinWifi(String name) => 'Conecte no Wi-Fi $name';
+  @override
+  String consoleJoinNetwork(String name) => 'Conecte na rede $name';
+  @override
+  String consoleJoinScan(String link) => 'Aponte a câmera pro QR code ou acesse $link';
+  @override
+  String get consoleJoinFace => 'Monte seu rostinho e aperte Pronto';
+  @override
+  String get lineupTitle => 'Quem joga primeiro?';
+  @override
+  String lineupSeats(String game, int seats) => '$game tem $seats ${seats == 1 ? 'vaga' : 'vagas'}';
+  @override
+  String get lineupPlayNow => 'Quero jogar agora';
+  @override
+  String get lineupBench => 'Começo no banco';
+  @override
+  String get lineupChooseHint => 'Ande até um dos lados';
+  @override
+  String get lineupDedanha => 'Dedanha!';
+  @override
+  String get lineupZerinho => 'Zerinho ou um!';
+  @override
+  String get lineupDedanhaHint => 'Mostre de 0 a 5 dedos no celular: a soma conta pela roda';
+  @override
+  String get lineupZerinhoHint => 'Escolha 0 ou 1 no celular: a minoria é decidida';
+  @override
+  String lineupModeOut(int needed) => '$needed ${needed == 1 ? 'pessoa vai' : 'pessoas vão'} pro banco';
+  @override
+  String lineupModeIn(int needed) => '$needed ${needed == 1 ? 'vaga' : 'vagas'} pra decidir';
+  @override
+  String lineupPicked(int picked, int total) => '$picked/$total escolheram';
+  @override
+  String lineupTotal(int total) => 'Soma: $total';
+  @override
+  String get lineupTie => 'Empatou! De novo!';
+  @override
+  String get lineupNarrow => 'A minoria joga de novo!';
+  @override
+  String get lineupGoesOut => 'vai pro banco';
+  @override
+  String get lineupGoesIn => 'joga!';
+  @override
+  String get lineupDone => 'Escalação';
+  @override
+  String get lineupPlaying => 'Jogando';
+  @override
+  String get lineupOnBench => 'Banco';
+  @override
+  String get lineupCancel => 'Cancelar';
+  @override
   String readyPrompt(int ready, int total) =>
       'Apertem START quando estiverem prontos · $ready/$total';
   @override
@@ -306,6 +368,47 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get steamInfoLoading => 'Buscando descrição e detalhes do jogo...';
   @override
+  String get fetchData => 'Buscar dados';
+  @override
+  String get fetchDataHint => 'Busca o jogo na internet e você escolhe o que preencher: capa, descrição, tags, trailer e imagens';
+  @override
+  String get dataPreviewTitle => 'O que preencher?';
+  @override
+  String get dataPreviewHint => 'Marque o que você quer usar desta busca.';
+  @override
+  String get dataWillReplace => 'Substitui o que já está preenchido';
+  @override
+  String get dataNothingFound => 'Nenhum dado extra encontrado para este jogo.';
+  @override
+  String get applyData => 'Preencher';
+  @override
+  String get addImage => 'Adicionar imagem';
+  @override
+  String get addImageConfirm => 'Adicionar';
+  @override
+  String get imageLinkHint => 'Cole o link da imagem';
+  @override
+  String get imageLoadError => 'Não foi possível carregar esta imagem';
+  @override
+  String loadingGame(String game) => 'Abrindo $game';
+  @override
+  List<String> get loadingLines => const [
+    'Soprando o cartucho',
+    'Esquentando os controles',
+    'Ajustando a antena',
+    'Desembaraçando o fio do controle',
+    'Escolhendo o melhor lugar no sofá',
+    'Pegando a pipoca',
+    'Carregando os polígonos',
+    'Acordando os NPCs',
+  ];
+  @override
+  String loadingElapsed(int seconds) => '${seconds}s';
+  @override
+  String get loadingSlowHint => 'Demorando? Se o jogo já abriu, START mostra ele.';
+  @override
+  String get loadingShowGame => 'Mostrar o jogo';
+  @override
   String get tournamentTitle => 'Torneio!';
   @override
   String tournamentIntro(int games) =>
@@ -352,6 +455,43 @@ class PtBrSessionStrings implements SessionStrings {
 }
 
 class PtBrControllersStrings implements ControllersStrings {
+  @override
+  String get diagnosticsTitle => 'Diagnóstico';
+  @override
+  String get allGood => 'Tudo certo: o Windows só está vendo o que deveria.';
+  @override
+  String predictionWarning(int pads, int free, int out) =>
+      'O ma•net usa $pads ${pads == 1 ? 'controle' : 'controles'} x•input, mas só $free das '
+      '4 vagas do Windows ${free == 1 ? 'está livre' : 'estão livres'}: $out ${out == 1 ? 'jogador fica' : 'jogadores ficam'} '
+      'de fora e jogos x•input não vão enxergá-${out == 1 ? 'lo' : 'los'}. Desconecte os outros controles ou use d•input.';
+  @override
+  String get windowsSeesTitle => 'O que o Windows está vendo';
+  @override
+  String get windowsSeesHint => 'Todos os controles de jogo conectados neste PC agora.';
+  @override
+  String get colDevice => 'Dispositivo';
+  @override
+  String get colType => 'Tipo';
+  @override
+  String get colSource => 'Quem criou';
+  @override
+  String get sourceManet => 'ma•net';
+  @override
+  String get sourcePhysical => 'Controle real';
+  @override
+  String get sourceSteam => 'Steam Input';
+  @override
+  String get sourceUnknown => 'Outro programa';
+  @override
+  String get outOfXinput => 'Ficaram de fora';
+  @override
+  String get appsTitle => 'Programas que podem criar controles';
+  @override
+  String get appsHint => 'O Windows não diz qual programa criou cada controle virtual; estes estão abertos agora.';
+  @override
+  String get appsEmpty => 'Nenhum programa conhecido aberto.';
+  @override
+  String likelySources(String apps) => 'Provavelmente: $apps';
   @override
   String get title => 'Controles no Windows';
   @override
@@ -600,6 +740,18 @@ class PtBrHomeStrings implements HomeStrings {
 
 class PtBrSettingsStrings implements SettingsStrings {
   @override
+  String get mousePasswordTitle => 'Senha do modo mouse';
+  @override
+  String get mousePasswordHint => 'Os celulares precisam dela pra controlar o mouse do PC (no modo livre não precisa). Vazia: modo mouse só no modo livre.';
+  @override
+  String get lobbyStartTitle => 'Começar a escolha de jogo quando';
+  @override
+  String get lobbyStartHint => 'As pessoas saem pela borda direita. Ninguém pode estar montando o rostinho.';
+  @override
+  String get lobbyStartMajority => 'A maioria sair';
+  @override
+  String get lobbyStartAll => 'Todos saírem';
+  @override
   String get title => 'Opções';
   @override
   String get colorsTitle => 'Cores do ma.net';
@@ -619,6 +771,10 @@ class PtBrSettingsStrings implements SettingsStrings {
   String get freeModeTitle => 'Modo livre';
   @override
   String get freeModeHint => 'Permite minimizar o MaNet na escolha de jogos para os celulares virarem controles comuns em qualquer jogo.';
+  @override
+  String get consoleModeTitle => 'Modo console';
+  @override
+  String get consoleModeHint => 'Ligado: as pessoas só entram e os controles são criados quando um jogo abre. Desligado: modo ferramenta, com o lobby técnico de slots, x/d•input e layout.';
 }
 
 class PtBrSlotsStrings implements SlotsStrings {

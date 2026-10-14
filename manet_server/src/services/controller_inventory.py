@@ -349,6 +349,44 @@ def find_other_servers() -> list[dict]:
     ]
 
 
+# Programs known to plug in virtual controllers (mostly through ViGEmBus).
+# Windows doesn't say which process owns a virtual pad, so the panel lists
+# the ones running as the likely source.
+_VIRTUAL_PAD_APPS = {
+    "ds4windows.exe": "DS4Windows",
+    "dsx.exe": "DSX",
+    "dualsensex.exe": "DSX",
+    "rewasd.exe": "reWASD",
+    "rewasdengine.exe": "reWASD",
+    "x360ce.exe": "x360ce",
+    "x360ce_x64.exe": "x360ce",
+    "betterjoy.exe": "BetterJoy",
+    "betterjoyforcemu.exe": "BetterJoy",
+    "inputmapper.exe": "InputMapper",
+    "scptoolkit.exe": "ScpToolkit",
+    "scpservice.exe": "ScpToolkit",
+    "xoutput.exe": "XOutput",
+    "parsecd.exe": "Parsec",
+    "sunshine.exe": "Sunshine",
+    "steam.exe": "Steam",
+    "joyshockmapper.exe": "JoyShockMapper",
+    "dsadvance.exe": "DSAdvance",
+    "padforge.exe": "PadForge",
+}
+
+
+def find_virtual_pad_apps() -> list[dict]:
+    """Running programs that may be creating virtual controllers."""
+    apps = {}
+    for proc in psutil.process_iter(["pid", "name"]):
+        name = (proc.info.get("name") or "").lower()
+        label = _VIRTUAL_PAD_APPS.get(name)
+        if label is None or label in apps:
+            continue
+        apps[label] = {"name": label, "exe": proc.info.get("name"), "pid": proc.info["pid"]}
+    return list(apps.values())
+
+
 def close_other_servers() -> int:
     closed = 0
     for server in find_other_servers():
@@ -407,6 +445,11 @@ def build_inventory(own_pads: list[dict], callback_states: dict[int, dict], cont
     for device in devices:
         device["own"] = _is_own_device(device, serials)
     other_servers = find_other_servers()
+    try:
+        virtual_pad_apps = find_virtual_pad_apps()
+    except Exception:
+        LOG.exception("Could not list programs that create virtual controllers")
+        virtual_pad_apps = []
 
     return {
         "success": True,
@@ -420,9 +463,12 @@ def build_inventory(own_pads: list[dict], callback_states: dict[int, dict], cont
             "foreignVirtual": sum(1 for d in devices if d["origin"] == "vigem" and not d["own"]),
             "physical": sum(1 for d in devices if d["origin"] == "physical"),
             "steam": sum(1 for d in devices if d["origin"] == "steam"),
+            "xinputTakenByOthers": sum(1 for slot in xinput_slots if slot["owner"] == "other"),
+            "xinputFree": sum(1 for slot in xinput_slots if slot["owner"] == "free"),
             "playersWithoutXinput": sum(
                 1 for pad in own_pads if pad["type"] == "x360" and pad["xinputIndex"] is None
             ),
         },
         "otherServers": other_servers,
+        "virtualPadApps": virtual_pad_apps,
     }

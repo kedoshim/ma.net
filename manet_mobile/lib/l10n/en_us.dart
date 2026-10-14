@@ -39,9 +39,87 @@ class EnUsStrings implements AppStrings {
 
   @override
   final menu = EnUsMenuStrings();
+
+  @override
+  final relay = EnUsRelayStrings();
+}
+
+class EnUsRelayStrings implements RelayStrings {
+  @override
+  String get title => 'Controller found!';
+  @override
+  String offer(String padName) => '"$padName" is connected here. Play with it? Its buttons go to MaNet as if they were this screen.';
+  @override
+  String get sameMachineWarning => 'This browser is on the MaNet PC itself, which also shows the virtual controllers MaNet creates. Pick only a real controller.';
+  @override
+  String get padAnswerHint => 'Press A on the controller to use it, B to decline.';
+  @override
+  String get use => 'Use controller';
+  @override
+  String get notNow => 'Not now';
+  @override
+  String get usePad => 'Use physical controller';
+  @override
+  String active(String padName) => 'Playing with $padName';
+  @override
+  String get stop => 'Stop';
+  @override
+  String disconnected(String padName) => '$padName disconnected. Back to the screen.';
+  @override
+  String get pickTitle => 'Which controller?';
 }
 
 class EnUsMenuStrings implements MenuStrings {
+  @override
+  String get enter => 'Enter';
+  @override
+  String newSeat(int seat) => 'P$seat · new controller';
+  @override
+  String lagTitle(int ms) => 'Slow connection (~$ms ms)';
+  @override
+  String lagTipHotspot(String name, String address) => 'This PC has its own network, which is faster: connect your phone\'s Wi-Fi to ${name.isEmpty ? 'the PC hotspot' : name} and open $address.';
+  @override
+  String get lagTipRouter => 'The controller may lag. Try getting closer to the router, or turning on the PC\'s mobile hotspot.';
+  @override
+  String get lagOk => 'Got it';
+  @override
+  String get mousePasswordTitle => 'Mouse mode password';
+  @override
+  String get mousePasswordHint => 'Ask whoever runs ma•net for it';
+  @override
+  String get mousePasswordWrong => 'Wrong password';
+  @override
+  String get mousePasswordUnset => 'Mouse mode needs a password: set one in ma•net\'s settings on the PC.';
+  @override
+  String get mousePasswordEnter => 'Enter';
+  @override
+  String get checkInTitle => 'Make your face';
+  @override
+  String get checkInHint => 'Pick a name and a face to join';
+  @override
+  String get checkInButton => 'Ready, I want to play!';
+  @override
+  String get editFace => 'Edit face';
+  @override
+  String get consoleLobbyHint => 'Roll your face out to the right →';
+  @override
+  String get consoleWaitingHint => 'Waiting for the others...';
+  @override
+  String get lineupChooseHint => 'Walk to a side: play now or the bench';
+  @override
+  String get lineupPickDedanha => 'How many fingers?';
+  @override
+  String get lineupPickZerinho => 'Zero or one?';
+  @override
+  String get lineupWait => 'Watch the TV...';
+  @override
+  String get lineupAnnounceDedanha => 'Finger count! Get ready to pick 0 to 5';
+  @override
+  String get lineupAnnounceZerinho => 'Zero or one! Get ready to pick 0 or 1';
+  @override
+  String get lineupYouPlay => 'You play now!';
+  @override
+  String get lineupYouBench => 'You start on the bench';
   @override
   String get select => 'Select';
   @override
@@ -61,6 +139,10 @@ class EnUsMenuStrings implements MenuStrings {
   @override
   String get jump => 'Jump';
   @override
+  String get loadingHint => 'The game is opening... jump around meanwhile!';
+  @override
+  String get showGame => "It's open";
+  @override
   String get seat => 'Seat';
   @override
   String get seatsTitle => 'Seats';
@@ -74,6 +156,8 @@ class EnUsMenuStrings implements MenuStrings {
   String get swap => 'Swap';
   @override
   String get freeSeat => 'Free';
+  @override
+  String get sitHere => 'Sit here';
   @override
   String get goToBench => 'Go to the bench';
   @override

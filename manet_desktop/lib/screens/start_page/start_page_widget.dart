@@ -277,6 +277,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
       final reservationTimeoutSeconds = timeoutMinutes * 60;
 
       final mode = _controllerMode;
+      final consoleMode = await AppPreferences.consoleMode();
 
       // Start the server with 0 slots; the gamepads are created right after
       // in the chosen mode.
@@ -287,6 +288,7 @@ class _StartPageWidgetState extends State<StartPageWidget> {
           slots: 0,
           fixed: true,
           controllerMode: mode,
+          consoleMode: consoleMode,
         );
       }
 
@@ -857,18 +859,19 @@ class _MascotWidgetState extends State<MascotWidget>
       animation: Listenable.merge([_popController, _tickController]),
       builder: (context, child) {
         final renderBox = context.findRenderObject() as RenderBox?;
-        final center = renderBox != null
+        final hasSize = renderBox != null && renderBox.hasSize;
+        final center = hasSize
             ? renderBox.localToGlobal(
                 Offset(renderBox.size.width / 2, renderBox.size.height / 2),
               )
-            : Offset.zero;
+            : null;
 
-        var delta = widget.globalMousePos - center;
+        var delta = center != null ? widget.globalMousePos - center : Offset.zero;
 
         // Lógica de movimento 2D flat (estilo analógico)
         const maxTravel = 90.0;
         Offset targetOffset;
-        if (delta.distance > 800) {
+        if (center == null || delta.distance > 800) {
           targetOffset = Offset.zero;
         } else {
           // Clamping independente para X e Y para permitir um alcance mais quadrado

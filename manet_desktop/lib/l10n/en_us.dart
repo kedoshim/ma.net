@@ -35,6 +35,68 @@ class EnUsStrings implements AppStrings {
 
 class EnUsSessionStrings implements SessionStrings {
   @override
+  String get lineupGetReady => 'Get ready!';
+  @override
+  String get consoleEditing => 'making their face...';
+  @override
+  String get consolePlayTitle => 'Play';
+  @override
+  String get consolePlayHint => 'Go in here to pick a game';
+  @override
+  String consoleStartingIn(int seconds) => 'Starting in $seconds...';
+  @override
+  String get consoleJoinTitle => 'How to join';
+  @override
+  String consoleJoinWifi(String name) => 'Connect to the Wi-Fi $name';
+  @override
+  String consoleJoinNetwork(String name) => 'Connect to the network $name';
+  @override
+  String consoleJoinScan(String link) => 'Point the camera at the QR code or open $link';
+  @override
+  String get consoleJoinFace => 'Make your face and press Ready';
+  @override
+  String get lineupTitle => 'Who plays first?';
+  @override
+  String lineupSeats(String game, int seats) => '$game has $seats ${seats == 1 ? 'seat' : 'seats'}';
+  @override
+  String get lineupPlayNow => 'I want to play now';
+  @override
+  String get lineupBench => 'I\'ll start on the bench';
+  @override
+  String get lineupChooseHint => 'Walk to one of the sides';
+  @override
+  String get lineupDedanha => 'Finger count!';
+  @override
+  String get lineupZerinho => 'Zero or one!';
+  @override
+  String get lineupDedanhaHint => 'Show 0 to 5 fingers on the phone: the sum counts around the circle';
+  @override
+  String get lineupZerinhoHint => 'Pick 0 or 1 on the phone: the minority is decided';
+  @override
+  String lineupModeOut(int needed) => '$needed ${needed == 1 ? 'player goes' : 'players go'} to the bench';
+  @override
+  String lineupModeIn(int needed) => '$needed ${needed == 1 ? 'seat' : 'seats'} to fill';
+  @override
+  String lineupPicked(int picked, int total) => '$picked/$total picked';
+  @override
+  String lineupTotal(int total) => 'Total: $total';
+  @override
+  String get lineupTie => 'Tie! Again!';
+  @override
+  String get lineupNarrow => 'The minority plays again!';
+  @override
+  String get lineupGoesOut => 'to the bench';
+  @override
+  String get lineupGoesIn => 'plays!';
+  @override
+  String get lineupDone => 'Lineup';
+  @override
+  String get lineupPlaying => 'Playing';
+  @override
+  String get lineupOnBench => 'Bench';
+  @override
+  String get lineupCancel => 'Cancel';
+  @override
   String readyPrompt(int ready, int total) => 'Press START when you are ready · $ready/$total';
   @override
   String get allReady => 'Everyone is ready! Press START to pick a game';
@@ -304,6 +366,47 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get steamInfoLoading => 'Getting description and game details...';
   @override
+  String get fetchData => 'Find game data';
+  @override
+  String get fetchDataHint => 'Search the game online and choose what to fill: cover, description, tags, trailer and images';
+  @override
+  String get dataPreviewTitle => 'What should be filled?';
+  @override
+  String get dataPreviewHint => 'Check what you want to use from this search.';
+  @override
+  String get dataWillReplace => 'Replaces what is already there';
+  @override
+  String get dataNothingFound => 'No extra data found for this game.';
+  @override
+  String get applyData => 'Fill in';
+  @override
+  String get addImage => 'Add image';
+  @override
+  String get addImageConfirm => 'Add';
+  @override
+  String get imageLinkHint => 'Paste the image link';
+  @override
+  String get imageLoadError => 'Could not load this image';
+  @override
+  String loadingGame(String game) => 'Opening $game';
+  @override
+  List<String> get loadingLines => const [
+    'Blowing on the cartridge',
+    'Warming up the controllers',
+    'Adjusting the antenna',
+    'Untangling the controller cable',
+    'Picking the best spot on the couch',
+    'Grabbing the popcorn',
+    'Loading the polygons',
+    'Waking up the NPCs',
+  ];
+  @override
+  String loadingElapsed(int seconds) => '${seconds}s';
+  @override
+  String get loadingSlowHint => 'Taking long? If the game is already open, START shows it.';
+  @override
+  String get loadingShowGame => 'Show the game';
+  @override
   String get tournamentTitle => 'Tournament!';
   @override
   String tournamentIntro(int games) =>
@@ -350,6 +453,43 @@ class EnUsSessionStrings implements SessionStrings {
 }
 
 class EnUsControllersStrings implements ControllersStrings {
+  @override
+  String get diagnosticsTitle => 'Diagnosis';
+  @override
+  String get allGood => 'All good: Windows only sees what it should.';
+  @override
+  String predictionWarning(int pads, int free, int out) =>
+      'ma•net uses $pads x•input ${pads == 1 ? 'controller' : 'controllers'}, but only $free of the '
+      '4 Windows slots ${free == 1 ? 'is' : 'are'} free: $out ${out == 1 ? 'player stays' : 'players stay'} '
+      'out and x•input games won\'t see them. Unplug the other controllers or use d•input.';
+  @override
+  String get windowsSeesTitle => 'What Windows sees';
+  @override
+  String get windowsSeesHint => 'Every game controller plugged into this PC right now.';
+  @override
+  String get colDevice => 'Device';
+  @override
+  String get colType => 'Type';
+  @override
+  String get colSource => 'Created by';
+  @override
+  String get sourceManet => 'ma•net';
+  @override
+  String get sourcePhysical => 'Real controller';
+  @override
+  String get sourceSteam => 'Steam Input';
+  @override
+  String get sourceUnknown => 'Another program';
+  @override
+  String get outOfXinput => 'Left out';
+  @override
+  String get appsTitle => 'Programs that can create controllers';
+  @override
+  String get appsHint => 'Windows doesn\'t tell which program created each virtual controller; these are open now.';
+  @override
+  String get appsEmpty => 'No known program running.';
+  @override
+  String likelySources(String apps) => 'Probably: $apps';
   @override
   String get title => 'Controllers in Windows';
   @override
@@ -598,6 +738,18 @@ class EnUsHomeStrings implements HomeStrings {
 
 class EnUsSettingsStrings implements SettingsStrings {
   @override
+  String get mousePasswordTitle => 'Mouse mode password';
+  @override
+  String get mousePasswordHint => 'Phones need it to control this PC\'s mouse (not needed in free mode). Empty: mouse mode only in free mode.';
+  @override
+  String get lobbyStartTitle => 'Start picking a game when';
+  @override
+  String get lobbyStartHint => 'Players walk out through the right edge. Nobody can still be making their face.';
+  @override
+  String get lobbyStartMajority => 'Most go';
+  @override
+  String get lobbyStartAll => 'Everyone goes';
+  @override
   String get title => 'Options';
   @override
   String get colorsTitle => 'ma.net colors';
@@ -617,6 +769,10 @@ class EnUsSettingsStrings implements SettingsStrings {
   String get freeModeTitle => 'Free mode';
   @override
   String get freeModeHint => 'Lets the game selection minimize MaNet so phones work as plain controllers for any game.';
+  @override
+  String get consoleModeTitle => 'Console mode';
+  @override
+  String get consoleModeHint => 'On: players just join and controllers are created when a game starts. Off: tool mode, the technical lobby with slots, x/d•input and layout.';
 }
 
 

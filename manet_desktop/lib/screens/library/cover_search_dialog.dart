@@ -195,10 +195,16 @@ class SteamDetails extends GameDetails {
         (c as Map<String, dynamic>)['description'] as String? ?? '',
     ]);
 
+    // Steam lists trailers as streams now (HLS/DASH; older apps also had
+    // mp4/webm). The highlighted one first; phones play the HLS link.
     String trailer = '';
-    for (final movie in data['movies'] as List<dynamic>? ?? const []) {
-      final m = movie as Map<String, dynamic>;
+    final movies = [
+      for (final movie in data['movies'] as List<dynamic>? ?? const [])
+        movie as Map<String, dynamic>,
+    ]..sort((a, b) => (b['highlight'] == true ? 1 : 0) - (a['highlight'] == true ? 1 : 0));
+    for (final m in movies) {
       final url =
+          m['hls_h264'] ??
           (m['mp4'] as Map<String, dynamic>?)?['max'] ??
           (m['webm'] as Map<String, dynamic>?)?['max'];
       if (url is String && url.isNotEmpty) {
@@ -206,8 +212,7 @@ class SteamDetails extends GameDetails {
         break;
       }
     }
-    if (trailer.isEmpty && (data['movies'] as List<dynamic>? ?? const []).isNotEmpty) {
-      // Newer apps only list streaming formats: the store page plays them.
+    if (trailer.isEmpty && movies.isNotEmpty) {
       trailer = 'https://store.steampowered.com/app/$appId';
     }
 

@@ -66,27 +66,45 @@ class SessionController extends ChangeNotifier with WindowListener {
   void _applySnapshot(SessionSnapshot next) {
     final previousPhase = snapshot.phase;
     final previousOverlay = snapshot.overlayOpen;
+    final previousReady = snapshot.gameReady;
     snapshot = next;
+    GameEntry.seatsCanRotate = next.consoleMode;
     if (previousOverlay != next.overlayOpen) {
       unawaited(_onOverlayChanged(next.overlayOpen, next.phase));
     }
     // A restarted server forgets the focus state; tell it again.
     if (next.focused != _windowFocused) unawaited(_reportFocus());
-    if (previousPhase != next.phase)
+    if (previousPhase != next.phase) {
       unawaited(_onPhaseChanged(previousPhase, next.phase));
+    } else if (next.phase == SessionPhase.inGame &&
+        !previousReady &&
+        next.gameReady &&
+        !next.overlayOpen) {
+      // The game's window is up: hand it the screen and the focus.
+      unawaited(_stepAsideSafely());
+    }
   }
 
   Future<void> _onPhaseChanged(SessionPhase from, SessionPhase to) async {
     try {
       if (to == SessionPhase.inGame) {
-        // Let the game have the screen.
-        await _stepAside();
+        // Stay up with the loading screen until the game's window shows up;
+        // then let the game have the screen (and the focus).
+        if (snapshot.gameReady) await _stepAside(focusGame: true);
       } else if (from == SessionPhase.inGame) {
         await windowManager.restore();
         await windowManager.show();
         await AppPreferences.applyFullScreen();
         await windowManager.focus();
       }
+    } catch (e) {
+      debugPrint('[SESSION] window change failed: $e');
+    }
+  }
+
+  Future<void> _stepAsideSafely() async {
+    try {
+      await _stepAside(focusGame: true);
     } catch (e) {
       debugPrint('[SESSION] window change failed: $e');
     }
@@ -212,9 +230,15 @@ class SessionController extends ChangeNotifier with WindowListener {
   Future<void> play([String? gameId]) => _api.playGame(gameId);
   Future<void> cancelCountdown() => _api.cancelCountdown();
   Future<void> stopGame() => _api.stopGame();
+  Future<void> markGameReady() => _api.markGameReady();
   Future<void> returnFromGame() => _api.returnFromGame();
   Future<void> setOverlay(bool open) => _api.setOverlay(open);
   Future<void> cancelTournament() => _api.cancelTournament();
+  Future<void> setLobbyZone(String deviceId, bool inside) =>
+      _api.setLobbyZone(deviceId, inside);
+  Future<void> setLineupZone(String deviceId, String? zone) =>
+      _api.setLineupZone(deviceId, zone);
+  Future<void> cancelLineup() => _api.cancelLineup();
   Future<void> tournamentVote(String deviceId, String? side) =>
       _api.tournamentVote(deviceId, side);
   Future<void> enterFreeMode() => _api.enterFreeMode();
@@ -225,6 +249,26 @@ class SessionController extends ChangeNotifier with WindowListener {
   Future<void> setFreeModeEnabled(bool enabled) async {
     await AppPreferences.setFreeModeEnabled(enabled);
     await _api.setFreeModeEnabled(enabled);
+  }
+
+  /// Tool mode always offers free mode (the "Modo livre" game card).
+  Future<void> setConsoleMode(bool enabled) async {
+    await AppPreferences.setConsoleMode(enabled);
+    await _api.setConsoleMode(enabled);
+    if (!enabled) {
+      await AppPreferences.setFreeModeEnabled(true);
+      await _api.setFreeModeEnabled(true);
+    }
+  }
+
+  Future<void> setMousePassword(String password) async {
+    await AppPreferences.setMousePassword(password);
+    await _api.setMousePassword(password.trim());
+  }
+
+  Future<void> setLobbyStartRule(String rule) async {
+    await AppPreferences.setLobbyStartRule(rule);
+    await _api.setLobbyStartRule(rule);
   }
 
   Future<void> setMatchSeconds(int seconds) async {
@@ -239,7 +283,17 @@ class SessionController extends ChangeNotifier with WindowListener {
       if (seconds != snapshot.matchSeconds.round()) {
         await _api.setMatchSeconds(seconds);
       }
-      final freeMode = await AppPreferences.freeModeEnabled();
+      // The server doesn't echo the password: always push it.
+      await _api.setMousePassword(await AppPreferences.mousePassword());
+      final rule = await AppPreferences.lobbyStartRule();
+      if (rule != snapshot.lobbyStartRule) {
+        await _api.setLobbyStartRule(rule);
+      }
+      final consoleMode = await AppPreferences.consoleMode();
+      if (consoleMode != snapshot.consoleMode) {
+        await _api.setConsoleMode(consoleMode);
+      }
+      final freeMode = !consoleMode || await AppPreferences.freeModeEnabled();
       if (freeMode != snapshot.freeModeEnabled) {
         await _api.setFreeModeEnabled(freeMode);
       }

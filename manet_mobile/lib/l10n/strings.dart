@@ -12,9 +12,50 @@ abstract class AppStrings {
   DisconnectStrings get disconnect;
   AndroidOnboardingStrings get androidOnboarding;
   MenuStrings get menu;
+  RelayStrings get relay;
+}
+
+/// Physical gamepad relay (a real controller attached to the phone/computer).
+abstract class RelayStrings {
+  String get title;
+  String offer(String padName);
+  String get sameMachineWarning;
+  String get padAnswerHint;
+  String get use;
+  String get notNow;
+  String get usePad;
+  String active(String padName);
+  String get stop;
+  String disconnected(String padName);
+  String get pickTitle;
 }
 
 abstract class MenuStrings {
+  String get enter;
+  String newSeat(int seat);
+  String lagTitle(int ms);
+  String lagTipHotspot(String name, String address);
+  String get lagTipRouter;
+  String get lagOk;
+  String get mousePasswordTitle;
+  String get mousePasswordHint;
+  String get mousePasswordWrong;
+  String get mousePasswordUnset;
+  String get mousePasswordEnter;
+  String get checkInTitle;
+  String get checkInHint;
+  String get checkInButton;
+  String get editFace;
+  String get consoleLobbyHint;
+  String get consoleWaitingHint;
+  String get lineupChooseHint;
+  String get lineupPickDedanha;
+  String get lineupPickZerinho;
+  String get lineupWait;
+  String get lineupAnnounceDedanha;
+  String get lineupAnnounceZerinho;
+  String get lineupYouPlay;
+  String get lineupYouBench;
   String get select;
   String get back;
   String get avatar;
@@ -24,6 +65,8 @@ abstract class MenuStrings {
   String playgroundHint(String owner);
   String get someone;
   String get jump;
+  String get loadingHint;
+  String get showGame;
   String get seat;
   String get seatsTitle;
   String get seatsHint;
@@ -31,6 +74,7 @@ abstract class MenuStrings {
   String you(String name);
   String get swap;
   String get freeSeat;
+  String get sitHere;
   String get goToBench;
   String get joinGame;
   String swapOffer(String name, String fromSeat, String toSeat);

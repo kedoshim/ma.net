@@ -347,6 +347,13 @@ void main() {
       await post('/api/session/play', {'gameId': sleeper['id']});
     });
     await settle(4500);
+    // The sleeper never opens a window: MaNet stays on the loading screen
+    // until it is told the game is up.
+    await shot('14a_game_loading');
+    await settle(16000);
+    await shot('14b_game_loading_slow');
+    await tester.runAsync(() => post('/api/session/game-ready', {}));
+    await settle(600);
     await shot('14_in_game');
     // Only the player who opened the overlay (phones[0]) can drive it.
     void press(String button) => phones[0].press(button);

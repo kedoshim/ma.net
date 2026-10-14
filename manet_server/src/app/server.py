@@ -12,6 +12,7 @@ from src.bootstrap.dependencies import build_dependencies
 from src.cli.debug_cli import DebugCLI
 from src.services.connection_service import ConnectionService
 from src.services.network_diagnostics_service import NetworkDiagnosticsService
+from src.app.security import admin_auth_middleware, load_admin_token, requires_admin
 
 import logging
 
@@ -31,7 +32,7 @@ def create_app(config):
     )
 
     LOG.info("Creating aiohttp web application...")
-    app = web.Application()
+    app = web.Application(middlewares=[admin_auth_middleware(load_admin_token())])
 
     cors = aiohttp_cors.setup(app, defaults={
         "*": aiohttp_cors.ResourceOptions(
@@ -70,8 +71,11 @@ def create_app(config):
         file_routes
     )
 
+    # Only what phones use is open to other origins; the desktop app is a
+    # native client and needs no CORS.
     for route in list(app.router.routes()):
-        cors.add(route)
+        if not requires_admin(route.method, route.resource.canonical):
+            cors.add(route)
 
     lifecycle = AppLifecycle(manager, connection_service, admin_panel)
     lifecycle.register_lifecycle(app)

@@ -114,6 +114,8 @@ class _LibraryViewState extends State<LibraryView>
     const {},
   );
   final Map<String, String?> _lastVotes = {};
+  // D-pad: where each cursor is gliding to (a card or chip center).
+  final Map<String, Offset> _hops = {};
   StreamSubscription<PadButtonEvent>? _buttons;
   Duration _lastTick = Duration.zero;
 
@@ -156,8 +158,11 @@ class _LibraryViewState extends State<LibraryView>
     super.dispose();
   }
 
-  Size? get _stackSize =>
-      (_stackKey.currentContext?.findRenderObject() as RenderBox?)?.size;
+  Size? get _stackSize {
+    final box = _stackKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.size;
+  }
 
   SessionSnapshot get _snapshot => context.read<SessionController>().snapshot;
 
@@ -208,7 +213,21 @@ class _LibraryViewState extends State<LibraryView>
       }
       if (!_parked(player)) {
         final input = gamepads.inputListenable(id).value;
-        position += _stickVelocity(input.stickX, input.stickY) * dt;
+        final velocity = _stickVelocity(input.stickX, input.stickY);
+        final hop = _hops[id];
+        if (velocity != Offset.zero) {
+          _hops.remove(id); // the stick takes over
+          position += velocity * dt;
+        } else if (hop != null) {
+          // Quick glide to the D-pad's target.
+          position = Offset.lerp(position, hop, 1 - math.exp(-dt * 20))!;
+          if ((position - hop).distance < 1) {
+            position = hop;
+            _hops.remove(id);
+          }
+        }
+      } else {
+        _hops.remove(id);
       }
       next[id] = Offset(
         position.dx.clamp(0.0, size.width),
@@ -405,6 +424,52 @@ class _LibraryViewState extends State<LibraryView>
         }
       case 'Y':
         _triggerEmote(id);
+      case 'UP' || 'DOWN' || 'LEFT' || 'RIGHT':
+        if (reading != null || player.vote != null) return;
+        _hop(id, event.button);
+    }
+  }
+
+  /// D-pad: the cursor jumps to the nearest card or chip in that direction.
+  /// With no card left on that side of the strip, it scrolls one card and
+  /// then jumps.
+  void _hop(String id, String direction, {bool scrolled = false}) {
+    final from = _hops[id] ?? _cursors.value[id];
+    if (from == null) return;
+    final d = switch (direction) {
+      'UP' => const Offset(0, -1),
+      'DOWN' => const Offset(0, 1),
+      'LEFT' => const Offset(-1, 0),
+      _ => const Offset(1, 0),
+    };
+    final grid = _rectOf(_gridKey);
+    Offset? best;
+    var bestScore = double.infinity;
+    for (final entry in _targetKeys.entries) {
+      final rect = _rectOf(entry.value);
+      if (rect == null) continue;
+      final center = rect.center;
+      // Cards scrolled out of the strip's viewport don't count.
+      if (_priority(entry.key) == 4 && !(grid?.contains(center) ?? false)) continue;
+      final v = center - from;
+      final along = v.dx * d.dx + v.dy * d.dy;
+      if (along <= 8) continue;
+      final across = (v.dx * d.dy - v.dy * d.dx).abs();
+      final score = along + across * 2;
+      if (score < bestScore) {
+        bestScore = score;
+        best = center;
+      }
+    }
+    if (best != null) {
+      _hops[id] = best;
+      return;
+    }
+    if (!scrolled && (direction == 'LEFT' || direction == 'RIGHT')) {
+      _stepScroll(direction == 'LEFT');
+      Future.delayed(const Duration(milliseconds: 320), () {
+        if (mounted) _hop(id, direction, scrolled: true);
+      });
     }
   }
 

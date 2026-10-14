@@ -25,7 +25,13 @@ class ControllerManager:
         # Serializes gamepad creation/destruction across awaits.
         self._slot_lock = asyncio.Lock()
         self._send_tasks: set[asyncio.Task] = set()
-        self._send_tasks: set[asyncio.Task] = set()
+        # Called with (old_device_id, new_device_id) when a reconnecting
+        # phone takes back its seat under a new id (SessionState moves its
+        # check-in, votes...).
+        self.on_device_replaced = None
+        # Console mode during a game: the seats are fixed. Phones without a
+        # seat wait on the bench and join from the overlay (SessionState).
+        self.bench_new_devices = False
 
     def set_main_loop(self, loop):
         self.main_loop = loop
@@ -102,6 +108,8 @@ class ControllerManager:
             self.notify_device(device_id, payload)
 
     def has_vacant_slot(self) -> bool:
+        if self.bench_new_devices:
+            return False  # joining goes through the overlay's seat list
         # Check if any existing slot is available
         if any(slot.is_available() for slot in self.slots):
             return True
@@ -143,9 +151,10 @@ class ControllerManager:
             controller_type = getattr(slot, 'controller_type', 'unknown')
             LOGGER.info("[LIFECYCLE] Cleaning up slot index=%s, controller_type=%s", slot_id, controller_type)
             try:
-                LOGGER.info("[LIFECYCLE] Retiring gamepad for slot index=%s", slot_id)
-                retire_gamepad(slot.gamepad)
-                del slot.gamepad
+                if slot.gamepad is not None:
+                    LOGGER.info("[LIFECYCLE] Retiring gamepad for slot index=%s", slot_id)
+                    retire_gamepad(slot.gamepad)
+                slot.gamepad = None
             except Exception:
                 LOGGER.exception("[LIFECYCLE] Error retiring gamepad for slot index=%s", slot_id)
 
@@ -155,8 +164,86 @@ class ControllerManager:
     def _existing_x360_count(self):
         return sum(
             1 for slot in self.slots
-            if slot.controller_type == "x360"
+            if slot.gamepad is not None and slot.controller_type == "x360"
         )
+
+    @property
+    def console_mode(self) -> bool:
+        return bool(getattr(self.config, "console_mode", False))
+
+    def _create_seat(self, index):
+        """Console mode: a seat with no virtual pad yet. Pads are plugged in
+        when a game starts (ensure_player_pads) and kept afterwards."""
+        slot = PlayerSlot(slot_id=index, gamepad=None, controller_type=self.config.controller_type)
+        self.slots.append(slot)
+        LOGGER.info("[LIFECYCLE] Created seat index=%d without a gamepad", index)
+        return slot
+
+    def _attach_pad(self, slot) -> bool:
+        gamepad, gp_type = create_gamepad(
+            self,
+            self.config.controller_type,
+            self._existing_x360_count(),
+            self.main_loop,
+            slot.slot_id,
+        )
+        if isinstance(gamepad, NullGamepad):
+            LOGGER.error("[LIFECYCLE] Failed to plug a gamepad into seat %d", slot.slot_id)
+            return False
+        slot.gamepad = gamepad
+        slot.controller_type = gp_type
+        LOGGER.info("[LIFECYCLE] Plugged %s gamepad into seat %d", gp_type, slot.slot_id)
+        return True
+
+    async def ensure_pads(self, min_seats: int = 0, every_seat: bool = False, pad_first: int = 0) -> int:
+        """Plug virtual pads into the seats with a player, the first
+        `pad_first` seats, or every seat, in seat order so the XInput order
+        follows the seats. Pads that already exist are kept. Also makes sure
+        there are at least `min_seats` seats. Returns how many were plugged in."""
+        created = 0
+        async with self._slot_lock:
+            while len(self.slots) < min(min_seats, 16):
+                self._create_seat(len(self.slots))
+            for slot in self.slots:
+                if slot.gamepad is not None:
+                    continue
+                if not (every_seat or slot.assigned_device_id or slot.slot_id < pad_first):
+                    continue
+                await asyncio.sleep(0)
+                if not self._attach_pad(slot):
+                    self._broadcast_limit_reached(sum(1 for s in self.slots if s.gamepad is not None))
+                    break
+                created += 1
+        if created:
+            for slot in self.slots:
+                if slot.assigned_device_id and slot.connected:
+                    self.notify_device(slot.assigned_device_id, {
+                        "type": "slots_updated",
+                        "total_slots": len(self.slots),
+                    })
+        return created
+
+    def needs_pads(self) -> bool:
+        return any(slot.gamepad is None and slot.assigned_device_id for slot in self.slots)
+
+    def _broadcast_limit_reached(self, created_count):
+        mode_display = "x•input" if self.config.controller_type == "x360" else ("d•input" if self.config.controller_type == "ds4" else "misto")
+        self.admin_panel.broadcast_event({
+            "type": "gamepad_creation_limit_reached",
+            "created": created_count,
+            "mode": self.config.controller_type,
+            "message": f"Não foi possível gerar mais controles. O limite foi ajustado para {created_count} controles no modo {mode_display}."
+        })
+
+    async def set_console_mode(self, enabled: bool):
+        enabled = bool(enabled)
+        if self.console_mode == enabled:
+            return
+        LOGGER.info("Console mode %s", "on" if enabled else "off")
+        self.config.console_mode = enabled
+        if not enabled:
+            # Tool mode: every seat is a plugged-in pad, as configured.
+            await self.ensure_pads(every_seat=True)
     
     def register_device(self, device_id, player_name=None, customization=None, lang="pt"):
         if not player_name or player_name.strip() == "":
@@ -259,6 +346,13 @@ class ControllerManager:
             LOGGER.info("Re-assigned device %s (%s) to existing slot %s (reservation reclaimed)", device_id, slot.player_name, slot.slot_id)
             return slot
 
+        twin = self._reserved_twin(device_id, player_name)
+        if twin is not None:
+            return twin
+
+        if self.bench_new_devices:
+            return None
+
         for slot in self.slots:
             if slot.is_available():
                 slot.assigned_device_id = device_id
@@ -270,6 +364,17 @@ class ControllerManager:
                 LOGGER.info("Assigned device %s (%s) to available slot %s", device_id, slot.player_name, slot.slot_id)
                 return slot
 
+        if self.console_mode:
+            if len(self.slots) >= 16:
+                return None
+            slot = self._create_seat(len(self.slots))
+            slot.assigned_device_id = device_id
+            slot.player_name = player_name or self.get_resolved_player_name(device_id)
+            slot.connected = True
+            self._apply_identity_to_slot(slot, device_id)
+            self.device_map[device_id] = slot.slot_id
+            return slot
+
         if self.config.auto_expand_slots:
             return self.create_and_assign_new_slot(
                 device_id,
@@ -277,6 +382,44 @@ class ControllerManager:
             )
 
         return None
+
+    def _reserved_twin(self, device_id, player_name):
+        """A phone that reloads can come back with a new device id (some
+        in-app browsers, e.g. a QR scanner's, don't keep it) but the same
+        name and face. If exactly one disconnected, reserved seat has that
+        identity, it is that phone: give it the seat back instead of a new
+        one and leaving a ghost."""
+        name = player_name or self.connected_devices.get(device_id, {}).get("name")
+        if not name:
+            return None
+        identity = self.get_device_identity(device_id)
+        matches = [
+            slot for slot in self.slots
+            if slot.assigned_device_id
+            and slot.assigned_device_id != device_id
+            and not slot.connected
+            and slot.assigned_device_id not in self.device_ws_map
+            and slot.player_name == name
+            and slot.color == identity.get("color")
+            and slot.face_text == identity.get("faceText")
+        ]
+        if len(matches) != 1:
+            return None
+        slot = matches[0]
+        old_id = slot.assigned_device_id
+        self.device_map.pop(old_id, None)
+        slot.assigned_device_id = device_id
+        slot.connected = True
+        slot.reserved_until = 0
+        self._apply_identity_to_slot(slot, device_id)
+        self.device_map[device_id] = slot.slot_id
+        LOGGER.info("Device %s (%s) took back seat %s of %s (same name and face)", device_id, name, slot.slot_id, old_id)
+        if self.on_device_replaced is not None:
+            try:
+                self.on_device_replaced(old_id, device_id)
+            except Exception:
+                LOGGER.exception("Failed to move session state from %s to %s", old_id, device_id)
+        return slot
 
     def create_and_assign_new_slot(self, device_id, player_name=None):
         if len(self.slots) >= getattr(self.config, "max_slots", 16):
@@ -557,7 +700,8 @@ class ControllerManager:
                     'reservedUntil': slot.reserved_until,
                     **self.get_slot_identity(slot),
                 } if slot.assigned_device_id else None,
-                'type': slot.controller_type
+                'type': slot.controller_type,
+                'hasPad': slot.gamepad is not None,
             }
             for i, slot in enumerate(self.slots)
         ]
@@ -662,9 +806,12 @@ class ControllerManager:
                 LOGGER.info("Controller mode changed to %s, recreating gamepads", mode)
                 await self._recreate_all_gamepads(slots if slots is not None else len(self.slots))
                 self.save_settings()
-            elif slots is not None:
+            elif slots is not None and not self.console_mode:
                 LOGGER.info("Resizing slots to %s", slots)
                 await self._resize_slots(slots)
+        if not self.console_mode and any(slot.gamepad is None for slot in self.slots):
+            # Seats left over from console mode get their pads.
+            await self.ensure_pads(every_seat=True)
 
 
     async def recreate_gamepads(self):
@@ -675,6 +822,9 @@ class ControllerManager:
             await self._recreate_all_gamepads(len(self.slots))
 
     async def _recreate_all_gamepads(self, new_slot_count: int):
+        if self.console_mode:
+            await self._replug_pads()
+            return
 
         LOGGER.info(f"Recreating gamepads to {new_slot_count} slots")
 
@@ -742,6 +892,32 @@ class ControllerManager:
         except Exception:
             LOGGER.exception("Failed to broadcast active layout")
 
+    async def _replug_pads(self):
+        """Console mode: unplug every pad and plug the same seats back in the
+        current mode. Seats and players stay put. Call with _slot_lock held."""
+        had_pad = [slot for slot in self.slots if slot.gamepad is not None]
+        LOGGER.info("Re-plugging %d gamepads as %s", len(had_pad), self.config.controller_type)
+        for slot in self.slots:
+            if slot.gamepad is not None:
+                try:
+                    retire_gamepad(slot.gamepad)
+                except Exception:
+                    LOGGER.exception("Failed to retire gamepad for seat %d", slot.slot_id)
+            slot.gamepad = None
+            slot.controller_type = self.config.controller_type
+        for index, slot in enumerate(had_pad):
+            if index >= 4:
+                await asyncio.sleep(0.35)  # same pacing as a full recreate
+            else:
+                await asyncio.sleep(0)
+            if not self._attach_pad(slot):
+                self._broadcast_limit_reached(index)
+                break
+        try:
+            self.broadcast_active_layout()
+        except Exception:
+            LOGGER.exception("Failed to broadcast active layout")
+
     async def _resize_slots(self, new_size: int):
         new_size = min(new_size, 16)
         current_size = len(self.slots)
@@ -790,9 +966,10 @@ class ControllerManager:
                 if slot.assigned_device_id:
                     self.unassign_slot(i)
                 try:
-                    LOGGER.info("[LIFECYCLE] Retiring gamepad for slot index=%d", i)
-                    retire_gamepad(slot.gamepad)
-                    del slot.gamepad
+                    if slot.gamepad is not None:
+                        LOGGER.info("[LIFECYCLE] Retiring gamepad for slot index=%d", i)
+                        retire_gamepad(slot.gamepad)
+                    slot.gamepad = None
                 except Exception:
                     LOGGER.exception("[LIFECYCLE] Failed to retire gamepad for slot index=%d", i)
             

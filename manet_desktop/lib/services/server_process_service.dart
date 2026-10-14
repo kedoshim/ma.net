@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../utils/demo_config.dart';
+import 'admin_auth.dart';
 
 enum ServerStartupStatus {
   success,
@@ -40,14 +41,32 @@ class ServerProcessService {
 
   List<String> get logs => List.unmodifiable(_logs);
 
-  void _log(String message) {
+  // Whether the server line being continued (a traceback) was echoed.
+  bool _echoingServerLine = false;
+
+  void _log(String message, {bool echo = true}) {
     final time = DateTime.now().toIso8601String().split('T').last;
     final formatted = '[$time] $message';
     _logs.add(formatted);
     if (_logs.length > _maxLogLines) {
       _logs.removeRange(0, _logs.length - _maxLogLines);
     }
-    debugPrint(formatted);
+    if (echo) debugPrint(formatted);
+  }
+
+  /// Server output is kept in [logs]; only warnings and errors (with their
+  /// tracebacks) are echoed to the console. Echoing every INFO line made
+  /// `flutter run` buffer the console output until it ran out of memory in
+  /// long sessions.
+  void _logServerLine(String stream, String line) {
+    final level = RegExp(r'\|\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*\|').firstMatch(line)?.group(1);
+    if (level != null) {
+      _echoingServerLine = level != 'DEBUG' && level != 'INFO';
+    } else if (stream == 'STDERR' && !_echoingServerLine) {
+      // Unformatted stderr (e.g. a crash) always shows.
+      _echoingServerLine = true;
+    }
+    _log('[$stream] $line', echo: _echoingServerLine);
   }
 
   String _resolveExecutablePath() {
@@ -164,6 +183,7 @@ class ServerProcessService {
     required int slots,
     required bool fixed,
     required String controllerMode,
+    bool consoleMode = false,
   }) async {
     _logs.clear();
     _log('Initializing server startup sequence...');
@@ -216,6 +236,7 @@ class ServerProcessService {
       if (!fixed && !isDemoMode) '--auto-expand',
       '--controller-type',
       controllerMode,
+      if (consoleMode) '--console-mode',
       if (isDemoMode) '--demo',
       // The server exits by itself (releasing its gamepads) when this app
       // process ends, however it ends.
@@ -231,6 +252,9 @@ class ServerProcessService {
       final process = await Process.start(
         executablePath,
         arguments,
+        // Passed in the environment, not on the command line, which any
+        // process on the machine can read.
+        environment: {'MANET_ADMIN_TOKEN': AdminAuth.rotate()},
         runInShell: false,
         workingDirectory: _resolveWorkingDirectory(),
       );
@@ -249,14 +273,14 @@ class ServerProcessService {
           .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen((line) {
-            if (line.trim().isNotEmpty) _log('[STDOUT] ${line.trim()}');
+            if (line.trim().isNotEmpty) _logServerLine('STDOUT', line.trim());
           });
 
       process.stderr
           .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
           .listen((line) {
-            if (line.trim().isNotEmpty) _log('[STDERR] ${line.trim()}');
+            if (line.trim().isNotEmpty) _logServerLine('STDERR', line.trim());
           });
     } catch (e) {
       _log('Failed to spawn process: $e');
@@ -393,6 +417,7 @@ class ServerProcessService {
       final request = await client
           .postUrl(Uri.parse('http://127.0.0.1:$port/api/server/shutdown'))
           .timeout(const Duration(milliseconds: 500));
+      AdminAuth.headers.forEach(request.headers.set);
       final response = await request.close().timeout(
         const Duration(milliseconds: 1000),
       );

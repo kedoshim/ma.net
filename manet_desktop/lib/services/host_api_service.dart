@@ -5,6 +5,7 @@ import 'package:manet_desktop/models/controller_branding.dart';
 import 'package:manet_desktop/models/player_face.dart';
 import 'package:manet_desktop/models/session_models.dart';
 import 'package:manet_desktop/theme/app_theme.dart';
+import 'package:manet_desktop/services/admin_auth.dart';
 import 'package:manet_desktop/services/admin_socket_service.dart';
 import 'package:flutter/material.dart';
 
@@ -413,6 +414,18 @@ class ControllerDeviceInfo {
       vendor = json['vendor'] as String? ?? 'generic';
 }
 
+/// A running program known to create virtual controllers.
+class VirtualPadApp {
+  final String name;
+  final String exe;
+  final int pid;
+
+  VirtualPadApp.fromJson(Map<String, dynamic> json)
+    : name = json['name'] as String? ?? '',
+      exe = json['exe'] as String? ?? '',
+      pid = json['pid'] as int? ?? 0;
+}
+
 class XinputSlotInfo {
   final int index;
   final String owner; // 'manet' | 'other' | 'free'
@@ -447,7 +460,9 @@ class ControllerInventory {
   final int physical;
   final int steam;
   final int playersWithoutXinput;
+  final int xinputTakenByOthers;
   final int otherServers;
+  final List<VirtualPadApp> virtualPadApps;
 
   ControllerInventory.fromJson(Map<String, dynamic> json)
     : controllerMode = json['controllerMode'] as String?,
@@ -458,7 +473,9 @@ class ControllerInventory {
       physical = _summary(json, 'physical'),
       steam = _summary(json, 'steam'),
       playersWithoutXinput = _summary(json, 'playersWithoutXinput'),
-      otherServers = (json['otherServers'] as List<dynamic>? ?? const []).length;
+      xinputTakenByOthers = _summary(json, 'xinputTakenByOthers'),
+      otherServers = (json['otherServers'] as List<dynamic>? ?? const []).length,
+      virtualPadApps = _list(json['virtualPadApps'], VirtualPadApp.fromJson);
 
   /// Something the host should look at: pads MaNet doesn't control are taking
   /// XInput slots, or players got no XInput slot at all.
@@ -494,7 +511,7 @@ class HostApiService {
     : baseUrl = 'http://$host:$port';
 
   Future<AssignementStat> fetchSlots() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/slots')).timeout(_requestTimeout);
+    final response = await AdminAuth.client.get(Uri.parse('$baseUrl/api/slots')).timeout(_requestTimeout);
     if (response.statusCode == 200) {
       return AssignementStat.fromJson(json.decode(response.body));
     } else {
@@ -503,7 +520,7 @@ class HostApiService {
   }
 
   Future<void> assignDevice(String deviceId, int slotIndex) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/slots/assign'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'deviceId': deviceId, 'slotIndex': slotIndex}),
@@ -514,7 +531,7 @@ class HostApiService {
   }
 
   Future<void> moveDevice(int fromSlot, int toSlot) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/slots/move'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'fromSlot': fromSlot, 'toSlot': toSlot}),
@@ -525,7 +542,7 @@ class HostApiService {
   }
 
   Future<void> swapDevices(int slotA, int slotB) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/slots/swap'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'slotA': slotA, 'slotB': slotB}),
@@ -536,7 +553,7 @@ class HostApiService {
   }
 
   Future<void> unassignDevice(int slotIndex) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/slots/unassign'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'slotIndex': slotIndex}),
@@ -556,7 +573,7 @@ class HostApiService {
     if (fixed != null) body['fixed'] = fixed;
     if (reservationTimeout != null) body['reservationTimeout'] = reservationTimeout;
 
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/server/reset-controllers'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode(body),
@@ -571,7 +588,7 @@ class HostApiService {
   // ------------------------------------------------------------- session
 
   Future<http.Response> _postJson(String path, [Map<String, dynamic>? body]) {
-    return http
+    return AdminAuth.client
         .post(
           Uri.parse('$baseUrl$path'),
           headers: {'Content-Type': 'application/json'},
@@ -582,7 +599,7 @@ class HostApiService {
 
   Future<SessionSnapshot> fetchSession() async {
     final response =
-        await http.get(Uri.parse('$baseUrl/api/session')).timeout(_requestTimeout);
+        await AdminAuth.client.get(Uri.parse('$baseUrl/api/session')).timeout(_requestTimeout);
     if (response.statusCode != 200) throw Exception('Failed to fetch session');
     return SessionSnapshot.fromJson(json.decode(response.body));
   }
@@ -629,6 +646,23 @@ class HostApiService {
   Future<void> setFreeModeEnabled(bool enabled) =>
       _postJson('/api/session/settings', {'freeModeEnabled': enabled});
 
+  Future<void> setLobbyZone(String deviceId, bool inside) =>
+      _postJson('/api/session/lobby-zone', {'deviceId': deviceId, 'inside': inside});
+
+  Future<void> setLineupZone(String deviceId, String? zone) =>
+      _postJson('/api/session/lineup-zone', {'deviceId': deviceId, 'zone': zone});
+
+  Future<void> cancelLineup() => _postJson('/api/session/cancel-lineup', {});
+
+  Future<void> setMousePassword(String password) =>
+      _postJson('/api/session/settings', {'mousePassword': password});
+
+  Future<void> setLobbyStartRule(String rule) =>
+      _postJson('/api/session/settings', {'lobbyStartRule': rule});
+
+  Future<void> setConsoleMode(bool enabled) =>
+      _postJson('/api/session/settings', {'consoleMode': enabled});
+
   /// MaNet steps aside: phones become plain gamepads for any game.
   Future<void> enterFreeMode() => _postJson('/api/session/free-mode');
 
@@ -646,12 +680,15 @@ class HostApiService {
   /// Asks the server to move MaNet's window onto the game's monitor.
   Future<void> placeOverlayWindow() => _postJson('/api/session/place-overlay');
 
+  /// The game is up (or: stop waiting for it and show the desktop).
+  Future<void> markGameReady() => _postJson('/api/session/game-ready');
+
   /// Asks the server to bring the running game's window to the front.
   Future<void> focusGame() => _postJson('/api/session/focus-game');
 
   /// Handle (HWND) of the window the players are playing in, if known.
   Future<int?> gameWindow() async {
-    final response = await http
+    final response = await AdminAuth.client
         .get(Uri.parse('$baseUrl/api/session/game-window'))
         .timeout(_requestTimeout);
     if (response.statusCode != 200) return null;
@@ -663,11 +700,13 @@ class HostApiService {
 
   /// Screenshot of the game taken when the overlay opened; [shotId] busts
   /// the image cache between openings.
-  String overlayShotUrl(int shotId) =>
-      '$baseUrl/api/session/overlay-shot?v=$shotId';
+  /// (Image widgets cannot send headers, so the token rides in the query.)
+  String overlayShotUrl(int shotId) => AdminAuth.withToken(
+    Uri.parse('$baseUrl/api/session/overlay-shot?v=$shotId'),
+  ).toString();
 
   Future<List<DisplayInfo>> fetchDisplays() async {
-    final response = await http
+    final response = await AdminAuth.client
         .get(Uri.parse('$baseUrl/api/displays'))
         .timeout(_requestTimeout);
     if (response.statusCode != 200) throw Exception('Failed to fetch displays');
@@ -678,7 +717,7 @@ class HostApiService {
 
   Future<List<GameEntry>> fetchGames() async {
     final response =
-        await http.get(Uri.parse('$baseUrl/api/games')).timeout(_requestTimeout);
+        await AdminAuth.client.get(Uri.parse('$baseUrl/api/games')).timeout(_requestTimeout);
     if (response.statusCode != 200) throw Exception('Failed to fetch games');
     return _parseGames(json.decode(response.body)['games']);
   }
@@ -697,22 +736,22 @@ class HostApiService {
     final body = json.encode(game.toJson());
     const headers = {'Content-Type': 'application/json'};
     final response = await (game.id.isEmpty
-            ? http.post(uri, headers: headers, body: body)
-            : http.put(uri, headers: headers, body: body))
+            ? AdminAuth.client.post(uri, headers: headers, body: body)
+            : AdminAuth.client.put(uri, headers: headers, body: body))
         .timeout(_requestTimeout);
     if (response.statusCode != 200) throw Exception('Failed to save game');
     return GameEntry.fromJson(json.decode(response.body)['game']);
   }
 
   Future<void> deleteGame(String gameId) async {
-    final response = await http
+    final response = await AdminAuth.client
         .delete(Uri.parse('$baseUrl/api/games/$gameId'))
         .timeout(_requestTimeout);
     if (response.statusCode != 200) throw Exception('Failed to delete game');
   }
 
   Future<ControllerInventory> fetchControllerInventory() async {
-    final response = await http
+    final response = await AdminAuth.client
         .get(Uri.parse('$baseUrl/api/controllers/inventory'))
         .timeout(_requestTimeout);
     if (response.statusCode == 200) {
@@ -723,7 +762,7 @@ class HostApiService {
 
   /// Unplugs and recreates MaNet's virtual pads; players keep their slots.
   Future<void> recreateControllers() async {
-    final response = await http
+    final response = await AdminAuth.client
         .post(Uri.parse('$baseUrl/api/controllers/recreate'))
         .timeout(_resetTimeout);
     if (response.statusCode != 200) {
@@ -733,7 +772,7 @@ class HostApiService {
 
   /// Closes other MaNet server processes; returns how many were closed.
   Future<int> closeStaleServers() async {
-    final response = await http
+    final response = await AdminAuth.client
         .post(Uri.parse('$baseUrl/api/controllers/close-stale-servers'))
         .timeout(_requestTimeout);
     if (response.statusCode != 200) {
@@ -744,7 +783,7 @@ class HostApiService {
   }
 
   Future<Map<String, dynamic>> getServerStatus() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/server/status')).timeout(_requestTimeout);
+    final response = await AdminAuth.client.get(Uri.parse('$baseUrl/api/server/status')).timeout(_requestTimeout);
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -758,7 +797,7 @@ class HostApiService {
   }
 
   Future<ConnectionSnapshot> fetchConnections() async {
-    final response = await http.get(
+    final response = await AdminAuth.client.get(
       Uri.parse('$baseUrl/api/server/connections'),
     ).timeout(_requestTimeout);
 
@@ -770,7 +809,7 @@ class HostApiService {
   }
 
   Future<DiagnosticsSnapshot> fetchDiagnostics() async {
-    final response = await http.get(
+    final response = await AdminAuth.client.get(
       Uri.parse('$baseUrl/api/server/diagnostics'),
     ).timeout(_requestTimeout);
 
@@ -782,7 +821,7 @@ class HostApiService {
   }
 
   Future<void> runDiagnosticsAction(String actionId) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/server/diagnostics/actions'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'actionId': actionId}),
@@ -794,7 +833,7 @@ class HostApiService {
   }
 
   Future<ConnectionInfo> selectConnection(String connectionId) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/server/connections/select'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'connectionId': connectionId}),
@@ -812,7 +851,7 @@ class HostApiService {
   }
 
   Future<ConnectionInfo> fetchConnectionInfo() async {
-    final response = await http.get(
+    final response = await AdminAuth.client.get(
       Uri.parse('$baseUrl/api/server/connection'),
     ).timeout(_requestTimeout);
 
@@ -824,16 +863,18 @@ class HostApiService {
   }
 
   String getQrCodeUrl([String? connectionId]) {
-    final uri = Uri.parse('$baseUrl/api/server/qrcode');
+    final uri = AdminAuth.withToken(Uri.parse('$baseUrl/api/server/qrcode'));
     if (connectionId == null || connectionId.isEmpty) {
       return uri.toString();
     }
-    return uri.replace(queryParameters: {'id': connectionId}).toString();
+    return uri
+        .replace(queryParameters: {...uri.queryParameters, 'id': connectionId})
+        .toString();
   }
 
   Future<PresetCatalog> fetchPresets() async {
     final response =
-        await http.get(Uri.parse('$baseUrl/api/presets?format=catalog')).timeout(_requestTimeout);
+        await AdminAuth.client.get(Uri.parse('$baseUrl/api/presets?format=catalog')).timeout(_requestTimeout);
 
     if (response.statusCode == 200) {
       return PresetCatalog.fromJson(json.decode(response.body));
@@ -842,7 +883,7 @@ class HostApiService {
   }
 
   Future<ControllerPreset> selectPreset(String presetId) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/presets/select'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'presetId': presetId}),
@@ -862,7 +903,7 @@ class HostApiService {
     required String name,
     required ControllerPresetLayout layout,
   }) async {
-    final response = await http.post(
+    final response = await AdminAuth.client.post(
       Uri.parse('$baseUrl/api/presets/custom'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'name': name, 'layout': layout.toJson()}),
@@ -882,7 +923,7 @@ class HostApiService {
     required String name,
     required ControllerPresetLayout layout,
   }) async {
-    final response = await http.put(
+    final response = await AdminAuth.client.put(
       Uri.parse('$baseUrl/api/presets/custom/$presetId'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'name': name, 'layout': layout.toJson()}),
@@ -898,7 +939,7 @@ class HostApiService {
   }
 
   Future<void> deleteCustomPreset(String presetId) async {
-    final response = await http.delete(
+    final response = await AdminAuth.client.delete(
       Uri.parse('$baseUrl/api/presets/custom/$presetId'),
     ).timeout(_requestTimeout);
 

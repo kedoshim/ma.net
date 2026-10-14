@@ -48,6 +48,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--console-mode",
+        action="store_true",
+        help="Create virtual pads only when a game starts"
+    )
+
+    parser.add_argument(
         "--static-path",
         type=Path,
         default=Path("../manet_mobile/build/web")
@@ -140,6 +146,7 @@ def main():
         max_slots=max_slots,
         controller_type=controller_type,
         auto_expand_slots=False if is_demo else args.auto_expand,
+        console_mode=args.console_mode,
         debug=args.debug,
         is_demo=is_demo,
         parent_pid=args.parent_pid,

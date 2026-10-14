@@ -1,8 +1,9 @@
 /// Mirrors the server's session state (manet_server/src/core/session_state.py).
-enum SessionPhase { lobby, library, tournament, inGame }
+enum SessionPhase { lobby, library, tournament, lineup, inGame }
 
 SessionPhase _phaseFromWire(String? value) => switch (value) {
   'tournament' => SessionPhase.tournament,
+  'lineup' => SessionPhase.lineup,
   'library' => SessionPhase.library,
   'in_game' => SessionPhase.inGame,
   _ => SessionPhase.lobby,
@@ -80,6 +81,82 @@ class LobbyRequest {
 DateTime _fromEpochSeconds(num seconds) =>
     DateTime.fromMillisecondsSinceEpoch((seconds * 1000).round());
 
+/// Console mode: a game has fewer seats than players, so the group decides
+/// who plays first (server: manet_server/src/core/lineup.py).
+class LineupState {
+  final String gameId;
+  final int seats;
+  /// choose | pick | reveal | done
+  final String stage;
+  final DateTime? endsAt;
+  final List<String> queue;
+  /// deviceId -> 'play' | 'bench' (null: in between).
+  final Map<String, String?> zones;
+  /// 'out': decided players sit out; 'in': they play.
+  final String? mode;
+  final int needed;
+  final List<String> decided;
+  final List<String> candidates;
+  final int round;
+  /// 'dedanha' | 'zerinho'
+  final String? game;
+  final List<String> picked;
+  final Map<String, int>? picks;
+  final Map<String, dynamic>? result;
+  final List<String> chosen;
+  final List<String> bench;
+
+  const LineupState({
+    required this.gameId,
+    required this.seats,
+    required this.stage,
+    required this.endsAt,
+    required this.queue,
+    required this.zones,
+    required this.mode,
+    required this.needed,
+    required this.decided,
+    required this.candidates,
+    required this.round,
+    required this.game,
+    required this.picked,
+    required this.picks,
+    required this.result,
+    required this.chosen,
+    required this.bench,
+  });
+
+  static List<String> _ids(dynamic raw) =>
+      (raw as List<dynamic>? ?? const []).cast<String>();
+
+  factory LineupState.fromJson(Map<String, dynamic> json) {
+    final endsAt = json['endsAt'] as num?;
+    final picks = json['picks'] as Map<String, dynamic>?;
+    return LineupState(
+      gameId: json['gameId'] as String? ?? '',
+      seats: json['seats'] as int? ?? 1,
+      stage: json['stage'] as String? ?? 'choose',
+      endsAt: endsAt == null ? null : _fromEpochSeconds(endsAt),
+      queue: _ids(json['queue']),
+      zones: {
+        for (final e in (json['zones'] as Map<String, dynamic>? ?? const {}).entries)
+          e.key: e.value as String?,
+      },
+      mode: json['mode'] as String?,
+      needed: json['needed'] as int? ?? 0,
+      decided: _ids(json['decided']),
+      candidates: _ids(json['candidates']),
+      round: json['round'] as int? ?? 0,
+      game: json['game'] as String?,
+      picked: _ids(json['picked']),
+      picks: picks == null ? null : {for (final e in picks.entries) e.key: e.value as int},
+      result: json['result'] as Map<String, dynamic>?,
+      chosen: _ids(json['chosen']),
+      bench: _ids(json['bench']),
+    );
+  }
+}
+
 class RunningGameInfo {
   final String id;
   final String name;
@@ -108,11 +185,23 @@ class SessionSnapshot {
   /// False while a MaNet-launched game is not the foreground window; input
   /// is then paused so it can't leak into other games.
   final bool gameInFront;
+  /// False from a launch until the game's window shows up (loading screen).
+  final bool gameReady;
+  final DateTime? launchStartedAt;
   final TournamentState? tournament;
   final double matchSeconds;
   /// MaNet stepped aside: phones are plain gamepads for any game.
   final bool freeMode;
   final bool freeModeEnabled;
+  /// Console mode (no slot settings, pads created per game) or tool mode.
+  final bool consoleMode;
+  /// Console mode: checked-in players in arrival order.
+  final List<String> queue;
+  /// Console lobby: 'majority' or 'all' must leave through the right edge.
+  final String lobbyStartRule;
+  /// Console lobby: checked-in players standing in the "play" area.
+  final Set<String> playZone;
+  final LineupState? lineup;
   final LobbyCountdown? lobbyCountdown;
   final LobbyRequest? lobbyRequest;
   /// deviceId -> gameId whose details that player reads on their phone.
@@ -131,10 +220,17 @@ class SessionSnapshot {
     this.overlayShotId,
     this.overlayOwner,
     this.gameInFront = true,
+    this.gameReady = true,
+    this.launchStartedAt,
     this.tournament,
     this.matchSeconds = 10,
     this.freeMode = false,
     this.freeModeEnabled = true,
+    this.consoleMode = false,
+    this.queue = const [],
+    this.lobbyStartRule = 'majority',
+    this.playZone = const {},
+    this.lineup,
     this.lobbyCountdown,
     this.lobbyRequest,
     this.reading = const {},
@@ -176,12 +272,25 @@ class SessionSnapshot {
       overlayShotId: json['overlayShotId'] as int?,
       overlayOwner: json['overlayOwner'] as String?,
       gameInFront: json['gameInFront'] != false,
+      gameReady: json['gameReady'] != false,
+      launchStartedAt: json['launchStartedAt'] == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              ((json['launchStartedAt'] as num) * 1000).round(),
+            ),
       tournament: json['tournament'] == null
           ? null
           : TournamentState.fromJson(json['tournament'] as Map<String, dynamic>),
       matchSeconds: (json['matchSeconds'] as num?)?.toDouble() ?? 10,
       freeMode: json['freeMode'] == true,
       freeModeEnabled: json['freeModeEnabled'] != false,
+      consoleMode: json['consoleMode'] == true,
+      queue: (json['queue'] as List<dynamic>? ?? const []).cast<String>(),
+      lobbyStartRule: json['lobbyStartRule'] == 'all' ? 'all' : 'majority',
+      playZone: {...(json['playZone'] as List<dynamic>? ?? const []).cast<String>()},
+      lineup: json['lineup'] == null
+          ? null
+          : LineupState.fromJson(json['lineup'] as Map<String, dynamic>),
       lobbyCountdown: lobbyCountdown == null
           ? null
           : LobbyCountdown(
@@ -308,7 +417,13 @@ class GameEntry {
     this.screenshots = const [],
   });
 
-  bool fits(int players) => players >= minPlayers && players <= maxPlayers;
+  /// Console mode: games with fewer seats than players fit too, a lineup
+  /// decides who plays first. Kept in sync with the session by
+  /// SessionController.
+  static bool seatsCanRotate = false;
+
+  bool fits(int players) =>
+      players >= minPlayers && (seatsCanRotate || players <= maxPlayers);
 
   factory GameEntry.fromJson(Map<String, dynamic> json) => GameEntry(
     id: json['id'] as String? ?? '',

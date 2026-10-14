@@ -107,4 +107,74 @@ void main() {
     final b = centerOf(tester, 1);
     expect(b.dy, lessThan(a.dy - 40), reason: 'b should be standing on a');
   });
+
+  testWidgets('the D-pad rolls the face and up jumps', (tester) async {
+    await pumpPlayground(tester, ['a']);
+    await run(tester, const Duration(seconds: 2));
+    final start = centerOf(tester, 0);
+    pads.events.add(const PadButtonEvent('a', 'RIGHT', true));
+    await run(tester, const Duration(milliseconds: 400));
+    pads.events.add(const PadButtonEvent('a', 'RIGHT', false));
+    expect(centerOf(tester, 0).dx, greaterThan(start.dx + 40));
+    await run(tester, const Duration(seconds: 1));
+    final resting = centerOf(tester, 0).dy;
+    pads.events.add(const PadButtonEvent('a', 'UP', true));
+    await run(tester, const Duration(milliseconds: 150));
+    expect(centerOf(tester, 0).dy, lessThan(resting - 40));
+  });
+
+  testWidgets('the one on top falls off when the one below walks away', (tester) async {
+    await pumpPlayground(tester, ['a', 'b'], visible: ['a']);
+    pads.updateJoystick('a', 1, 0);
+    await run(tester, const Duration(seconds: 2));
+    pads.updateJoystick('a', 0, 0);
+    await showPlayground(tester, ['a', 'b']);
+    pads.updateJoystick('b', -1, 0);
+    await run(tester, const Duration(seconds: 2));
+    pads.updateJoystick('b', 1, 0);
+    for (var i = 0; i < 6; i++) {
+      pads.events.add(const PadButtonEvent('b', 'A', true));
+      await run(tester, const Duration(milliseconds: 500));
+    }
+    pads.updateJoystick('b', 0, 0);
+    await run(tester, const Duration(seconds: 2));
+    expect(centerOf(tester, 1).dy, lessThan(centerOf(tester, 0).dy - 40), reason: 'b stands on a');
+
+    // a walks away to the left: b loses its footing and lands on the floor.
+    pads.updateJoystick('a', -1, 0);
+    await run(tester, const Duration(seconds: 2));
+    pads.updateJoystick('a', 0, 0);
+    await run(tester, const Duration(seconds: 1));
+    expect(
+      (centerOf(tester, 1).dy - centerOf(tester, 0).dy).abs(),
+      lessThan(4),
+      reason: 'both on the floor',
+    );
+  });
+
+  testWidgets('holding the emote blows the face up and shoves a neighbor', (tester) async {
+    await pumpPlayground(tester, ['a', 'b'], visible: ['a']);
+    // 'a' parks against the left wall, then 'b' drops in and rolls next to it.
+    pads.updateJoystick('a', -1, 0);
+    await run(tester, const Duration(seconds: 2));
+    pads.updateJoystick('a', 0, 0);
+    await showPlayground(tester, ['a', 'b']);
+    pads.updateJoystick('b', -1, 0);
+    await run(tester, const Duration(seconds: 2));
+    pads.updateJoystick('b', 0, 0);
+    await run(tester, const Duration(milliseconds: 500));
+    final normal = tester.getSize(find.byType(PlayerFaceIndicator).at(0)).width;
+    final bBefore = centerOf(tester, 1).dx;
+
+    pads.events.add(const PadButtonEvent('a', 'Y', true));
+    await run(tester, const Duration(milliseconds: 1600));
+    final blown = tester.getSize(find.byType(PlayerFaceIndicator).at(0)).width;
+    expect(blown, greaterThan(normal * 2), reason: 'a grows while Y is held');
+    expect(centerOf(tester, 1).dx, greaterThan(bBefore + 40), reason: 'b gets shoved away');
+
+    pads.events.add(const PadButtonEvent('a', 'Y', false));
+    await run(tester, const Duration(seconds: 1));
+    final after = tester.getSize(find.byType(PlayerFaceIndicator).at(0)).width;
+    expect(after, closeTo(normal, 2), reason: 'back to normal after letting go');
+  });
 }

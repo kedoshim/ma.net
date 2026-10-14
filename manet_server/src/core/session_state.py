@@ -19,8 +19,12 @@ import random
 import time
 from enum import Enum
 
+import psutil
+
 from src.core.slot_handler import reset_slot_gamepad
 from src.core.game_library import resolve_settings
+from src.core import lineup as lineup_rules
+from src.core.lineup import Lineup
 from src.core.tournament import (
     ALL_VOTED_GRACE_SECONDS,
     CHAMPION_SECONDS,
@@ -38,11 +42,33 @@ from src.services.window_placement import (
     foreground_window,
     is_window,
     list_displays,
+    describe_window,
     move_to_monitor,
+    visible_windows,
     window_monitor,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+# Waiting for a launched game to show up: its window must stay up this long
+# (splash screens count: something is visibly happening). There is no
+# timeout: MaNet stays on the loading screen until the window shows up or
+# someone skips the wait (START / host button) or cancels.
+GAME_READY_STABLE_SECONDS = 1.0
+GAME_READY_POLL_SECONDS = 0.4
+# Players can only skip the wait (START) after this, so an early tap doesn't
+# show the bare desktop.
+GAME_READY_MANUAL_AFTER_SECONDS = 8.0
+# Windows that appearing after a launch don't mean "the game is up" (store
+# launchers, the shell). Lower-case process names.
+NOT_THE_GAME = {
+    "explorer.exe", "steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe",
+    "epicwebhelper.exe", "galaxyclient.exe", "eadesktop.exe", "ubisoftconnect.exe",
+    "upc.exe", "battle.net.exe", "searchhost.exe", "startmenuexperiencehost.exe",
+    "shellexperiencehost.exe", "textinputhost.exe", "gamebar.exe"
+    # Console windows of command-line launchers (not the game itself).
+    "windowsterminal.exe", "conhost.exe", "openconsole.exe",
+}
 
 COUNTDOWN_SECONDS = 3.0
 # Everyone ready in the lobby: the game selection opens after this.
@@ -56,10 +82,17 @@ class SessionPhase(str, Enum):
     LIBRARY = "library"
     # Elimination tournament between the games voted in the library.
     TOURNAMENT = "tournament"
+    # Console mode: more players than the game's seats, deciding who plays.
+    LINEUP = "lineup"
     IN_GAME = "in_game"
 
 
-MENU_PHASES = (SessionPhase.LOBBY, SessionPhase.LIBRARY, SessionPhase.TOURNAMENT)
+MENU_PHASES = (
+    SessionPhase.LOBBY,
+    SessionPhase.LIBRARY,
+    SessionPhase.TOURNAMENT,
+    SessionPhase.LINEUP,
+)
 
 
 class InputMode(str, Enum):
@@ -111,6 +144,11 @@ class SessionState:
         # games started through a launcher, which we can't track by pid).
         self.game_hwnd: int | None = None
         self._guard_task: asyncio.Task | None = None
+        # False from launch until the game's window shows up; MaNet keeps a
+        # loading screen (and the phones) until then.
+        self.game_ready = True
+        self.launch_started_at: float | None = None
+        self._ready_task: asyncio.Task | None = None
         self._last_phone_payloads: dict[str, dict] = {}
         # target deviceId -> (requesting deviceId, expiry timestamp)
         self._swap_offers: dict[str, tuple[str, float]] = {}
@@ -128,6 +166,27 @@ class SessionState:
         self._lobby_request_task: asyncio.Task | None = None
         # deviceId -> gameId whose details that phone is reading.
         self.reading: dict[str, str] = {}
+        # Players seen at the last sync; lets the selection screens fall back
+        # to the lobby when the last phone leaves (but not when the host
+        # opened them with nobody connected).
+        self._last_player_count = 0
+        self._pads_task: asyncio.Task | None = None
+        # Console mode: check-in order (who arrived first), the players
+        # whose face stands in the lobby's "play" area, and the lineup.
+        self.queue: list[str] = []
+        self.play_zone: set[str] = set()
+        # Console lobby: when the game selection starts counting down —
+        # "majority" or "all" of the checked-in players past the right edge
+        # (and nobody still making their face either way).
+        self.lobby_start_rule = "majority"
+        # Console mode: mouse mode takes over the PC, so it needs the host's
+        # password (except in free mode, where the phones are tools anyway).
+        self.mouse_password = ""
+        # Console mode in a game: how many controllers the game takes.
+        self.seat_limit = 16
+        self.lineup: Lineup | None = None
+        self._lineup_task: asyncio.Task | None = None
+        manager.on_device_replaced = self._device_replaced
 
     # ---------------------------------------------------------------- players
 
@@ -143,13 +202,116 @@ class SessionState:
         players = self.player_ids()
         return bool(players) and all(p in self.ready for p in players)
 
+    @property
+    def console(self) -> bool:
+        return self.manager.console_mode
+
+    def present_ids(self) -> set[str]:
+        """Phones connected right now, seated or on the bench."""
+        return set(self.manager.device_ws_map)
+
+    def checked_in(self) -> list[str]:
+        """Console mode: who finished the check-in, in arrival order."""
+        return [d for d in self.queue if d in self.ready]
+
+    def _device_replaced(self, old: str, new: str):
+        """A phone came back under a new id: it keeps its check-in, place in
+        the queue, vote and "ready" spot."""
+        if old in self.ready:
+            self.ready.discard(old)
+            self.ready.add(new)
+        self.queue = [new if d == old else d for d in self.queue]
+        if old in self.play_zone:
+            self.play_zone.discard(old)
+            self.play_zone.add(new)
+        if old in self.votes:
+            self.votes[new] = self.votes.pop(old)
+
+    def check_in(self, device_id: str) -> bool:
+        """Console mode: the phone finished name + face and wants to play."""
+        if not self.console or device_id not in self.present_ids():
+            return False
+        if device_id not in self.queue:
+            self.queue.append(device_id)
+        if device_id not in self.ready:
+            self.ready.add(device_id)
+            LOGGER.info("Device %s checked in", device_id)
+            self.manager.pulse_device(device_id)
+        self._check_lobby_countdown()
+        self.broadcast()
+        return True
+
+    def check_out(self, device_id: str) -> bool:
+        """Cancel on the phone: out of the "play" queue back into the
+        playground, or (already in the playground) back to editing name and
+        face."""
+        if device_id in self.play_zone:
+            self.play_zone.discard(device_id)
+            self._check_lobby_countdown()
+            self.broadcast()
+            return True
+        if device_id not in self.ready:
+            return False
+        self.ready.discard(device_id)
+        self._check_lobby_countdown()
+        self.broadcast()
+        return True
+
+    def mouse_mode_check(self, password) -> str | None:
+        """None when this phone may take the mouse; otherwise an error code."""
+        if not self.console or self.free_mode:
+            return None
+        if not self.mouse_password:
+            return "mouse_password_unset"
+        if not password:
+            return "mouse_password_required"
+        if str(password) != self.mouse_password:
+            return "mouse_password_wrong"
+        return None
+
+    def set_lobby_start_rule(self, rule: str):
+        self.lobby_start_rule = "all" if rule == "all" else "majority"
+        self._check_lobby_countdown()
+
+    def set_lobby_zone(self, device_id: str, inside: bool) -> bool:
+        """The desktop reports whose face stands in the lobby's play area."""
+        if self.phase != SessionPhase.LOBBY or device_id not in self.ready:
+            return False
+        before = device_id in self.play_zone
+        if inside:
+            self.play_zone.add(device_id)
+        else:
+            self.play_zone.discard(device_id)
+        if before != inside:
+            self._check_lobby_countdown()
+            self.broadcast()
+        return True
+
     def sync_players(self):
         """Drop state of players who left; re-check votes. Called whenever
         slots change."""
         players = set(self.player_ids())
+        if self.console:
+            # Check-ins belong to the phone, seated or benched.
+            present = self.present_ids()
+            self.queue = [d for d in self.queue if d in present]
+            self.play_zone &= self.ready & present
+            if self.lineup is not None:
+                self.lineup.drop(present)
+        had_players = self._last_player_count > 0
+        self._last_player_count = len(players)
+        if (not players and had_players
+                and self.phase in (SessionPhase.LIBRARY, SessionPhase.TOURNAMENT, SessionPhase.LINEUP)):
+            # Everyone left the game selection: nobody is choosing anymore.
+            # Deferred so the phase doesn't change while slots are updated.
+            self._clear_lobby_request()
+            self.reading.clear()
+            asyncio.get_running_loop().call_soon(self._lobby_if_empty)
+            return
         changed = False
+        keep_ready = self.present_ids() if self.console else players
         for device_id in list(self.ready):
-            if device_id not in players:
+            if device_id not in keep_ready:
                 self.ready.discard(device_id)
                 changed = True
         for device_id in list(self.votes):
@@ -160,7 +322,7 @@ class SessionState:
             self._votes_changed()
         if self.tournament is not None:
             self.tournament.drop_voters(players)
-        if self.overlay_owner is not None and self.overlay_owner not in players:
+        if self.overlay_owner is not None and self.overlay_owner not in self.present_ids():
             # The opener left; let anyone drive the overlay so it can't get stuck.
             self.overlay_owner = None
         for device_id in list(self.reading):
@@ -168,8 +330,30 @@ class SessionState:
                 del self.reading[device_id]
         self._sync_lobby_request(players)
         self._check_lobby_countdown()
+        if self.phase == SessionPhase.IN_GAME:
+            # Console mode: someone joined or changed seats mid-game.
+            self._schedule_pads()
         # Always publish: a player joining changes "everyone ready" too.
         self.broadcast()
+
+    def _schedule_pads(self):
+        """Console mode: plug in pads for seated players that have none."""
+        if not self.manager.console_mode or not self.manager.needs_pads():
+            return
+        if self._pads_task is not None and not self._pads_task.done():
+            return
+
+        async def plug():
+            if await self.manager.ensure_pads():
+                self.admin_panel.broadcast_update()
+
+        self._pads_task = asyncio.get_running_loop().create_task(plug())
+
+    def _lobby_if_empty(self):
+        if (not self.player_ids()
+                and self.phase in (SessionPhase.LIBRARY, SessionPhase.TOURNAMENT, SessionPhase.LINEUP)):
+            LOGGER.info("Everyone left the game selection; back to the lobby")
+            self.back_to_lobby()
 
     # ------------------------------------------------------------ input mode
 
@@ -179,7 +363,8 @@ class SessionState:
     def _refresh_input_mode(self):
         # The screen decides, not window focus: the lobby and the game
         # selection always own the phones.
-        menu = self.overlay_open or self.phase in MENU_PHASES
+        loading = self.phase == SessionPhase.IN_GAME and not self.game_ready
+        menu = self.overlay_open or loading or self.phase in MENU_PHASES
         if menu:
             mode = InputMode.MENU
         elif self.phase == SessionPhase.IN_GAME and not self.game_in_front:
@@ -216,6 +401,8 @@ class SessionState:
         # console-style START/SELECT keep working too.
         # A ready / select, B not ready / cancel my selection, X info and
         # Y emote (desktop only); START/SELECT keep working on real pads.
+        if self.phase == SessionPhase.LOBBY and self.console:
+            return  # A jumps in the playground; check-in happens on the phone
         if self.phase == SessionPhase.LOBBY:
             if button in ("A", "START") and device_id not in self.ready:
                 self.ready.add(device_id)
@@ -233,11 +420,20 @@ class SessionState:
                 self.request_lobby(device_id)
             elif button == "START" and self.countdown_game_id is None:
                 self.decide()
+        elif self.phase == SessionPhase.IN_GAME and not self.game_ready:
+            # Loading screen: START shows the game when detection can't tell
+            # (some games only open after a launcher click).
+            waited = time.time() - (self.launch_started_at or 0)
+            if button == "START" and waited >= GAME_READY_MANUAL_AFTER_SECONDS:
+                self.mark_game_ready(reason="player")
 
     def handle_home_pressed(self, device_id: str):
-        """A phone's Home button toggles the in-game overlay."""
-        if self.phase != SessionPhase.IN_GAME or device_id not in self.player_ids():
+        """A phone's Home button toggles the in-game overlay (also from the
+        bench: that's where you join the game)."""
+        if self.phase != SessionPhase.IN_GAME or device_id not in self.present_ids():
             return
+        if not self.game_ready:
+            return  # still on the loading screen
         if self.overlay_open and self.overlay_owner not in (None, device_id):
             return  # someone else is using the overlay
         LOGGER.info("Home pressed by device %s", device_id)
@@ -386,7 +582,24 @@ class SessionState:
     def _check_lobby_countdown(self):
         """Everyone ready starts the countdown to the game selection; anyone
         un-readying (or someone new arriving) stops it."""
-        should_run = self.phase == SessionPhase.LOBBY and self.all_ready()
+        if self.console:
+            # Console mode: the majority of the checked-in players stands in
+            # the "play" area of the playground.
+            # Console mode: nobody is still making their face, and the
+            # majority (or everyone, per lobby_start_rule) of the checked-in
+            # players left through the right edge.
+            players = self.player_ids()
+            checked = [d for d in self.checked_in() if d in players]
+            in_zone = sum(1 for d in checked if d in self.play_zone)
+            needed = len(checked) if self.lobby_start_rule == "all" else len(checked) // 2 + 1
+            should_run = (
+                self.phase == SessionPhase.LOBBY
+                and bool(checked)
+                and len(checked) == len(players)
+                and in_zone >= needed
+            )
+        else:
+            should_run = self.phase == SessionPhase.LOBBY and self.all_ready()
         if should_run and self._lobby_countdown_task is None:
             self.lobby_countdown_ends_at = time.time() + LOBBY_COUNTDOWN_SECONDS
             self._lobby_countdown_task = asyncio.get_running_loop().create_task(
@@ -562,12 +775,16 @@ class SessionState:
         LOGGER.info("Entering free mode")
         self.cancel_countdown(broadcast=False)
         self.votes.clear()
-        self.ready.clear()
+        if not self.console:
+            self.ready.clear()
         self.last_error = None
         self.free_mode = True
         self.running = None
         self.game_in_front = True
+        if self.console:
+            self._fix_seats(16)
         self._set_phase(SessionPhase.IN_GAME)
+        self._schedule_pads()
         self.broadcast()
         return True
 
@@ -578,9 +795,12 @@ class SessionState:
         if self.phase == SessionPhase.IN_GAME:
             return
         self._stop_tournament()
+        self._stop_lineup()
         self.cancel_countdown(broadcast=False)
         self.votes.clear()
-        self.ready.clear()
+        if not self.console:
+            self.ready.clear()
+        self.play_zone.clear()
         self._set_phase(SessionPhase.LOBBY)
         self.broadcast()
 
@@ -593,8 +813,11 @@ class SessionState:
             game = self.library.get(game_id)
             players = len(self.player_ids())
             # Players can only vote for games that fit everyone; the host can
-            # still force any game with a click.
-            if game is None or not game["minPlayers"] <= players <= game["maxPlayers"]:
+            # still force any game with a click. Console mode also takes
+            # games with fewer seats: a lineup decides who plays first.
+            if game is None or players < game["minPlayers"]:
+                return False
+            if players > game["maxPlayers"] and not self.console:
                 return False
         previous = self.votes.get(device_id)
         if game_id is None:
@@ -749,15 +972,135 @@ class SessionState:
         self.countdown_ends_at = None
         await self.launch(game_id)
 
+    # -------------------------------------------------------------- lineup
+
+    def start_lineup(self, game_id: str) -> bool:
+        game = self.library.get(game_id)
+        if game is None or self.phase not in (SessionPhase.LIBRARY, SessionPhase.LOBBY):
+            return False
+        players = self.player_ids()
+        queue = [d for d in self.queue if d in players] + [d for d in players if d not in self.queue]
+        LOGGER.info("Lineup for %s: %d players, %d seats", game["name"], len(players), game["maxPlayers"])
+        self.cancel_countdown(broadcast=False)
+        self.lineup = Lineup(game_id, game["maxPlayers"], queue)
+        self._set_phase(SessionPhase.LINEUP)
+        for device_id in players:
+            self.manager.pulse_device(device_id)
+        self._lineup_task = asyncio.get_running_loop().create_task(self._run_lineup())
+        self.broadcast()
+        return True
+
+    def _stop_lineup(self):
+        if self._lineup_task is not None:
+            self._lineup_task.cancel()
+        self._lineup_task = None
+        self.lineup = None
+
+    def cancel_lineup(self):
+        """Back to the game selection (host)."""
+        if self.phase != SessionPhase.LINEUP:
+            return
+        self._stop_lineup()
+        self._set_phase(SessionPhase.LIBRARY)
+        self.broadcast()
+
+    def lineup_zone(self, device_id: str, zone: str | None) -> bool:
+        l = self.lineup
+        if l is None or not l.set_zone(device_id, zone):
+            return False
+        self.broadcast()
+        return True
+
+    def lineup_pick(self, device_id: str, value) -> bool:
+        l = self.lineup
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return False
+        if l is None or not l.pick(device_id, value):
+            return False
+        self.manager.pulse_device(device_id, strong=0.3, weak=0.2, seconds=0.05)
+        if l.ends_at and l.everyone_picked():
+            l.ends_at = min(l.ends_at, time.time() + lineup_rules.ALL_PICKED_GRACE_SECONDS)
+        self.broadcast()
+        return True
+
+    async def _wait_until(self, l: Lineup):
+        while time.time() < (l.ends_at or 0):
+            await asyncio.sleep(0.1)
+
+    async def _run_lineup(self):
+        l = self.lineup
+        try:
+            l.ends_at = time.time() + lineup_rules.CHOOSE_SECONDS
+            self.broadcast()
+            await self._wait_until(l)
+            l.close_choose()
+            while l.stage == "announce":
+                l.ends_at = time.time() + lineup_rules.ANNOUNCE_SECONDS
+                self.broadcast()
+                await self._wait_until(l)
+                l.begin_pick()
+                l.ends_at = time.time() + lineup_rules.PICK_SECONDS
+                self.broadcast()
+                await self._wait_until(l)
+                l.close_round()
+                l.ends_at = time.time() + lineup_rules.REVEAL_SECONDS
+                self.broadcast()
+                await self._wait_until(l)
+                l.next_round()
+            l.ends_at = time.time() + lineup_rules.DONE_SECONDS
+            self.broadcast()
+            await self._wait_until(l)
+        except asyncio.CancelledError:
+            return
+        self._lineup_task = None
+        self._seat_lineup(l)
+        self.lineup = None
+        # launch() needs to start from the library phase on failure too.
+        self._set_phase(SessionPhase.LIBRARY)
+        await self.launch(l.game_id, lineup_done=True)
+        if self.phase == SessionPhase.LIBRARY:
+            self.broadcast()
+
+    def _seat_lineup(self, l: Lineup):
+        """Chosen players take the first seats, the others go to the bench."""
+        present = self.present_ids()
+        chosen = [d for d in l.chosen if d in present]
+        for device_id in l.bench:
+            slot = self.manager.device_map.get(device_id)
+            if slot is not None:
+                reset_slot_gamepad(self.manager.slots[slot])
+                self.manager.unassign_slot(slot)
+        for device_id in chosen:
+            slot = self.manager.device_map.get(device_id)
+            if slot is not None and slot < l.seats:
+                continue
+            free = next(
+                (s for s in self.manager.slots[: l.seats] if s.assigned_device_id is None),
+                None,
+            )
+            if free is None:
+                continue
+            if slot is not None:
+                self.manager.unassign_slot(slot)
+            name = self.manager.connected_devices.get(device_id, {}).get("name")
+            self.manager.assign_to_slot(device_id, free.slot_id, name)
+        self.admin_panel.broadcast_update()
+
     # -------------------------------------------------------------- launch
 
-    async def launch(self, game_id: str):
+    async def launch(self, game_id: str, lineup_done: bool = False):
         game = self.library.get(game_id)
         if game is None:
             return
         self.last_error = None
+        if (self.console and not lineup_done
+                and len(self.player_ids()) > game["maxPlayers"]):
+            self.start_lineup(game_id)
+            return
         try:
-            settings = resolve_settings(game, len(self.player_ids()))
+            settings = resolve_settings(game, min(len(self.player_ids()), game["maxPlayers"]))
             mode = settings["controllerMode"]
             if mode and mode != getattr(self.manager.config, "controller_type", None):
                 await self.manager.update_server_settings(mode=mode)
@@ -766,10 +1109,22 @@ class SessionState:
             if preset_id and preset_id in self.manager.preset_store.all_presets_by_id:
                 self.manager.preset_store.set_active_preset(preset_id)
                 self.manager.broadcast_active_layout()
+            if self.manager.console_mode:
+                # Every controller the game takes is plugged in before it
+                # starts: many games only look for controllers when they boot.
+                # Whoever arrives later waits on the bench and takes an empty
+                # seat from the overlay.
+                self._fix_seats(game["maxPlayers"])
+                seats = min(16, game["maxPlayers"])
+                if await self.manager.ensure_pads(min_seats=seats, pad_first=seats):
+                    await asyncio.sleep(0.5)  # let Windows finish plugging them
+                self.admin_panel.broadcast_update()
+            windows_before = set(await asyncio.to_thread(visible_windows))
             running = await asyncio.to_thread(start_game, game)
         except LaunchError as e:
             self.last_error = str(e)
             LOGGER.error("Could not launch %s: %s", game["name"], e)
+            self.manager.bench_new_devices = False
             self.broadcast()
             return
 
@@ -777,7 +1132,12 @@ class SessionState:
         self.admin_panel.broadcast_event({"type": "games_update", "games": self.library.list()})
         self.running = running
         self.votes.clear()
+        self.game_ready = False
+        self.launch_started_at = time.time()
         self._set_phase(SessionPhase.IN_GAME)
+        self._ready_task = asyncio.get_running_loop().create_task(
+            self._await_game_window(running, windows_before)
+        )
         if running.tracked:
             loop = asyncio.get_running_loop()
             self._watch_task = loop.create_task(watch_game(running, self._on_game_exit))
@@ -787,6 +1147,67 @@ class SessionState:
             self.game_in_front = True
             self.game_hwnd = None
             self._guard_task = loop.create_task(self._guard_foreground())
+        self.broadcast()
+
+    async def _await_game_window(self, running, windows_before: set[int]):
+        """Marks the game ready once its window is up: a window of the game's
+        own processes or, for launchers/store links we can't track, a new
+        window that isn't a launcher's or MaNet's."""
+        loop = asyncio.get_running_loop()
+        candidate, seen_since = None, 0.0
+        try:
+            while self.running is running and not self.game_ready:
+                await asyncio.sleep(GAME_READY_POLL_SECONDS)
+                hwnd = await asyncio.to_thread(self._find_launched_window, running, windows_before)
+                if hwnd is None or hwnd != candidate:
+                    candidate, seen_since = hwnd, loop.time()
+                    continue
+                if loop.time() - seen_since >= GAME_READY_STABLE_SECONDS:
+                    self.mark_game_ready(hwnd, reason="window")
+                    return
+        except asyncio.CancelledError:
+            pass
+
+    def _find_launched_window(self, running, windows_before: set[int]) -> int | None:
+        pids = running.alive_pids() if running.tracked else set()
+        if pids:
+            hwnd = find_main_window(pids)
+            if hwnd:
+                return hwnd
+        own = self._own_pids()
+        names: dict[int, str] = {}
+
+        def name(pid):
+            if pid not in names:
+                try:
+                    names[pid] = psutil.Process(pid).name().lower()
+                except Exception:
+                    names[pid] = ""
+            return names[pid]
+
+        new = [
+            hwnd for hwnd, pid in visible_windows().items()
+            if hwnd not in windows_before and pid not in own and name(pid) not in NOT_THE_GAME
+        ]
+        if not new:
+            return None
+        front, _ = foreground_window()
+        return front if front in new else new[0]
+
+    def mark_game_ready(self, hwnd: int | None = None, reason: str = ""):
+        """The game is up: MaNet steps aside and the phones become pads."""
+        if self.phase != SessionPhase.IN_GAME or self.game_ready:
+            return
+        LOGGER.info("Game ready (%s) after %.1fs%s", reason,
+                    time.time() - (self.launch_started_at or time.time()),
+                    f": {describe_window(hwnd)}" if hwnd else "")
+        self.game_ready = True
+        if hwnd:
+            self.game_hwnd = hwnd
+        if self._ready_task is not None and self._ready_task is not asyncio.current_task():
+            self._ready_task.cancel()
+        self._ready_task = None
+        self._refresh_input_mode()
         self.broadcast()
 
     def _on_game_exit(self, handoff: bool):
@@ -803,12 +1224,15 @@ class SessionState:
         self.return_from_game()
 
     def return_from_game(self):
-        for task in (self._watch_task, self._placement_task, self._guard_task):
+        for task in (self._watch_task, self._placement_task, self._guard_task, self._ready_task):
             if task is not None:
                 task.cancel()
         self._watch_task = None
         self._placement_task = None
         self._guard_task = None
+        self._ready_task = None
+        self.game_ready = True
+        self.launch_started_at = None
         self.game_in_front = True
         self.game_hwnd = None
         self.overlay_owner = None
@@ -816,7 +1240,15 @@ class SessionState:
         self.overlay_open = False
         self.overlay_shot = None
         self.free_mode = False
-        self.ready.clear()
+        self.manager.bench_new_devices = False
+        if self.console:
+            # Whoever waited on the bench gets a seat again in the lobby.
+            for device_id in list(self.present_ids()):
+                if device_id not in self.manager.device_map:
+                    self.join_from_bench(device_id)
+        else:
+            self.ready.clear()
+        self.play_zone.clear()
         self.votes.clear()
         self._set_phase(SessionPhase.LOBBY)
         self.broadcast()
@@ -855,14 +1287,21 @@ class SessionState:
             "overlayOwner": self.overlay_owner,
             "overlayShotId": self.overlay_shot_id if self.overlay_shot else None,
             "gameInFront": self.game_in_front,
+            "gameReady": self.game_ready,
+            "launchStartedAt": self.launch_started_at,
             "freeMode": self.free_mode,
             "freeModeEnabled": self.free_mode_enabled,
+            "consoleMode": self.manager.console_mode,
             "lobbyCountdown": {
                 "endsAt": self.lobby_countdown_ends_at,
                 "seconds": LOBBY_COUNTDOWN_SECONDS,
             } if self.lobby_countdown_ends_at else None,
             "lobbyRequest": self._lobby_request_payload(),
             "reading": dict(self.reading),
+            "queue": self.checked_in(),
+            "lobbyStartRule": self.lobby_start_rule,
+            "playZone": sorted(self.play_zone),
+            "lineup": self.lineup.to_payload() if self.lineup else None,
         }
 
     def phone_payload(self, device_id: str | None = None) -> dict:
@@ -892,8 +1331,30 @@ class SessionState:
             "myVote": self.votes.get(device_id),
             "reading": self.reading.get(device_id),
             "freeMode": self.free_mode,
+            "gameReady": self.game_ready,
             "lobbyCountdownEndsAt": self.lobby_countdown_ends_at,
             "lobbyRequest": self._lobby_request_payload(device_id),
+            "consoleMode": self.console,
+            "checkedIn": device_id in self.ready,
+            "inPlayZone": device_id in self.play_zone,
+            "benched": bool(device_id) and device_id in self.present_ids()
+            and device_id not in self.manager.device_map,
+            "lineup": self._lineup_phone_payload(device_id),
+        }
+
+    def _lineup_phone_payload(self, device_id: str | None) -> dict | None:
+        l = self.lineup
+        if l is None:
+            return None
+        return {
+            "stage": l.stage,
+            "endsAt": l.ends_at,
+            "game": l.round_game,
+            "seats": l.seats,
+            "candidate": device_id in l.candidates,
+            "myPick": l.picks.get(device_id) if device_id else None,
+            "myZone": l.zones.get(device_id) if device_id else None,
+            "playing": device_id in l.chosen if l.stage == "done" else None,
         }
 
     # --------------------------------------------------------------- seats
@@ -919,13 +1380,24 @@ class SessionState:
             occupant = None
             if slot.assigned_device_id:
                 occupant = {**self._identity(slot.assigned_device_id), "connected": slot.connected}
-            slots.append({"slot": slot.slot_id, "player": occupant})
+            slots.append({
+                "slot": slot.slot_id,
+                "player": occupant,
+                "hasPad": slot.gamepad is not None,
+            })
         bench = [
             self._identity(device_id)
             for device_id in self.manager.connected_devices
             if device_id not in self.manager.device_map
         ]
-        return {"slots": slots, "bench": bench}
+        return {
+            "slots": slots,
+            "bench": bench,
+            # During a game (console mode): only seats with a controller are
+            # offered, plus this one new controller (None: the game is full).
+            "inGame": self._seats_fixed(),
+            "newSeat": self.new_seat_index(),
+        }
 
     def go_to_bench(self, device_id: str) -> bool:
         slot = self.manager.get_slot_by_device(device_id)
@@ -952,6 +1424,61 @@ class SessionState:
             **self.manager.get_slot_identity(slot),
             "total_slots": len(self.manager.slots),
         })
+        self.admin_panel.broadcast_update()
+        return True
+
+    def _fix_seats(self, limit: int):
+        """Console mode, entering a game: seats are fixed from now on."""
+        self.seat_limit = max(1, min(16, int(limit)))
+        self.manager.bench_new_devices = True
+
+    def _seats_fixed(self) -> bool:
+        return self.console and self.phase == SessionPhase.IN_GAME and self.manager.bench_new_devices
+
+    def new_seat_index(self) -> int | None:
+        """In a game: the one new controller that can still be added (the
+        first seat without a pad), or None when the game is full."""
+        if not self._seats_fixed():
+            return None
+        slots = self.manager.slots
+        if sum(1 for s in slots if s.gamepad is not None) >= self.seat_limit:
+            return None
+        for slot in slots:
+            if slot.gamepad is None and slot.assigned_device_id is None:
+                return slot.slot_id
+        return len(slots) if len(slots) < 16 else None
+
+    def move_to_seat(self, device_id: str, slot_index: int) -> bool:
+        """Sit in an empty seat right away (no one to ask). Lets a player
+        change to another controller, or come back from the bench. During a
+        game (console mode) only seats that have a controller, or the next
+        new controller up to the game's maximum."""
+        if device_id not in self.manager.device_ws_map:
+            return False
+        if self._seats_fixed():
+            new_seat = self.new_seat_index()
+            if slot_index == new_seat and new_seat == len(self.manager.slots):
+                self.manager._create_seat(new_seat)
+            elif slot_index != new_seat:
+                if not 0 <= slot_index < len(self.manager.slots):
+                    return False
+                if self.manager.slots[slot_index].gamepad is None:
+                    return False
+        if not 0 <= slot_index < len(self.manager.slots):
+            return False
+        target = self.manager.slots[slot_index]
+        if target.assigned_device_id is not None:
+            return False  # taken (or reserved for someone who dropped out)
+        current = self.manager.device_map.get(device_id)
+        if current == slot_index:
+            return False
+        LOGGER.info("Device %s moves from seat %s to empty seat %s", device_id, current, slot_index)
+        name = self.manager.connected_devices.get(device_id, {}).get("name")
+        if current is not None:
+            reset_slot_gamepad(self.manager.slots[current])
+            self.manager.unassign_slot(current)
+        self.manager.assign_to_slot(device_id, slot_index, name)
+        reset_slot_gamepad(target)
         self.admin_panel.broadcast_update()
         return True
 

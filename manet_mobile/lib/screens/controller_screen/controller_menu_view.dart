@@ -21,7 +21,19 @@ import 'controller_default_view.dart'
 import 'controller_screen_widgets.dart' show MovementModeToggleButton;
 
 /// Where the menu controls are being used; changes the buttons shown.
-enum MenuContext { lobby, library, tournament, overlay, playground }
+enum MenuContext {
+  lobby,
+  library,
+  tournament,
+  overlay,
+  playground,
+  /// Console mode: name + face before joining the lobby playground.
+  checkIn,
+  /// Console mode: deciding who plays first (sides, then a minigame).
+  lineup,
+  /// A launched game is still opening: jump around, or show it (START).
+  loading,
+}
 
 /// Controls shown while the phone drives MaNet's menus instead of a game:
 /// the stick on the left, the actions of the current screen on the right.
@@ -58,10 +70,25 @@ class ControllerMenuView extends StatefulWidget {
   final Future<String> Function() onRequestRandomName;
   final MovementMode? movementMode;
   final ValueChanged<MovementMode>? onMovementModeChanged;
+  /// Console mode lobby: the face is in the playground (Cancel goes back to
+  /// the check-in screen).
+  final bool consoleLobby;
+  /// Console lobby: this face already left through the right edge.
+  final bool inPlayZone;
+  /// In a game without a seat: the seat button becomes "Enter".
+  final bool benched;
+  final VoidCallback onCheckIn;
+  final VoidCallback onCheckOut;
+  /// Lineup state for this phone (stage, game, candidate, myPick, playing).
+  final Map<String, dynamic>? lineup;
+  final ValueChanged<int> onLineupPick;
+  /// The controller options (theme, vibration...), from the gear at the top.
+  final VoidCallback? onOpenOptions;
 
   static void _defaultVoidCallback() {}
   static void _defaultStringCallback(String _) {}
   static Future<String> _defaultRandomNameCallback() async => '';
+  static void _defaultIntCallback(int _) {}
 
   const ControllerMenuView({
     super.key,
@@ -86,6 +113,14 @@ class ControllerMenuView extends StatefulWidget {
     this.serverBase,
     this.movementMode,
     this.onMovementModeChanged,
+    this.consoleLobby = false,
+    this.inPlayZone = false,
+    this.benched = false,
+    this.onCheckIn = _defaultVoidCallback,
+    this.onCheckOut = _defaultVoidCallback,
+    this.lineup,
+    this.onLineupPick = _defaultIntCallback,
+    this.onOpenOptions,
   });
 
   @override
@@ -184,7 +219,49 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
 
   @override
   Widget build(BuildContext context) {
+    final content = _buildContent(context);
+    if (widget.onOpenOptions == null) return content;
+    return Stack(
+      children: [
+        Positioned.fill(child: content),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _OptionsGear(onTap: widget.onOpenOptions!),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final strings = context.l10n.menu;
+    if (widget.menuContext == MenuContext.checkIn) {
+      return _buildCheckIn(context, strings);
+    }
+    if (widget.menuContext == MenuContext.lineup) {
+      return _buildLineup(context, strings);
+    }
+    if (widget.menuContext == MenuContext.lobby && widget.consoleLobby) {
+      return _buildPlayground(
+        context,
+        hint: widget.lobbyCountdownEndsAt != null
+            ? _CountdownHint(endsAt: widget.lobbyCountdownEndsAt!)
+            : _Hint(widget.inPlayZone ? strings.consoleWaitingHint : strings.consoleLobbyHint),
+        option: _OptionButton(
+          onTap: widget.onCheckOut,
+          label: strings.cancel,
+          leading: const Icon(Icons.close_rounded, size: 32, color: AppColors.textPrimary),
+        ),
+      );
+    }
     if (widget.menuContext == MenuContext.lobby || widget.menuContext == MenuContext.library) {
       return _buildLobby(context, strings);
     }
@@ -247,7 +324,7 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
               ),
               faceButton,
             ),
-            _EmoteButton(onDown: () => _press('Y'), onUp: () => _release('Y')),
+            _EmoteButton(face: widget.playerFace, onDown: () => _press('Y'), onUp: () => _release('Y')),
           ],
         );
       case MenuContext.library:
@@ -275,7 +352,7 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
                     _pad('X', strings.info, Icons.info_outline_rounded),
                     faceButton,
                   ),
-                  _EmoteButton(onDown: () => _press('Y'), onUp: () => _release('Y')),
+                  _EmoteButton(face: widget.playerFace, onDown: () => _press('Y'), onUp: () => _release('Y')),
                 ],
         );
       case MenuContext.tournament:
@@ -283,7 +360,20 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
           hint: _Hint(strings.tournamentHint),
           children: [
             faceButton,
-            _EmoteButton(onDown: () => _press('Y'), onUp: () => _release('Y')),
+            _EmoteButton(face: widget.playerFace, onDown: () => _press('Y'), onUp: () => _release('Y')),
+          ],
+        );
+      case MenuContext.checkIn || MenuContext.lineup:
+        return const SizedBox.shrink(); // full-screen layouts, built in build()
+      case MenuContext.loading:
+        return _Column(
+          hint: _Hint(strings.loadingHint),
+          children: [
+            _pair(
+              _pad('START', strings.showGame, Icons.tv_rounded),
+              _pad('A', strings.jump, Icons.keyboard_double_arrow_up_rounded, large: true),
+            ),
+            faceButton,
           ],
         );
       case MenuContext.overlay || MenuContext.playground:
@@ -308,8 +398,13 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
               faceButton,
               SmallPadButton(
                 onTap: widget.onOpenSeats,
-                label: strings.seat,
-                leading: const Icon(Icons.swap_horiz_rounded, size: 24, color: AppColors.textPrimary),
+                label: widget.benched ? strings.enter : strings.seat,
+                highlighted: widget.benched,
+                leading: Icon(
+                  widget.benched ? Icons.login_rounded : Icons.swap_horiz_rounded,
+                  size: 24,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
           ],
@@ -347,7 +442,7 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
       top = widget.ready
           ? big('B', strings.notReady, Icons.close_rounded)
           : big('A', strings.ready, Icons.check_rounded);
-      bottom = big('Y', '', Icons.sentiment_very_satisfied_rounded);
+      bottom = _bigEmote();
     } else if (reading) {
       top = big('A', strings.select, Icons.check_rounded);
       bottom = PadButton(
@@ -429,11 +524,14 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
                 child: GameInfoPanel(game: widget.details!, serverBase: widget.serverBase),
               )
             else ...[
+              // Stick and buttons get the same width so the middle column
+              // sits in the middle of the screen.
               Expanded(
-                flex: 4,
+                flex: 3,
                 child: _buildMovementControl(joystickSize: 200),
               ),
-              Expanded(flex: 4, child: middle),
+              const SizedBox(width: 12),
+              Expanded(flex: 5, child: middle),
             ],
             const SizedBox(width: 12),
             Expanded(
@@ -467,6 +565,215 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
         ),
       ],
     );
+  }
+
+  /// Big emote button (Y) with the player's own face on it.
+  Widget _bigEmote() => PadButton(
+    key: const ValueKey('big_emote'),
+    label: '',
+    large: true,
+    width: double.infinity,
+    height: double.infinity,
+    onDown: () => _press('Y'),
+    onUp: () => _release('Y'),
+    tapHaptic: false,
+    child: PlayerFaceIndicator(
+      face: widget.playerFace,
+      size: 56,
+      roundedSquare: true,
+      borderColor: AppColors.textPrimary,
+    ),
+  );
+
+  /// Console mode check-in: pick a name and a face, then join.
+  Widget _buildCheckIn(BuildContext context, MenuStrings strings) {
+    final name = (widget.playerName == null || widget.playerName!.isEmpty)
+        ? context.l10n.editName.noName
+        : widget.playerName!;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 7,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(strings.checkInTitle, style: _bold.copyWith(fontSize: 24)),
+                    const SizedBox(height: 4),
+                    Text(strings.checkInHint, style: _bold.copyWith(fontWeight: FontWeight.normal)),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: widget.onOpenAvatar,
+                          child: PlayerFaceIndicator(
+                            face: widget.playerFace,
+                            size: 120,
+                            roundedSquare: true,
+                            borderColor: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _OptionButton(
+                              onTap: widget.onOpenAvatar,
+                              label: strings.editFace,
+                              leading: const Icon(Icons.face_retouching_natural_rounded, size: 30, color: AppColors.textPrimary),
+                            ),
+                            const SizedBox(height: 10),
+                            _OptionButton(
+                              onTap: () => showEditNameDialog(
+                                context,
+                                name,
+                                widget.onNameChanged,
+                                widget.onRequestRandomName,
+                                widget.playerFace,
+                              ),
+                              label: name,
+                              leading: const Icon(Icons.edit_rounded, size: 30, color: AppColors.textPrimary),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 4,
+              child: PadButton(
+                key: const ValueKey('check_in'),
+                label: strings.checkInButton,
+                icon: Icons.sports_esports_rounded,
+                large: true,
+                width: double.infinity,
+                height: double.infinity,
+                onDown: widget.onCheckIn,
+                onUp: () {},
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Stick on the left, a hint and one option in the middle, Jump (A) and
+  /// the emote on the right: moving your face around on the TV.
+  Widget _buildPlayground(BuildContext context, {required Widget hint, Widget? option}) {
+    final strings = context.l10n.menu;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Same widths on both sides: the middle column is centered.
+            Expanded(flex: 3, child: _buildMovementControl(joystickSize: 200)),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 5,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    hint,
+                    if (option != null) ...[const SizedBox(height: 14), option],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: Column(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: PadButton(
+                      key: const ValueKey('big_jump'),
+                      label: strings.jump,
+                      icon: Icons.keyboard_double_arrow_up_rounded,
+                      large: true,
+                      width: double.infinity,
+                      height: double.infinity,
+                      onDown: () => _press('A'),
+                      onUp: () => _release('A'),
+                      tapHaptic: false,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(flex: 2, child: _bigEmote()),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Lineup: walk to a side, then (if you're in the minigame) pick fingers
+  /// or zero/one; afterwards, whether you play or wait.
+  Widget _buildLineup(BuildContext context, MenuStrings strings) {
+    final lineup = widget.lineup ?? const {};
+    final stage = lineup['stage'] as String? ?? 'choose';
+    final candidate = lineup['candidate'] == true;
+    if (stage == 'pick' && candidate) {
+      final dedanha = lineup['game'] == 'dedanha';
+      final myPick = lineup['myPick'] as int?;
+      final values = dedanha ? [0, 1, 2, 3, 4, 5] : [0, 1];
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Text(
+                dedanha ? strings.lineupPickDedanha : strings.lineupPickZerinho,
+                style: _bold.copyWith(fontSize: 22),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: GridView.count(
+                  crossAxisCount: dedanha ? 3 : 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: dedanha ? 2.2 : 2.6,
+                  children: [
+                    for (final value in values)
+                      _ChoiceButton(
+                        label: '$value',
+                        selected: myPick == value,
+                        onTap: () => widget.onLineupPick(value),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final String hint = switch (stage) {
+      'choose' => strings.lineupChooseHint,
+      'announce' when candidate => lineup['game'] == 'dedanha'
+          ? strings.lineupAnnounceDedanha
+          : strings.lineupAnnounceZerinho,
+      'done' => lineup['playing'] == true ? strings.lineupYouPlay : strings.lineupYouBench,
+      _ => strings.lineupWait,
+    };
+    return _buildPlayground(context, hint: _Hint(hint));
   }
 
   static Widget _pair(Widget first, Widget? second) => Row(
@@ -649,6 +956,79 @@ class _LobbyRequestOption extends StatelessWidget {
   }
 }
 
+/// Round gear at the top of the menu screens: opens the controller options
+/// (theme, vibration).
+class _OptionsGear extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _OptionsGear({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: context.l10n.options.title,
+      child: GestureDetector(
+        onTap: () {
+          HapticsManager.instance.softTap();
+          onTap();
+        },
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.lightColor,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.textPrimary, width: AppColors.borderThickness),
+          ),
+          child: const Icon(Icons.settings_rounded, size: 26, color: AppColors.textPrimary),
+        ),
+      ),
+    );
+  }
+}
+
+/// A minigame answer: white with a black border; the chosen one gets a
+/// thicker border and a check.
+class _ChoiceButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ChoiceButton({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) {
+        HapticsManager.instance.softTap();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.lightColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: AppColors.textPrimary,
+            width: selected ? AppColors.borderThickness * 2.2 : AppColors.borderThickness,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: _bold.copyWith(fontSize: 34)),
+            if (selected) ...[
+              const SizedBox(width: 8),
+              const Icon(Icons.check_rounded, size: 30, color: AppColors.textPrimary),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Rounded-square button with a label, like the gameplay buttons: white
 /// with a black border.
 class PadButton extends StatefulWidget {
@@ -659,6 +1039,9 @@ class PadButton extends StatefulWidget {
   final VoidCallback onUp;
   final double? width;
   final double? height;
+
+  /// Drawn above the label in place of [icon].
+  final Widget? child;
 
   /// False when [onDown] presses a gamepad button, which already plays that
   /// button's own haptic signature.
@@ -673,6 +1056,7 @@ class PadButton extends StatefulWidget {
     this.large = false,
     this.width,
     this.height,
+    this.child,
     this.tapHaptic = true,
   });
 
@@ -725,7 +1109,9 @@ class _PadButtonState extends State<PadButton> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (widget.icon != null)
+              if (widget.child != null)
+                widget.child!
+              else if (widget.icon != null)
                 Icon(widget.icon, size: widget.large ? 48 : 30, color: AppColors.textPrimary),
               if (widget.label.isNotEmpty)
                 Text(
@@ -748,12 +1134,14 @@ class _PadButtonState extends State<PadButton> {
   }
 }
 
-/// The blank button: no label, it only makes your face dance on the TV.
+/// The emote button: shows your own face, pressing it makes that face
+/// dance on the TV.
 class _EmoteButton extends StatelessWidget {
+  final PlayerFaceData face;
   final VoidCallback onDown;
   final VoidCallback onUp;
 
-  const _EmoteButton({required this.onDown, required this.onUp});
+  const _EmoteButton({required this.face, required this.onDown, required this.onUp});
 
   @override
   Widget build(BuildContext context) {
@@ -764,6 +1152,12 @@ class _EmoteButton extends StatelessWidget {
       onDown: onDown,
       onUp: onUp,
       tapHaptic: false,
+      child: PlayerFaceIndicator(
+        face: face,
+        size: 38,
+        roundedSquare: true,
+        borderColor: AppColors.textPrimary,
+      ),
     );
   }
 }
@@ -815,8 +1209,16 @@ class SmallPadButton extends StatelessWidget {
   final VoidCallback onTap;
   final String label;
   final Widget leading;
+  /// Stands out (e.g. "Enter" for someone on the bench).
+  final bool highlighted;
 
-  const SmallPadButton({super.key, required this.onTap, required this.label, required this.leading});
+  const SmallPadButton({
+    super.key,
+    required this.onTap,
+    required this.label,
+    required this.leading,
+    this.highlighted = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -828,7 +1230,7 @@ class SmallPadButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.lightColor,
+          color: highlighted ? AppColors.highlightColor : AppColors.lightColor,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.textPrimary, width: 2),
         ),
@@ -993,7 +1395,11 @@ class GameInfoPanel extends StatelessWidget {
                     // 2. Vídeo grandão
                     if (trailerUrl.isNotEmpty) ...[
                       const SizedBox(height: 14),
-                      _TrailerCard(trailerUrl: trailerUrl, videoId: videoId),
+                      _TrailerCard(
+                        trailerUrl: trailerUrl,
+                        videoId: videoId,
+                        thumbnailUrl: shots.isEmpty ? null : shots.first,
+                      ),
                     ],
 
                     // 3. Imagens
@@ -1141,10 +1547,13 @@ class GameInfoPanel extends StatelessWidget {
 class _TrailerCard extends StatefulWidget {
   final String trailerUrl;
   final String? videoId;
+  /// Backdrop for streams (Steam trailers have no thumbnail link).
+  final String? thumbnailUrl;
 
   const _TrailerCard({
     required this.trailerUrl,
     this.videoId,
+    this.thumbnailUrl,
   });
 
   @override
@@ -1154,17 +1563,27 @@ class _TrailerCard extends StatefulWidget {
 class _TrailerCardState extends State<_TrailerCard> {
   bool _isPlaying = false;
 
+  bool get _stream => isStreamUrl(widget.trailerUrl);
+
+  @override
+  void dispose() {
+    if (_isPlaying && _stream) stopEmbeddedStreams();
+    super.dispose();
+  }
+
   @override
   void didUpdateWidget(covariant _TrailerCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.videoId != oldWidget.videoId || widget.trailerUrl != oldWidget.trailerUrl) {
+      if (_isPlaying && isStreamUrl(oldWidget.trailerUrl)) stopEmbeddedStreams();
       _isPlaying = false;
     }
   }
 
   void _play() async {
     HapticsManager.instance.softTap();
-    if (isEmbeddedVideoSupported && widget.videoId != null && widget.videoId!.isNotEmpty) {
+    final playable = (widget.videoId != null && widget.videoId!.isNotEmpty) || _stream;
+    if (isEmbeddedVideoSupported && playable) {
       setState(() {
         _isPlaying = true;
       });
@@ -1178,6 +1597,7 @@ class _TrailerCardState extends State<_TrailerCard> {
 
   void _stop() {
     HapticsManager.instance.softTap();
+    if (_stream) stopEmbeddedStreams();
     setState(() {
       _isPlaying = false;
     });
@@ -1200,8 +1620,10 @@ class _TrailerCardState extends State<_TrailerCard> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_isPlaying && widget.videoId != null) ...[
-              getEmbeddedVideo(widget.videoId!),
+            if (_isPlaying && (widget.videoId != null || _stream)) ...[
+              widget.videoId != null
+                  ? getEmbeddedVideo(widget.videoId!)
+                  : getEmbeddedStream(widget.trailerUrl),
               Positioned(
                 top: 8,
                 right: 8,
@@ -1238,9 +1660,11 @@ class _TrailerCardState extends State<_TrailerCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (widget.videoId != null)
+                    if (widget.videoId != null || widget.thumbnailUrl != null)
                       Image.network(
-                        'https://img.youtube.com/vi/${widget.videoId}/hqdefault.jpg',
+                        widget.videoId != null
+                            ? 'https://img.youtube.com/vi/${widget.videoId}/hqdefault.jpg'
+                            : widget.thumbnailUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
@@ -1354,10 +1778,17 @@ class SeatsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n.menu;
-    final slots = (seats['slots'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final inGame = seats['inGame'] == true;
+    // In a game (console mode) the controllers are fixed: only seats that
+    // have one, plus at most one new controller.
+    final slots = [
+      for (final s in (seats['slots'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>())
+        if (!inGame || s['hasPad'] == true) s,
+    ];
+    final newSeat = inGame ? seats['newSeat'] as int? : null;
     final bench = (seats['bench'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
     final mySlot = slots.where((s) => (s['player'] as Map?)?['deviceId'] == me).firstOrNull;
-    final hasFreeSeat = slots.any((s) => s['player'] == null);
+    final hasFreeSeat = !inGame && slots.any((s) => s['player'] == null);
 
     void act(Map<String, dynamic> message) {
       HapticsManager.instance.softTap();
@@ -1365,7 +1796,7 @@ class SeatsSheet extends StatelessWidget {
       Navigator.of(context).pop();
     }
 
-    Widget seatRow(String label, Map<String, dynamic>? player) {
+    Widget seatRow(String label, Map<String, dynamic>? player, {int? slot}) {
       final isMe = player?['deviceId'] == me;
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
@@ -1399,8 +1830,14 @@ class SeatsSheet extends StatelessWidget {
                     label: strings.swap,
                     onTap: () => act({'type': 'swap_request', 'target': player['deviceId']}),
                   ),
-              ] else
+              ] else ...[
                 Expanded(child: Text(strings.freeSeat, style: _faint)),
+                if (slot != null)
+                  _SheetButton(
+                    label: strings.sitHere,
+                    onTap: () => act({'type': 'seat_move', 'slot': slot}),
+                  ),
+              ],
             ],
           ),
         ),
@@ -1417,7 +1854,33 @@ class SeatsSheet extends StatelessWidget {
             const SizedBox(height: 4),
             Text(strings.seatsHint, style: _faint),
             const SizedBox(height: 12),
-            for (final slot in slots) seatRow('P${(slot['slot'] as int) + 1}', slot['player'] as Map<String, dynamic>?),
+            for (final slot in slots)
+              seatRow(
+                'P${(slot['slot'] as int) + 1}',
+                slot['player'] as Map<String, dynamic>?,
+                slot: slot['slot'] as int,
+              ),
+            if (newSeat != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.lightColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.textPrimary, width: 2),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(strings.newSeat(newSeat + 1), style: _bold)),
+                      _SheetButton(
+                        label: strings.enter,
+                        onTap: () => act({'type': 'seat_move', 'slot': newSeat}),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (bench.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(strings.bench, style: _bold),

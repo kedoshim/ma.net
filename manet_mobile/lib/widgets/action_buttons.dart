@@ -578,7 +578,9 @@ class _GameButtonState extends State<GameButton> with SingleTickerProviderStateM
       child: Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: (event) {
-          if (_pointerId != null) return;
+          // A new touch takes over even if the old one's "up" never arrived
+          // (iOS Safari can drop it), so the button can't get stuck.
+          if (_pointerId != null && _pointerId != event.pointer) _setPressed(false);
           _pointerId = event.pointer;
           _setPressed(true);
         },

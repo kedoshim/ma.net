@@ -1182,8 +1182,23 @@ class _ControllerDpadState extends State<ControllerDpad> {
     }
   }
 
+  @override
+  void dispose() {
+    // Removed mid-touch (e.g. the menu changed): don't leave a direction
+    // held on the server.
+    for (final d in _activeDirections) {
+      widget.onButtonStateChanged(d, 'up');
+    }
+    super.dispose();
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
-    if (_pointerId != null) return;
+    if (_pointerId != null && _pointerId != event.pointer) {
+      // The old finger's "up" never arrived (iOS Safari can drop it after
+      // system gestures or multi-touch): the new touch takes over instead
+      // of the D-pad ignoring every touch from now on.
+      _releaseDirection();
+    }
     debugPrint('LEFT DOWN pointer=${event.pointer}');
     _pointerId = event.pointer;
     final RenderBox box = context.findRenderObject() as RenderBox;

@@ -6,7 +6,7 @@ from aiohttp import WSMsgType, web
 
 import logging
 
-from src.input.input_handler import apply_button, apply_stick, apply_right_stick
+from src.input.input_handler import apply_button, apply_stick, apply_right_stick, apply_trigger
 from src.input.keyboard_controller import KeyboardController
 from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
@@ -17,6 +17,20 @@ LOG = logging.getLogger("websocket")
 # it, so a phone that silently left the Wi-Fi is detected in ~15s instead of
 # waiting for the OS TCP timeout.
 WS_HEARTBEAT_SECONDS = 10.0
+
+# Input flood guard: a phone streams sticks at a few dozen messages per
+# second; past this rate messages are dropped, and a socket that keeps it up
+# for several seconds is closed.
+MAX_MESSAGES_PER_SECOND = 300
+MAX_FLOODED_SECONDS = 5
+
+MAX_DEVICE_ID_LENGTH = 64
+MAX_NAME_LENGTH = 15
+MAX_FIELD_LENGTH = 32
+
+
+def _clip(value, limit):
+    return value[:limit] if isinstance(value, str) else value
 
 
 class WebSocketRoutes:
@@ -29,6 +43,24 @@ class WebSocketRoutes:
         self.mouse = MouseController()
         self.keyboard = KeyboardController()
 
+    def _hotspot_hint(self, reached_ip, port):
+        """The PC's own hotspot, when it has one and the phone isn't using it
+        (reached_ip: the PC address the phone connected to):
+        a direct link is much faster than a crowded router."""
+        try:
+            snapshot = self.connection_service.get_snapshot()
+        except Exception:
+            return None
+        for option in snapshot.connections:
+            if option.kind != "hotspot" or option.ip == reached_ip:
+                continue
+            parts = option.display_name_key.split("__", 1)
+            return {
+                "name": parts[1] if len(parts) > 1 else "",
+                "url": f"http://{option.ip}:{port}" if port else f"http://{option.ip}",
+            }
+        return None
+
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse(heartbeat=WS_HEARTBEAT_SECONDS)
         await ws.prepare(request)
@@ -38,16 +70,14 @@ class WebSocketRoutes:
         local_ip = sockname[0] if isinstance(sockname, tuple) and sockname else None
 
         device_id = request.query.get("deviceId")
-        player_name = request.query.get("name")
-        lang = request.query.get("lang", "pt")
+        player_name = _clip(request.query.get("name"), MAX_NAME_LENGTH)
+        lang = _clip(request.query.get("lang", "pt"), 8)
         customization = {
-            "color": request.query.get("color"),
-            "faceText": request.query.get("faceText"),
-            "faceRotation": request.query.get("faceRotation"),
-            "presetId": request.query.get("presetId"),
+            key: _clip(request.query.get(key), MAX_FIELD_LENGTH)
+            for key in ("color", "faceText", "faceRotation", "presetId")
         }
 
-        if not device_id:
+        if not device_id or len(device_id) > MAX_DEVICE_ID_LENGTH:
             await ws.send_json({
                 "type": "error",
                 "code": "missing_device_id"
@@ -103,7 +133,20 @@ class WebSocketRoutes:
             "type": "slot_status",
             "has_vacant_slot": self.manager.has_vacant_slot(),
         })
+        # A browser on the MaNet PC itself also sees MaNet's virtual pads, so
+        # the physical-pad relay must not offer itself automatically there.
+        await ws.send_json({
+            "type": "client_info",
+            "sameMachine": peer is not None and (peer == local_ip or peer in ("127.0.0.1", "::1")),
+        })
         self.admin_panel.broadcast_update()
+
+        # Relayed analog triggers, as pressed/released for menus and the admin feed.
+        trigger_down = {"LT": False, "RT": False}
+
+        rate_window = int(time.monotonic())
+        rate_count = 0
+        flooded_seconds = 0
 
         try:
             async for msg in ws:
@@ -114,9 +157,27 @@ class WebSocketRoutes:
                 if msg.type != WSMsgType.TEXT:
                     continue
 
+                now_window = int(time.monotonic())
+                if now_window != rate_window:
+                    flooded = rate_count > MAX_MESSAGES_PER_SECOND
+                    if not flooded or now_window - rate_window > 1:
+                        flooded_seconds = 0
+                    if flooded:
+                        flooded_seconds += 1
+                    rate_window = now_window
+                    rate_count = 0
+                rate_count += 1
+                if rate_count > MAX_MESSAGES_PER_SECOND:
+                    if flooded_seconds >= MAX_FLOODED_SECONDS:
+                        LOG.warning("Device %s flooding input; closing socket", device_id)
+                        break
+                    continue
+
                 try:
                     data = json.loads(msg.data)
                 except Exception:
+                    continue
+                if not isinstance(data, dict):
                     continue
 
                 try:
@@ -194,11 +255,49 @@ class WebSocketRoutes:
                             "state": data.get("state")
                         })
 
+                    elif msg_type == "trigger":
+                        # Analog LT/RT from a physical pad relayed by the phone.
+                        if is_mouse_owner:
+                            continue
+
+                        btn = data.get("id")
+                        if btn not in trigger_down:
+                            continue
+                        value = float(data.get("value", 0))
+
+                        if to_game:
+                            current_slot.last_input_at = time.time()
+                            apply_trigger(current_slot, btn, value)
+
+                        pressed = value > (0.3 if trigger_down[btn] else 0.5)
+                        if pressed != trigger_down[btn]:
+                            trigger_down[btn] = pressed
+                            state = "down" if pressed else "up"
+                            if not to_game and current_slot is not None:
+                                self.session.handle_menu_button(device_id, btn, state)
+                            self.admin_panel.broadcast_input({
+                                "type": "input_event",
+                                "deviceId": device_id,
+                                "event": "button",
+                                "id": btn,
+                                "state": state,
+                            })
+
                     elif msg_type == "home_pressed":
                         self.session.handle_home_pressed(device_id)
 
                     elif msg_type == "keepalive":
                         pass
+
+                    elif msg_type == "ping":
+                        # The phone measures its round trip (lag warning).
+                        await ws.send_json({"type": "pong", "t": data.get("t")})
+
+                    elif msg_type == "network_hint":
+                        hint = await asyncio.to_thread(
+                            self._hotspot_hint, local_ip, sockname[1] if isinstance(sockname, tuple) else None
+                        )
+                        await ws.send_json({"type": "network_hint", "hotspot": hint})
 
                     elif msg_type == "raw":
                         pass
@@ -223,6 +322,10 @@ class WebSocketRoutes:
                         wants_active = data.get("active") == True
 
                         if wants_active:
+                            denied = self.session.mouse_mode_check(data.get("password"))
+                            if denied is not None:
+                                await ws.send_json({"type": "error", "code": denied})
+                                continue
                             if not self.manager.request_mouse_mode(device_id):
                                 await ws.send_json({
                                     "type": "error",
@@ -286,6 +389,18 @@ class WebSocketRoutes:
                         self.session.go_to_bench(device_id)
                     elif msg_type == "seat_join":
                         self.session.join_from_bench(device_id)
+                    elif msg_type == "check_in":
+                        self.session.check_in(device_id)
+                    elif msg_type == "check_out":
+                        self.session.check_out(device_id)
+                    elif msg_type == "lineup_pick":
+                        self.session.lineup_pick(device_id, data.get("value"))
+                    elif msg_type == "seat_move":
+                        try:
+                            seat = int(data.get("slot"))
+                        except (TypeError, ValueError):
+                            seat = -1
+                        self.session.move_to_seat(device_id, seat)
                     elif msg_type == "swap_request":
                         self.session.request_swap(device_id, str(data.get("target") or ""))
                     elif msg_type == "swap_answer":
@@ -299,6 +414,8 @@ class WebSocketRoutes:
                     elif msg_type == "details_close":
                         self.session.show_details(device_id, None)
                     elif msg_type == "request_slot":
+                        # (During a console game assign_slot keeps them on the
+                        # bench: they join from the overlay's seat list.)
                         dev_name = self.manager.connected_devices.get(device_id, {}).get("name", player_name)
                         LOG.info("Device %s (%s) requested slot", device_id, dev_name)
                         slot = self.manager.assign_slot(device_id, dev_name)

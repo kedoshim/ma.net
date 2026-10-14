@@ -53,6 +53,34 @@ def apply_right_stick(slot, x, y):
     _update_gamepad_safe(slot.gamepad)
 
 
+def apply_trigger(slot, btn, value):
+    """Analog LT/RT (0..1) from a physical pad relayed by a phone."""
+    if not hasattr(slot, "gamepad") or slot.gamepad is None:
+        return
+    gp = slot.gamepad
+    value = max(0.0, min(1.0, value))
+
+    if btn == "LT":
+        gp.left_trigger_float(value)
+    elif btn == "RT":
+        gp.right_trigger_float(value)
+    else:
+        return
+
+    if slot.controller_type == "ds4":
+        # DS4 triggers also carry a digital bit; keep it in sync.
+        const = DS4_BUTTON_MAP[btn]
+        if value > 0.1:
+            gp.press_button(button=const)
+        else:
+            try:
+                gp.release_button(button=const)
+            except Exception:
+                LOG.debug("Failed to release DS4 trigger bit %s", btn)
+
+    _update_gamepad_safe(gp)
+
+
 def apply_button(slot, btn, state):
     if not hasattr(slot, "gamepad") or slot.gamepad is None:
         LOG.warning("Attempted to apply button %s to slot %s, but gamepad is missing or deleted", btn, getattr(slot, 'slot_id', 'unknown'))

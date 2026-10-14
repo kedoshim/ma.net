@@ -19,6 +19,7 @@ import '../../widgets/juicy_widgets.dart';
 import '../../widgets/layout_editor_view.dart';
 import '../../models/controller_branding.dart';
 import 'cover_search_dialog.dart';
+import 'game_media_widgets.dart';
 
 /// The host's management dialog with tabs for registered games and launcher settings.
 class ManageGamesDialog extends StatefulWidget {
@@ -437,10 +438,10 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
   late final TextEditingController _description;
   late final TextEditingController _tags;
   late final TextEditingController _trailer;
-  // Extra images (links, one per line): shown on the card and on the
-  // phones with the details. A Steam cover fills them in.
-  late final TextEditingController _images;
-  bool _fetchingSteam = false;
+  // Extra images (links): shown on the card and on the phones with the
+  // details. "Find game data" can fill them in.
+  late List<String> _screenshots;
+  bool _fetchingData = false;
   late String _coverPath;
   late int _minPlayers;
   late int _maxPlayers;
@@ -464,9 +465,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _description = TextEditingController(text: game?.description ?? '');
     _tags = TextEditingController(text: game?.tags.join(', ') ?? '');
     _trailer = TextEditingController(text: game?.trailerUrl ?? '');
-    _images = TextEditingController(
-      text: (game?.screenshots ?? const []).join('\n'),
-    );
+    _screenshots = [...?game?.screenshots];
     _coverPath = game?.coverPath ?? '';
     _minPlayers = game?.minPlayers ?? 1;
     _maxPlayers = game?.maxPlayers ?? 4;
@@ -504,7 +503,6 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _description.dispose();
     _tags.dispose();
     _trailer.dispose();
-    _images.dispose();
     super.dispose();
   }
 
@@ -535,6 +533,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     if (file != null) setState(() => _coverPath = file.path);
   }
 
+  /// "Find cover" only changes the cover.
   Future<void> _searchCover() async {
     final pick = await showDialog<CoverPick>(
       context: context,
@@ -542,34 +541,55 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     );
     if (pick == null || !mounted) return;
     setState(() => _coverPath = pick.path);
-    if (pick.details != null) {
-      _applyDetails(pick.details!);
-    } else if (pick.steamAppId != null) {
-      await _fillFromSteam(pick.steamAppId!);
-    }
   }
 
-  void _applyDetails(GameDetails details) {
-    if (_description.text.trim().isEmpty) {
-      _description.text = details.description;
+  /// "Find game data": search the game, then show everything the store has
+  /// (cover, description, tags, trailer, images) and fill only the fields
+  /// the host checks.
+  Future<void> _fetchData() async {
+    final pick = await showDialog<CoverPick>(
+      context: context,
+      builder: (_) => CoverSearchDialog(initialQuery: _name.text.trim()),
+    );
+    if (pick == null || !mounted) return;
+    var details = pick.details;
+    if (details == null && pick.steamAppId != null) {
+      setState(() => _fetchingData = true);
+      details = await SteamDetails.fetch(pick.steamAppId!);
+      if (!mounted) return;
+      setState(() => _fetchingData = false);
     }
-    if (_tags.text.trim().isEmpty) _tags.text = details.tags.join(', ');
-    if (_trailer.text.trim().isEmpty) _trailer.text = details.trailerUrl;
-    if (_images.text.trim().isEmpty) {
-      _images.text = details.screenshots.join('\n');
-    }
-  }
-
-  /// A Steam cover also brings the store's description, genres and trailer;
-  /// only empty fields are filled so nothing typed gets lost.
-  Future<void> _fillFromSteam(int appId) async {
-    setState(() => _fetchingSteam = true);
-    final details = await SteamDetails.fetch(appId);
-    if (!mounted) return;
+    final chosen = await showDialog<Set<GameDataField>>(
+      context: context,
+      builder: (_) => GameDataPreviewDialog(
+        pick: pick,
+        details: details,
+        filled: {
+          if (_coverPath.isNotEmpty) GameDataField.cover,
+          if (_description.text.trim().isNotEmpty) GameDataField.description,
+          if (_tags.text.trim().isNotEmpty) GameDataField.tags,
+          if (_trailer.text.trim().isNotEmpty) GameDataField.trailer,
+          if (_screenshots.isNotEmpty) GameDataField.images,
+        },
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    final found = details;
     setState(() {
-      _fetchingSteam = false;
-      if (details == null) return;
-      _applyDetails(details);
+      if (chosen.contains(GameDataField.cover)) _coverPath = pick.path;
+      if (found == null) return;
+      if (chosen.contains(GameDataField.description)) {
+        _description.text = found.description;
+      }
+      if (chosen.contains(GameDataField.tags)) {
+        _tags.text = found.tags.join(', ');
+      }
+      if (chosen.contains(GameDataField.trailer)) {
+        _trailer.text = found.trailerUrl;
+      }
+      if (chosen.contains(GameDataField.images)) {
+        _screenshots = [...found.screenshots];
+      }
     });
   }
 
@@ -659,10 +679,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
       trailerUrl: _trailer.text.trim(),
       addedAt: widget.game?.addedAt ?? 0,
       lastPlayedAt: widget.game?.lastPlayedAt ?? 0,
-      screenshots: [
-        for (final line in _images.text.split(RegExp(r'[\n,]')))
-          if (line.trim().startsWith('http')) line.trim(),
-      ],
+      screenshots: _screenshots,
     );
     try {
       await context.read<SessionController>().saveGame(game);
@@ -707,13 +724,53 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
             ],
           ),
           _label(strings.gameName),
-          _field(_name),
+          Row(
+            children: [
+              Expanded(child: _field(_name)),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: strings.fetchDataHint,
+                child: JuicyButton(
+                  onPressed: _fetchingData ? null : _fetchData,
+                  backgroundColor: AppColors.highlightColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_fetchingData)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary,
+                        ),
+                      const SizedBox(width: 6),
+                      Text(strings.fetchData, style: _buttonStyle),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_fetchingData) ...[
+            const SizedBox(height: 6),
+            Text(strings.steamInfoLoading, style: _captionStyle),
+          ],
           _label(strings.gameArguments),
           _field(_arguments),
           _label(strings.gameCover),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _Thumb(path: _coverPath),
+              CoverTile(
+                path: _coverPath,
+                onRemove: () => setState(() => _coverPath = ''),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Wrap(
@@ -722,7 +779,6 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
                   children: [
                     JuicyButton(
                       onPressed: _searchCover,
-                      backgroundColor: AppColors.highlightColor,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 10,
@@ -741,30 +797,11 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
                       ),
                     ),
                     _smallButton(strings.chooseCover, _pickCover),
-                    if (_coverPath.isNotEmpty)
-                      _smallButton(
-                        strings.removeCover,
-                        () => setState(() => _coverPath = ''),
-                      ),
                   ],
                 ),
               ),
             ],
           ),
-          if (_fetchingSteam) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 8),
-                Text(strings.steamInfoLoading, style: _captionStyle),
-              ],
-            ),
-          ],
           _label(strings.gameDescription),
           _field(_description, hint: strings.gameDescriptionHint, lines: 3),
           _label(strings.gameTags),
@@ -778,7 +815,10 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
             ],
           ),
           _label(strings.gameImages),
-          _field(_images, hint: strings.gameImagesHint, lines: 2),
+          ImageGallery(
+            urls: _screenshots,
+            onChanged: (urls) => setState(() => _screenshots = urls),
+          ),
           Row(
             children: [
               Expanded(

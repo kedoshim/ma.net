@@ -32,11 +32,22 @@ void main() {
         {'description': 'Cooperativo'},
       ],
       'movies': [
-        {'id': 1, 'hls_h264': 'x'},
+        {'id': 1, 'hls_h264': 'https://video.akamai.steamstatic.com/a/hls_264_master.m3u8'},
+        {'id': 2, 'highlight': true, 'hls_h264': 'https://video.akamai.steamstatic.com/b/hls_264_master.m3u8'},
       ],
     });
     expect(details.description, 'Caos na cozinha & muito fogo!');
     expect(details.tags, ['Ação', 'Casual', 'Co-op']);
+    // The highlighted trailer's HLS stream (phones play it).
+    expect(details.trailerUrl, 'https://video.akamai.steamstatic.com/b/hls_264_master.m3u8');
+  });
+
+  test('without any playable link the trailer is the store page', () {
+    final details = SteamDetails.fromAppData(728880, {
+      'movies': [
+        {'id': 1},
+      ],
+    });
     expect(details.trailerUrl, 'https://store.steampowered.com/app/728880');
   });
 }
