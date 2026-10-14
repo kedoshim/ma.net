@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
@@ -12,7 +13,9 @@ class AdminAuth {
   static const String header = 'X-Manet-Admin';
   static const String queryParameter = 'admin';
 
-  static String _token = '';
+  // A server started by hand (dev tools) takes its token from the same
+  // variable; spawned servers get a fresh one from [rotate].
+  static String _token = Platform.environment['MANET_ADMIN_TOKEN'] ?? '';
 
   static String get token => _token;
 

@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:manet_desktop/l10n/app_localizations.dart';
 import 'package:manet_desktop/screens/home_page/home_page_widget.dart';
+import 'package:manet_desktop/services/admin_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _loadFont(String family, ByteData data) async {
@@ -62,6 +63,7 @@ void main() {
     final client = HttpClient();
     Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
       final request = await client.postUrl(Uri.parse('$base$path'));
+      request.headers.set(AdminAuth.header, AdminAuth.token);
       request.headers.contentType = ContentType.json;
       request.write(jsonEncode(body));
       final response = await request.close();
@@ -93,9 +95,11 @@ void main() {
       // Start from a clean server: lobby phase, empty library.
       await post('/api/session/return', {});
       final listing = await client.getUrl(Uri.parse('$base/api/games'));
+      listing.headers.set(AdminAuth.header, AdminAuth.token);
       final existing = jsonDecode(await (await listing.close()).transform(utf8.decoder).join());
       for (final game in existing['games'] as List) {
         final request = await client.deleteUrl(Uri.parse('$base/api/games/${game['id']}'));
+        request.headers.set(AdminAuth.header, AdminAuth.token);
         await (await request.close()).drain<void>();
       }
       await post('/api/server/reset-controllers', {'mode': 'ds4', 'slots': 3, 'fixed': true});
@@ -224,6 +228,7 @@ void main() {
     // Three different picks -> elimination tournament.
     Future<String?> stage() async {
       final request = await client.getUrl(Uri.parse('$base/api/session'));
+      request.headers.set(AdminAuth.header, AdminAuth.token);
       final body = jsonDecode(await (await request.close()).transform(utf8.decoder).join());
       final session = (body['session'] ?? body) as Map<String, dynamic>;
       return (session['tournament'] as Map<String, dynamic>?)?['stage'] as String?;
@@ -371,13 +376,6 @@ void main() {
     await settle(1500);
     await shot('15c_overlay_playground_rest');
     press('DOWN');
-    await settle(400);
-    press('A');
-    await settle(1500);
-    await shot('16_overlay_add_players');
-    press('B');
-    await settle(300);
-    press('DOWN');
     await settle(300);
     press('A');
     await settle(800);
@@ -395,6 +393,7 @@ void main() {
     await shot('19_after_close_game');
     await tester.runAsync(() async {
       final request = await client.deleteUrl(Uri.parse('$base/api/games/${sleeper['id']}'));
+      request.headers.set(AdminAuth.header, AdminAuth.token);
       await (await request.close()).drain<void>();
     });
 
@@ -411,6 +410,7 @@ void main() {
     await tester.runAsync(() async {
       for (final game in [kart, party, solo]) {
         final request = await client.deleteUrl(Uri.parse('$base/api/games/${game['id']}'));
+        request.headers.set(AdminAuth.header, AdminAuth.token);
         await (await request.close()).drain<void>();
       }
     });

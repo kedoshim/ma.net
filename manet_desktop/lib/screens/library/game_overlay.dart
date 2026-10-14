@@ -16,9 +16,9 @@ import '../../widgets/player_face_indicator.dart';
 import '../home_page/gamepad_state.dart';
 import 'face_playground.dart';
 
-enum _OverlayItem { resume, addPlayers, layout, switchGame, closeGame }
+enum _OverlayItem { resume, layout, switchGame, closeGame }
 
-enum _OverlayPanel { menu, players, layouts }
+enum _OverlayPanel { menu, layouts }
 
 /// In-game overlay (opened with the phones' Home button): MaNet's window over
 /// a dimmed snapshot of the game. Driven by any player's controller —
@@ -51,7 +51,6 @@ class _GameOverlayState extends State<GameOverlay>
 
   List<_OverlayItem> get _items => [
     _OverlayItem.resume,
-    _OverlayItem.addPlayers,
     _OverlayItem.layout,
     _OverlayItem.switchGame,
     _OverlayItem.closeGame,
@@ -173,8 +172,6 @@ class _GameOverlayState extends State<GameOverlay>
 
   void _activate() {
     switch (_panel) {
-      case _OverlayPanel.players:
-        setState(() => _panel = _OverlayPanel.menu);
       case _OverlayPanel.layouts:
         _selectLayout(_layoutIndex);
       case _OverlayPanel.menu:
@@ -198,8 +195,6 @@ class _GameOverlayState extends State<GameOverlay>
     switch (item) {
       case _OverlayItem.resume:
         session.setOverlay(false);
-      case _OverlayItem.addPlayers:
-        setState(() => _panel = _OverlayPanel.players);
       case _OverlayItem.layout:
         final active = _presets.indexWhere((p) => p.id == _activePresetId);
         setState(() {
@@ -261,7 +256,7 @@ class _GameOverlayState extends State<GameOverlay>
             Container(color: Colors.black.withValues(alpha: 0.55)),
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(40),
+                padding: const EdgeInsets.fromLTRB(32, 28, 32, 36),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -271,8 +266,8 @@ class _GameOverlayState extends State<GameOverlay>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildOwnerHeader(context),
-                          const SizedBox(height: 16),
+                          _buildJoinCard(context),
+                          const SizedBox(height: 14),
                           Flexible(
                             child: SingleChildScrollView(
                               child: _buildMenu(context),
@@ -345,23 +340,9 @@ class _GameOverlayState extends State<GameOverlay>
   }
 
   Widget _buildPanel(BuildContext context) {
-    final session = context.read<SessionController>();
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: switch (_panel) {
-        _OverlayPanel.players => ValueListenableBuilder<OnlineStatus>(
-          key: const ValueKey('players'),
-          valueListenable: OnlineService.of(session.api),
-          builder: (context, online, _) {
-            // While "Play online" is up, latecomers join through the tunnel.
-            final connection = online.connection ?? _connection;
-            return _PlayersPanel(
-              qrUrl: session.api.getQrCodeUrl(connection?.id),
-              link: connection?.url,
-              slots: context.watch<GamepadState>().slots,
-            );
-          },
-        ),
         _OverlayPanel.layouts => _LayoutsPanel(
           key: const ValueKey('layouts'),
           presets: _presets,
@@ -377,43 +358,60 @@ class _GameOverlayState extends State<GameOverlay>
     );
   }
 
-  /// Top of the owner's area: who is driving the overlay.
+  /// Always on screen, so anyone watching can join without opening a menu.
+  Widget _buildJoinCard(BuildContext context) {
+    final api = context.read<SessionController>().api;
+    return ValueListenableBuilder<OnlineStatus>(
+      valueListenable: OnlineService.of(api),
+      builder: (context, online, _) {
+        // While "Play online" is up, latecomers join through the tunnel.
+        final connection = online.connection ?? _connection;
+        return _JoinCard(
+          qrUrl: api.getQrCodeUrl(connection?.id),
+          link: connection?.url,
+          slots: context.watch<GamepadState>().slots,
+        );
+      },
+    );
+  }
+
+  /// Top of the menu: who is driving the overlay.
   Widget _buildOwnerHeader(BuildContext context) {
     final strings = context.l10n.session;
     final session = context.read<SessionController>();
     final gamepads = context.watch<GamepadState>();
     final owner = gamepads.deviceById(session.snapshot.overlayOwner ?? '');
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: owner?.color ?? AppColors.highlightColor,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.textPrimary, width: 4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.textPrimary, width: 2.5),
       ),
       child: Row(
         children: [
           if (owner != null)
-            PlayerFaceIndicator(face: owner.face, size: 64)
+            PlayerFaceIndicator(face: owner.face, size: 34)
           else
             const Icon(
               Icons.mouse_rounded,
-              size: 48,
+              size: 28,
               color: AppColors.textPrimary,
             ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   owner?.name ?? strings.overlayHostOwner,
-                  style: _titleStyle,
+                  style: _titleStyle.copyWith(fontSize: 15),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   strings.overlayInCharge,
-                  style: _bodyStyle.copyWith(fontWeight: FontWeight.bold),
+                  style: _bodyStyle.copyWith(fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ],
             ),
@@ -432,7 +430,6 @@ class _GameOverlayState extends State<GameOverlay>
 
     String label(_OverlayItem item) => switch (item) {
       _OverlayItem.resume => strings.overlayResume,
-      _OverlayItem.addPlayers => strings.overlayAddPlayers,
       _OverlayItem.layout => strings.overlayLayout,
       _OverlayItem.switchGame => strings.overlaySwitchGame,
       _OverlayItem.closeGame => freeMode
@@ -442,7 +439,6 @@ class _GameOverlayState extends State<GameOverlay>
 
     IconData icon(_OverlayItem item) => switch (item) {
       _OverlayItem.resume => Icons.play_arrow_rounded,
-      _OverlayItem.addPlayers => Icons.person_add_alt_1_rounded,
       _OverlayItem.layout => Icons.gamepad_rounded,
       _OverlayItem.switchGame => Icons.swap_horiz_rounded,
       _OverlayItem.closeGame =>
@@ -450,24 +446,28 @@ class _GameOverlayState extends State<GameOverlay>
     };
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.screenBackground,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.textPrimary, width: 4),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('ma•net', style: _titleStyle.copyWith(fontSize: 18)),
-          const SizedBox(height: 4),
-          Text(strings.playing(running?.name ?? ''), style: _titleStyle),
+          _buildOwnerHeader(context),
           const SizedBox(height: 10),
-          const SizedBox(height: 18),
+          Text(
+            strings.playing(running?.name ?? ''),
+            style: _titleStyle.copyWith(fontSize: 18),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 10),
           for (var i = 0; i < _items.length; i++)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 8),
               child: _MenuEntry(
                 icon: icon(_items[i]),
                 label: _confirming == _items[i]
@@ -527,10 +527,10 @@ class _MenuEntry extends StatelessWidget {
           curve: Curves.easeOutBack,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: AppColors.textPrimary,
                 width: focused ? 4 : 2.5,
@@ -557,12 +557,13 @@ class _MenuEntry extends StatelessWidget {
   }
 }
 
-class _PlayersPanel extends StatelessWidget {
+/// QR, link and seats: everything someone needs to hop in.
+class _JoinCard extends StatelessWidget {
   final String qrUrl;
   final String? link;
   final List<SlotModel> slots;
 
-  const _PlayersPanel({
+  const _JoinCard({
     required this.qrUrl,
     this.link,
     required this.slots,
@@ -573,22 +574,78 @@ class _PlayersPanel extends StatelessWidget {
     final strings = context.l10n.session;
     final nextFree = slots.indexWhere((slot) => slot.device == null);
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.screenBackground,
-        borderRadius: BorderRadius.circular(28),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.textPrimary, width: 4),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(strings.overlayPlayersTitle, style: _titleStyle),
-            const SizedBox(height: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 120,
+                height: 120,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.textPrimary, width: 2.5),
+                ),
+                child: Image.network(
+                  qrUrl,
+                  key: ValueKey(qrUrl),
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.none,
+                  gaplessPlayback: true,
+                  errorBuilder: (context, error, stack) => const Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 64,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(strings.overlayPlayersTitle, style: _titleStyle.copyWith(fontSize: 18)),
+                    if (link != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        link!.replaceFirst(RegExp('^https?://'), ''),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _bodyStyle.copyWith(
+                          fontFamily: 'monomaniac',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                    if (slots.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        nextFree >= 0
+                            ? strings.overlayNextSeat(nextFree + 1)
+                            : strings.overlayNoSeat,
+                        style: _bodyStyle.copyWith(fontSize: 13),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (slots.isNotEmpty) ...[
+            const SizedBox(height: 10),
             Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              alignment: WrapAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 for (var i = 0; i < slots.length; i++)
                   _SeatSquare(
@@ -598,38 +655,8 @@ class _PlayersPanel extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              nextFree >= 0
-                  ? strings.overlayNextSeat(nextFree + 1)
-                  : strings.overlayNoSeat,
-              style: _bodyStyle.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: 200,
-              height: 200,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.textPrimary, width: 3),
-              ),
-              child: Image.network(qrUrl, fit: BoxFit.contain),
-            ),
-            if (link != null) ...[
-              const SizedBox(height: 10),
-              SelectableText(link!, style: _titleStyle.copyWith(fontSize: 16)),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              strings.overlaySeatsHint,
-              style: _bodyStyle,
-              textAlign: TextAlign.center,
-            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -651,25 +678,25 @@ class _SeatSquare extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
     final square = Container(
-      width: 92,
-      height: 108,
-      padding: const EdgeInsets.all(8),
+      width: 58,
+      height: 70,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: isNext ? AppColors.highlightColor : AppColors.lightColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.textPrimary, width: isNext ? 4 : 3),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.textPrimary, width: isNext ? 3 : 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('p${index + 1}', style: _itemStyle),
+          Text('p${index + 1}', style: _itemStyle.copyWith(fontSize: 12)),
           const Spacer(),
           Center(
             child: device != null
-                ? PlayerFaceIndicator(face: device!.face, size: 36)
+                ? PlayerFaceIndicator(face: device!.face, size: 22)
                 : Icon(
                     isNext ? Icons.add_rounded : Icons.person_outline_rounded,
-                    size: 32,
+                    size: 20,
                     color: AppColors.textPrimary.withValues(
                       alpha: isNext ? 1 : 0.4,
                     ),
@@ -681,7 +708,7 @@ class _SeatSquare extends StatelessWidget {
               device?.name ?? strings.freeSeat,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: _bodyStyle.copyWith(fontSize: 12),
+              style: _bodyStyle.copyWith(fontSize: 10),
             ),
           ),
         ],
