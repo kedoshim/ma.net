@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../models/controller_branding.dart';
+import '../../widgets/layout_preview_widgets.dart';
 import '../../services/host_api_service.dart';
 import '../../services/online_service.dart';
 import '../../widgets/player_kick_menu.dart';
@@ -25,8 +28,10 @@ enum _OverlayPanel { menu, layouts }
 /// up/down (d-pad or stick) moves, A confirms, B goes back — or by mouse.
 class GameOverlay extends StatefulWidget {
   final PresetCatalog? presetCatalog;
+  /// Xbox or PlayStation button faces for the layout previews.
+  final ValueListenable<ControllerBrandingMode>? brandingMode;
 
-  const GameOverlay({super.key, this.presetCatalog});
+  const GameOverlay({super.key, this.presetCatalog, this.brandingMode});
 
   @override
   State<GameOverlay> createState() => _GameOverlayState();
@@ -345,6 +350,7 @@ class _GameOverlayState extends State<GameOverlay>
       child: switch (_panel) {
         _OverlayPanel.layouts => _LayoutsPanel(
           key: const ValueKey('layouts'),
+          brandingMode: widget.brandingMode,
           presets: _presets,
           focusedIndex: _layoutIndex,
           activeId: _activePresetId,
@@ -722,6 +728,7 @@ class _SeatSquare extends StatelessWidget {
 }
 
 class _LayoutsPanel extends StatefulWidget {
+  final ValueListenable<ControllerBrandingMode>? brandingMode;
   final List<ControllerPreset> presets;
   final int focusedIndex;
   final String? activeId;
@@ -729,6 +736,7 @@ class _LayoutsPanel extends StatefulWidget {
 
   const _LayoutsPanel({
     super.key,
+    required this.brandingMode,
     required this.presets,
     required this.focusedIndex,
     required this.activeId,
@@ -770,6 +778,46 @@ class _LayoutsPanelState extends State<_LayoutsPanel> {
     });
   }
 
+  /// The layout under the cursor, as the phones will show it.
+  Widget _buildPreview(ControllerPreset preset) {
+    final branding = widget.brandingMode;
+    Widget preview(ControllerBrandingMode mode) => AnimatedSwitcher(
+      duration: const Duration(milliseconds: 160),
+      child: StructuredLayoutPreview(
+        key: ValueKey(preset.id),
+        brandingMode: mode,
+        layout: preset.layout,
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.textPrimary, width: 3),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            preset.name,
+            style: _itemStyle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 10),
+          if (branding == null)
+            preview(ControllerBrandingMode.xinput)
+          else
+            ValueListenableBuilder<ControllerBrandingMode>(
+              valueListenable: branding,
+              builder: (context, mode, _) => preview(mode),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
@@ -780,10 +828,10 @@ class _LayoutsPanelState extends State<_LayoutsPanel> {
       alignment: Alignment.centerLeft,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 520),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: AppColors.screenBackground,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.textPrimary, width: 4),
         ),
         child: Column(
@@ -792,8 +840,14 @@ class _LayoutsPanelState extends State<_LayoutsPanel> {
           children: [
             Text(strings.overlayLayoutTitle, style: _titleStyle),
             const SizedBox(height: 12),
+            if (widget.focusedIndex < widget.presets.length) ...[
+              _buildPreview(widget.presets[widget.focusedIndex]),
+              const SizedBox(height: 14),
+            ],
             Flexible(
               child: SingleChildScrollView(
+                // Room for the focused entry, which grows a little.
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

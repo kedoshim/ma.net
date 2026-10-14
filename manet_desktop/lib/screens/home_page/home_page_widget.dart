@@ -1298,7 +1298,10 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                     ),
                   ],
 
-                  child: GameOverlay(presetCatalog: _presetCatalog),
+                  child: GameOverlay(
+                    presetCatalog: _presetCatalog,
+                    brandingMode: _brandingModeNotifier,
+                  ),
                 )
               : const SizedBox.shrink(),
         ),
