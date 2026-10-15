@@ -19,6 +19,9 @@ LOG = logging.getLogger("websocket")
 # it, so a phone that silently left the Wi-Fi is detected in ~15s instead of
 # waiting for the OS TCP timeout.
 WS_HEARTBEAT_SECONDS = 10.0
+# Through the tunnel (mobile data, Cloudflare in between) a pong can take
+# longer: give it 10 s instead of 5.
+WS_HEARTBEAT_ONLINE_SECONDS = 20.0
 
 # Input flood guard: a phone streams sticks at a few dozen messages per
 # second; past this rate messages are dropped, and a socket that keeps it up
@@ -32,6 +35,15 @@ ACCESS_WAIT_SECONDS = 180.0
 MAX_DEVICE_ID_LENGTH = 64
 MAX_NAME_LENGTH = 15
 MAX_FIELD_LENGTH = 32
+
+
+def _log_socket_error(ws, who: str):
+    exc = ws.exception()
+    if isinstance(exc, asyncio.TimeoutError):
+        # Missed pong: a locked phone or one that left the network. Expected.
+        LOG.info("%s stopped answering (asleep or offline): %s", who, exc)
+    else:
+        LOG.error("%s socket error: %s", who, exc)
 
 
 def _clip(value, limit):
@@ -70,14 +82,16 @@ class WebSocketRoutes:
         return None
 
     async def websocket_handler(self, request):
-        ws = web.WebSocketResponse(heartbeat=WS_HEARTBEAT_SECONDS)
+        # Through the tunnel every peer is cloudflared on loopback.
+        online = request_origin(request) == "online"
+        ws = web.WebSocketResponse(
+            heartbeat=WS_HEARTBEAT_ONLINE_SECONDS if online else WS_HEARTBEAT_SECONDS
+        )
         await ws.prepare(request)
 
         peer = request.remote
         sockname = request.transport.get_extra_info("sockname")
         local_ip = sockname[0] if isinstance(sockname, tuple) and sockname else None
-        # Through the tunnel every peer is cloudflared on loopback.
-        online = request_origin(request) == "online"
 
         device_id = request.query.get("deviceId")
         player_name = _clip(request.query.get("name"), MAX_NAME_LENGTH)
@@ -171,7 +185,7 @@ class WebSocketRoutes:
         try:
             async for msg in ws:
                 if msg.type == WSMsgType.ERROR:
-                    LOG.error("WS error %s", ws.exception())
+                    _log_socket_error(ws, f"Device {device_id}")
                     continue
 
                 if msg.type != WSMsgType.TEXT:
@@ -621,7 +635,7 @@ class WebSocketRoutes:
 
             async for msg in ws:
                 if msg.type == WSMsgType.ERROR:
-                    LOG.error("Admin WS error %s", ws.exception())
+                    _log_socket_error(ws, "Admin")
                 # just keep alive
 
         except asyncio.CancelledError:
