@@ -80,8 +80,23 @@ class _StripGeometry {
       topPadding + row * (cardHeight + rowGap) + cardHeight / 2;
 }
 
+/// A cursor sliding in from the left edge as the library opens.
+class _CursorEntry {
+  final Offset to;
+  final double start; // seconds since the library opened
+
+  const _CursorEntry(this.to, this.start);
+}
+
 class _LibraryViewState extends State<LibraryView>
     with SingleTickerProviderStateMixin {
+  // Cursors present when the library opens glide in from the left edge,
+  // one after the other, as if the players walked in from the lobby.
+  static const double _entryWindow = 0.6;
+  static const double _entryDelay = 0.12;
+  static const double _entryStagger = 0.07;
+  static const double _entryDuration = 0.55;
+
   // Full stick deflection crosses ~900 px per second.
   static const double _cursorSpeed = 900;
   static const double _deadZone = 0.12;
@@ -116,6 +131,7 @@ class _LibraryViewState extends State<LibraryView>
   final Map<String, String?> _lastVotes = {};
   // D-pad: where each cursor is gliding to (a card or chip center).
   final Map<String, Offset> _hops = {};
+  final Map<String, _CursorEntry> _entering = {};
   StreamSubscription<PadButtonEvent>? _buttons;
   Duration _lastTick = Duration.zero;
 
@@ -192,14 +208,36 @@ class _LibraryViewState extends State<LibraryView>
           );
 
     final players = session.snapshot.players;
+    final now = elapsed.inMicroseconds / 1e6;
     final next = <String, Offset>{};
     for (var i = 0; i < players.length; i++) {
       final player = players[i];
       final id = player.deviceId;
-      var position =
-          _cursors.value[id] ??
-          // New cursors start spread along the middle of the strip.
-          Offset(size.width * (i + 1) / (players.length + 1), size.height / 2);
+      var position = _cursors.value[id];
+      if (position == null) {
+        // New cursors start spread along the middle of the strip.
+        final home = Offset(
+          size.width * (i + 1) / (players.length + 1),
+          size.height / 2,
+        );
+        position = home;
+        if (now < _entryWindow && !_parked(player)) {
+          _entering[id] = _CursorEntry(home, now + _entryDelay + i * _entryStagger);
+          position = Offset(-_cursorSize, home.dy);
+        }
+      }
+      if (_entering[id] case final entry?) {
+        // Still gliding in: input waits (the stick is usually still held
+        // from walking out of the lobby).
+        final t = ((now - entry.start) / _entryDuration).clamp(0.0, 1.0);
+        final eased = Curves.easeOutBack.transform(t);
+        next[id] = Offset(
+          -_cursorSize + (entry.to.dx + _cursorSize) * eased,
+          entry.to.dy,
+        );
+        if (t >= 1) _entering.remove(id);
+        continue;
+      }
       final prevVote = _lastVotes[id];
       if (player.vote != prevVote) {
         if (player.vote != null) {
@@ -235,16 +273,17 @@ class _LibraryViewState extends State<LibraryView>
       );
     }
     _lastVotes.removeWhere((id, _) => !next.containsKey(id));
+    _entering.removeWhere((id, _) => !next.containsKey(id));
     _pushStrip([
       for (final player in players)
-        if (!_parked(player) && next[player.deviceId] != null)
-          next[player.deviceId]!,
+        if (!_parked(player) && !_entering.containsKey(player.deviceId))
+          if (next[player.deviceId] case final point?) point,
     ], dt);
     // Hover is recomputed every frame: the strip can move under a still
     // cursor.
     final hovered = {
       for (final player in players)
-        if (!_parked(player))
+        if (!_parked(player) && !_entering.containsKey(player.deviceId))
           if (next[player.deviceId] case final point?)
             if (_targetAt(point) case final target?) player.deviceId: target,
     };
@@ -393,7 +432,7 @@ class _LibraryViewState extends State<LibraryView>
     final session = context.read<SessionController>();
     final id = event.deviceId;
     final player = session.playerById(id);
-    if (player == null) return;
+    if (player == null || _entering.containsKey(id)) return;
     final reading = session.snapshot.reading[id];
     switch (event.button) {
       case 'A' || 'START':
