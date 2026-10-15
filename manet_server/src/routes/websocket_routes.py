@@ -55,6 +55,9 @@ class WebSocketRoutes:
                  tunnel_service=None, access_gate=None):
         self.tunnel_service = tunnel_service
         self.access_gate = access_gate
+        # Admitted after asking from the check-in panel ("ready"): they are
+        # checked in as soon as they join, no second press.
+        self._ready_on_join: set[str] = set()
         self.manager = manager
         self.admin_panel = admin_panel
         self.session = session
@@ -173,6 +176,9 @@ class WebSocketRoutes:
             "sameMachine": not online and peer is not None
                 and (peer == local_ip or peer in ("127.0.0.1", "::1")),
         })
+        if device_id in self._ready_on_join:
+            self._ready_on_join.discard(device_id)
+            self.session.check_in(device_id)
         self.admin_panel.broadcast_update()
 
         # Relayed analog triggers, as pressed/released for menus and the admin feed.
@@ -600,6 +606,7 @@ class WebSocketRoutes:
 
         if decision in done and not decision.cancelled() and decision.result():
             await ws.send_json({"type": "access_granted"})
+            self._ready_on_join.add(device_id)
             return True, player_name
         answered = decision.done()
         self.access_gate.withdraw(device_id)

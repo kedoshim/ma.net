@@ -1455,7 +1455,8 @@ void showEditNameDialog(
   BuildContext context,
   String currentName,
   ValueChanged<String> onNameChanged,
-  Future<String> Function() onRequestRandomName,
+  // Null hides the dice (no random names, e.g. when asking to join).
+  Future<String> Function()? onRequestRandomName,
   PlayerFaceData playerFace,
 ) {
   final noNamePlaceholder = context.l10n.editName.noName;
@@ -1553,6 +1554,8 @@ void showEditNameDialog(
                                           color: AppColors.textPrimary,
                                         ),
                                       )
+                                    : onRequestRandomName == null
+                                    ? const SizedBox.shrink()
                                     : GestureDetector(
                                         onTap: () async {
                                           setDialogState(() {
@@ -1670,6 +1673,8 @@ void showEditNameDialog(
                                         color: AppColors.textPrimary,
                                       ),
                                     )
+                                  : onRequestRandomName == null
+                                  ? const SizedBox.shrink()
                                   : GestureDetector(
                                       onTap: () async {
                                         setDialogState(() {

@@ -18,11 +18,6 @@ abstract class AppStrings {
 
 /// Joining a room with a password or the host's approval.
 abstract class AccessStrings {
-  String get nameTitle;
-  String get nameHint;
-  String get nameField;
-  String get nameRequired;
-  String get requestToJoin;
   String get passwordTitle;
   String get passwordHint;
   String get passwordField;

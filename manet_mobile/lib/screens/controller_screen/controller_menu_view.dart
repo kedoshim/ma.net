@@ -67,7 +67,7 @@ class ControllerMenuView extends StatefulWidget {
   /// Lobby: the player's name, editable right there.
   final String? playerName;
   final ValueChanged<String> onNameChanged;
-  final Future<String> Function() onRequestRandomName;
+  final Future<String> Function()? onRequestRandomName;
   final MovementMode? movementMode;
   final ValueChanged<MovementMode>? onMovementModeChanged;
   /// Console mode lobby: the face is in the playground (Cancel goes back to

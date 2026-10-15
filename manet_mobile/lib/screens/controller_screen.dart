@@ -896,16 +896,23 @@ class _ControllerScreenState extends State<ControllerScreen>
     ws?.send({'type': 'access_password', 'password': password});
   }
 
-  void _submitAccessName(String name, PlayerFaceData face) {
-    setState(() {
-      playerName = name;
-      _playerFace = face;
-      playerColor = face.color;
-      _faceController.text = face.faceText;
-    });
-    unawaited(PreferencesService.instance.savePlayerName(name));
-    unawaited(PreferencesService.instance.savePlayerFace(face));
-    ws?.send({'type': 'access_name', 'name': name, ...face.toJson()});
+  /// "Ready" on the check-in panel of an approval room: the request goes
+  /// out with the name and face picked there (the name first, if missing).
+  void _askToJoin() {
+    final name = playerName?.trim() ?? '';
+    if (name.isEmpty) {
+      final dialogContext = _controllerNavigatorKey.currentContext ?? context;
+      showEditNameDialog(dialogContext, '', (picked) {
+        unawaited(_updatePlayerName(picked));
+        _sendJoinRequest(picked);
+      }, null, _playerFace);
+      return;
+    }
+    _sendJoinRequest(name);
+  }
+
+  void _sendJoinRequest(String name) {
+    ws?.send({'type': 'access_name', 'name': name, ..._playerFace.toJson()});
   }
 
   void _retryAfterAccessDenied() {
@@ -2029,13 +2036,17 @@ class _ControllerScreenState extends State<ControllerScreen>
           onPulseCycleEnd: _toggleCenterPulse,
         );
       case ControllerScreenMode.gameplay:
-        if (_connectionState == ControllerConnectionState.connected) {
-          if (_menuMode) {
+        // Approval rooms: the usual check-in panel, but "ready" asks to join.
+        final joining = _accessStage == AccessGateStage.name;
+        if (_connectionState == ControllerConnectionState.connected || joining) {
+          if (_menuMode || joining) {
             final isOverlay = _overlayOpen && _overlayMine;
             final currentMode =
                 isOverlay ? _overlayMovementMode : _menuMovementMode;
             return ControllerMenuView(
-              menuContext: _overlayOpen
+              menuContext: joining
+                  ? MenuContext.checkIn
+                  : _overlayOpen
                   ? (_overlayMine ? MenuContext.overlay : MenuContext.playground)
                   : switch (_sessionPhase) {
                       'in_game' => MenuContext.loading,
@@ -2048,7 +2059,7 @@ class _ControllerScreenState extends State<ControllerScreen>
               consoleLobby: _consoleMode,
               inPlayZone: _inPlayZone,
               benched: _benched && _gameRunning,
-              onCheckIn: () => _send({'type': 'check_in'}),
+              onCheckIn: joining ? _askToJoin : () => _send({'type': 'check_in'}),
               onCheckOut: () => _send({'type': 'check_out'}),
               lineup: _lineup,
               onLineupPick: (value) => _send({'type': 'lineup_pick', 'value': value}),
@@ -2087,7 +2098,7 @@ class _ControllerScreenState extends State<ControllerScreen>
               onCloseDetails: _closeDetails,
               playerName: playerName,
               onNameChanged: _updatePlayerName,
-              onRequestRandomName: _requestRandomName,
+              onRequestRandomName: joining ? null : _requestRandomName,
             );
           }
         }
@@ -2311,15 +2322,12 @@ class _ControllerScreenState extends State<ControllerScreen>
           child: Stack(
             children: [
               _buildResponsiveControllerFrame(),
-              if (_accessStage != null)
+              if (_accessStage != null && _accessStage != AccessGateStage.name)
                 AccessGateView(
                   stage: _accessStage!,
                   reason: _accessReason,
                   attemptsLeft: _accessAttemptsLeft,
-                  initialName: playerName,
-                  initialFace: _playerFace,
                   onSubmitPassword: _submitAccessPassword,
-                  onSubmitName: _submitAccessName,
                   onRetry: _retryAfterAccessDenied,
                 ),
             ],
