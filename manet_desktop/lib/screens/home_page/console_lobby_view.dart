@@ -75,6 +75,10 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
   /// Cancelled out of the pill: rolls back in from the right edge.
   final Set<String> _returning = {};
 
+  /// Back from the library (or a game): faces are thrown in from the right
+  /// edge one after the other, at these scene times.
+  final Map<String, double> _arrivals = {};
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +98,18 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
 
   void _tick(Duration elapsed) {
     _time.value = elapsed.inMicroseconds / 1e6;
+    final arrived = [
+      for (final e in _arrivals.entries)
+        if (e.value <= _time.value) e.key,
+    ];
+    if (arrived.isNotEmpty) {
+      setState(() {
+        for (final id in arrived) {
+          _arrivals.remove(id);
+          _returning.add(id);
+        }
+      });
+    }
     final done = [
       for (final e in _morphing.entries)
         if (_time.value - e.value >= _morphDuration.inMilliseconds / 1000)
@@ -131,6 +147,15 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
         if (checked.contains(id)) _returning.add(id);
       }
     }
+    if (initial) {
+      var order = 0;
+      for (final id in snapshot.queue) {
+        if (checked.contains(id) && !zone.contains(id)) {
+          _arrivals[id] = 0.15 + order++ * 0.2;
+        }
+      }
+    }
+    _arrivals.removeWhere((id, _) => !checked.contains(id) || zone.contains(id));
     _morphing.removeWhere((id, _) => !checked.contains(id));
     _present = present;
     _checked = checked;
@@ -139,9 +164,14 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
 
   PlaygroundSpawn? _spawnOf(String id, Size size) {
     if (_returning.remove(id)) {
+      // A little different for each player, so a group doesn't fly as one.
+      final jitter = math.Random(id.hashCode);
       return PlaygroundSpawn(
-        Offset(size.width - _faceRadius - 2, size.height * 0.3),
-        const Offset(-520, -250),
+        Offset(
+          size.width - _faceRadius - 2,
+          size.height * (0.22 + 0.16 * jitter.nextDouble()),
+        ),
+        Offset(-480 - 140 * jitter.nextDouble(), -220 - 80 * jitter.nextDouble()),
       );
     }
     final from = _dropFrom.remove(id);
@@ -222,7 +252,8 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
       for (final id in snapshot.queue)
         if (_checked.contains(id) &&
             !_zone.contains(id) &&
-            !_morphing.containsKey(id))
+            !_morphing.containsKey(id) &&
+            !_arrivals.containsKey(id))
           id,
     ];
     final pills = [
