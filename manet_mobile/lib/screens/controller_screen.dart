@@ -202,6 +202,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   AccessGateStage? _accessStage;
   String? _accessReason;
   int? _accessAttemptsLeft;
+  String? _accessNameSuggestion;
   bool _pulseOptionsButton = false;
 
   // Lag meter: round trips of pings to the host. A slow link (200+ ms)
@@ -857,6 +858,12 @@ class _ControllerScreenState extends State<ControllerScreen>
       return false;
     }
     switch (data['type']) {
+      case 'access_required' when data['mode'] == 'name':
+        // Approval rooms ask for a name first, so the host sees the real one.
+        setState(() {
+          _accessStage = AccessGateStage.name;
+          _accessNameSuggestion = data['suggestion'] as String? ?? _accessNameSuggestion;
+        });
       case 'access_required':
         setState(() {
           _accessStage = AccessGateStage.password;
@@ -891,6 +898,11 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   void _submitAccessPassword(String password) {
     ws?.send({'type': 'access_password', 'password': password});
+  }
+
+  void _submitAccessName(String name) {
+    unawaited(PreferencesService.instance.savePlayerName(name));
+    ws?.send({'type': 'access_name', 'name': name});
   }
 
   void _retryAfterAccessDenied() {
@@ -2301,7 +2313,9 @@ class _ControllerScreenState extends State<ControllerScreen>
                   stage: _accessStage!,
                   reason: _accessReason,
                   attemptsLeft: _accessAttemptsLeft,
+                  nameSuggestion: _accessNameSuggestion,
                   onSubmitPassword: _submitAccessPassword,
+                  onSubmitName: _submitAccessName,
                   onRetry: _retryAfterAccessDenied,
                 ),
             ],

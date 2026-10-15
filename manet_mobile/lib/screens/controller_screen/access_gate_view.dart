@@ -4,7 +4,7 @@ import '../../l10n/app_localizations.dart';
 import '../../theme/app_colors.dart';
 
 /// What the host's join rule asks of this phone before it gets a seat.
-enum AccessGateStage { password, pending, denied }
+enum AccessGateStage { name, password, pending, denied }
 
 const TextStyle _titleStyle = TextStyle(
   fontFamily: 'momo',
@@ -18,22 +18,26 @@ const TextStyle _bodyStyle = TextStyle(
   color: AppColors.textPrimary,
 );
 
-/// Full-screen card shown while the room asks for a password, waits for
-/// the host, or turned the phone away.
+/// Full-screen card shown while the room asks for a name or a password,
+/// waits for the host, or turned the phone away.
 class AccessGateView extends StatefulWidget {
   const AccessGateView({
     super.key,
     required this.stage,
     required this.onSubmitPassword,
+    required this.onSubmitName,
     required this.onRetry,
     this.reason,
     this.attemptsLeft,
+    this.nameSuggestion,
   });
 
   final AccessGateStage stage;
   final String? reason;
   final int? attemptsLeft;
+  final String? nameSuggestion;
   final ValueChanged<String> onSubmitPassword;
+  final ValueChanged<String> onSubmitName;
   final VoidCallback onRetry;
 
   @override
@@ -42,7 +46,9 @@ class AccessGateView extends StatefulWidget {
 
 class _AccessGateViewState extends State<AccessGateView> {
   final TextEditingController _password = TextEditingController();
+  final TextEditingController _name = TextEditingController();
   bool _visible = false;
+  bool _nameMissing = false;
 
   @override
   void didUpdateWidget(AccessGateView oldWidget) {
@@ -53,12 +59,76 @@ class _AccessGateViewState extends State<AccessGateView> {
   @override
   void dispose() {
     _password.dispose();
+    _name.dispose();
     super.dispose();
   }
 
   void _submit() {
     final value = _password.text.trim();
     if (value.isNotEmpty) widget.onSubmitPassword(value);
+  }
+
+  void _submitName() {
+    final value = _name.text.trim();
+    if (value.isEmpty) {
+      setState(() => _nameMissing = true);
+      return;
+    }
+    widget.onSubmitName(value);
+  }
+
+  OutlineInputBorder get _fieldBorder => OutlineInputBorder(
+    borderRadius: BorderRadius.circular(12),
+    borderSide: const BorderSide(color: AppColors.textPrimary, width: 2),
+  );
+
+  List<Widget> _nameStage(BuildContext context) {
+    final strings = context.l10n.access;
+    final suggestion = widget.nameSuggestion;
+    return [
+      const Icon(Icons.badge_rounded, size: 48, color: AppColors.textPrimary),
+      const SizedBox(height: 12),
+      Text(strings.nameTitle, style: _titleStyle, textAlign: TextAlign.center),
+      const SizedBox(height: 6),
+      Text(strings.nameHint, style: _bodyStyle, textAlign: TextAlign.center),
+      const SizedBox(height: 18),
+      TextField(
+        controller: _name,
+        autofocus: true,
+        maxLength: 15,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.go,
+        onChanged: (_) {
+          if (_nameMissing) setState(() => _nameMissing = false);
+        },
+        onSubmitted: (_) => _submitName(),
+        style: _bodyStyle,
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.white,
+          labelText: strings.nameField,
+          labelStyle: _bodyStyle,
+          errorText: _nameMissing ? strings.nameRequired : null,
+          errorStyle: _bodyStyle.copyWith(fontSize: 12, color: const Color(0xFFEF4444)),
+          counterStyle: _bodyStyle.copyWith(fontSize: 11),
+          suffixIcon: suggestion == null
+              ? null
+              : IconButton(
+                  tooltip: strings.suggestName,
+                  icon: const Icon(Icons.casino_rounded, color: AppColors.textPrimary),
+                  onPressed: () => setState(() {
+                    _name.text = suggestion;
+                    _nameMissing = false;
+                  }),
+                ),
+          border: _fieldBorder,
+          enabledBorder: _fieldBorder,
+          focusedBorder: _fieldBorder,
+        ),
+      ),
+      const SizedBox(height: 8),
+      _button(strings.requestToJoin, _submitName),
+    ];
   }
 
   Widget _button(String label, VoidCallback onPressed) {
@@ -163,6 +233,7 @@ class _AccessGateViewState extends State<AccessGateView> {
   @override
   Widget build(BuildContext context) {
     final children = switch (widget.stage) {
+      AccessGateStage.name => _nameStage(context),
       AccessGateStage.password => _passwordStage(context),
       AccessGateStage.pending => _pendingStage(context),
       AccessGateStage.denied => _deniedStage(context),

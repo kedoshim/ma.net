@@ -488,6 +488,18 @@ class PtBrAndroidOnboardingStrings implements AndroidOnboardingStrings {
 
 class PtBrAccessStrings implements AccessStrings {
   @override
+  String get nameTitle => 'Como você quer ser chamado?';
+  @override
+  String get nameHint => 'É esse nome que o host vai ver no seu pedido para entrar.';
+  @override
+  String get nameField => 'Seu nome';
+  @override
+  String get nameRequired => 'Escolha um nome';
+  @override
+  String get suggestName => 'Sugerir um nome';
+  @override
+  String get requestToJoin => 'Pedir para entrar';
+  @override
   String get passwordTitle => 'Esta sala tem senha';
   @override
   String get passwordHint => 'Peça a senha para quem está hospedando.';

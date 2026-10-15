@@ -566,8 +566,11 @@ class WebSocketRoutes:
 
     async def _wait_for_approval(self, ws, device_id, player_name, customization, lang, origin):
         if not player_name:
-            from src.core.name_generator import NameGenerator
-            player_name = NameGenerator.generate(lang)
+            # The host should see the name the player picks, not a random
+            # one: ask for it before the request goes out.
+            player_name = await self._wait_for_name(ws, lang)
+            if player_name is None:
+                return False, None
         identity = {
             key: customization[key]
             for key in ("color", "faceText", "faceRotation")
@@ -604,6 +607,39 @@ class WebSocketRoutes:
             return False, player_name
         await self._deny(ws, "rejected" if answered else "timeout")
         return False, player_name
+
+    async def _wait_for_name(self, ws, lang) -> str | None:
+        from src.core.name_generator import NameGenerator
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + ACCESS_WAIT_SECONDS
+        await ws.send_json({
+            "type": "access_required",
+            "mode": "name",
+            "suggestion": NameGenerator.generate(lang),
+        })
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                await self._deny(ws, "timeout")
+                return None
+            try:
+                msg = await ws.receive(timeout=remaining)
+            except asyncio.TimeoutError:
+                continue
+            if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED, WSMsgType.ERROR):
+                return None
+            if msg.type != WSMsgType.TEXT:
+                continue
+            try:
+                data = json.loads(msg.data)
+            except Exception:
+                continue
+            if not isinstance(data, dict) or data.get("type") != "access_name":
+                continue
+            name = str(data.get("name") or "").strip()[:MAX_NAME_LENGTH]
+            if name:
+                return name
+            await ws.send_json({"type": "access_required", "mode": "name"})
 
     async def _deny(self, ws, reason: str):
         try:
