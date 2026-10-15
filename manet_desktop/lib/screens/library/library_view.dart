@@ -85,18 +85,11 @@ class _CursorEntry {
   final Offset from;
   final Offset to;
   final double start; // seconds since the library opened
-  final double arc; // how high the throw lifts it, in pixels
 
-  const _CursorEntry(this.from, this.to, this.start, this.arc);
+  const _CursorEntry(this.from, this.to, this.start);
 
-  /// Fast off the edge, then a long slowdown, on a slight upward arc.
-  Offset at(double t) {
-    final x = from.dx + (to.dx - from.dx) * Curves.easeOutQuart.transform(t);
-    final y = from.dy +
-        (to.dy - from.dy) * Curves.easeOutCubic.transform(t) -
-        arc * math.sin(math.pi * t) * (1 - t);
-    return Offset(x, y);
-  }
+  /// Fast off the edge, then a long slowdown, in a straight line.
+  Offset at(double t) => Offset.lerp(from, to, Curves.easeOutQuart.transform(t))!;
 }
 
 class _LibraryViewState extends State<LibraryView>
@@ -323,7 +316,6 @@ class _LibraryViewState extends State<LibraryView>
       Offset(-_cursorSize, size.height * between(0.3, 0.7)),
       Offset(x, size.height * between(0.18, 0.82)),
       start,
-      between(40, 110),
     );
   }
 
