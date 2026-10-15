@@ -160,6 +160,12 @@ class WebSocketRoutes:
                 "total_slots": len(self.manager.slots)
             })
 
+        if device_id in self._ready_on_join:
+            # Before any state goes out, so neither the phone nor the TV
+            # shows them editing their face again for a moment.
+            self._ready_on_join.discard(device_id)
+            self.session.check_in(device_id)
+
         await ws.send_json(self.manager.build_mouse_mode_payload(device_id))
         await ws.send_json(self.manager.build_active_layout_payload())
         phone_state = self.session.phone_payload(device_id)
@@ -176,9 +182,6 @@ class WebSocketRoutes:
             "sameMachine": not online and peer is not None
                 and (peer == local_ip or peer in ("127.0.0.1", "::1")),
         })
-        if device_id in self._ready_on_join:
-            self._ready_on_join.discard(device_id)
-            self.session.check_in(device_id)
         self.admin_panel.broadcast_update()
 
         # Relayed analog triggers, as pressed/released for menus and the admin feed.
