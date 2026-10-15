@@ -488,9 +488,9 @@ class PtBrAndroidOnboardingStrings implements AndroidOnboardingStrings {
 
 class PtBrAccessStrings implements AccessStrings {
   @override
-  String get nameTitle => 'Como você quer ser chamado?';
+  String get nameTitle => 'Monte seu rostinho';
   @override
-  String get nameHint => 'É esse nome que o host vai ver no seu pedido para entrar.';
+  String get nameHint => 'É assim que o host vai ver seu pedido para entrar.';
   @override
   String get nameField => 'Seu nome';
   @override

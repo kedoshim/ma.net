@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:manet_mobile/l10n/app_localizations.dart';
+import 'package:manet_mobile/models/player_face.dart';
 import 'package:manet_mobile/screens/controller_screen/access_gate_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,13 +17,19 @@ void main() {
     final sent = <String>[];
     await tester.pumpWidget(_app(AccessGateView(
       stage: AccessGateStage.name,
-      onSubmitName: sent.add,
+      onSubmitName: (name, face) => sent.add('$name ${face.faceText}'),
+      initialFace: const PlayerFaceData(
+        color: Color(0xFF7C9CFF),
+        faceText: ':)',
+        rotation: PlayerFaceRotation.normal,
+      ),
       onSubmitPassword: (_) {},
       onRetry: () {},
     )));
     await tester.pumpAndSettle();
 
     // Blank: an error, nothing sent.
+    await tester.ensureVisible(find.byType(ElevatedButton));
     await tester.tap(find.byType(ElevatedButton));
     await tester.pump();
     expect(sent, isEmpty);
@@ -31,9 +38,12 @@ void main() {
     // The player picks the name: no random suggestion.
     expect(find.byIcon(Icons.casino_rounded), findsNothing);
 
-    await tester.enterText(find.byType(TextField), '  Abraão  ');
+    // Face text first (it is the first field), then the name.
+    await tester.enterText(find.byType(TextField).first, 'xD');
+    await tester.enterText(find.byType(TextField).last, '  Abraão  ');
+    await tester.ensureVisible(find.byType(ElevatedButton));
     await tester.tap(find.byType(ElevatedButton));
     await tester.pump();
-    expect(sent, ['Abraão']);
+    expect(sent, ['Abraão xD']);
   });
 }

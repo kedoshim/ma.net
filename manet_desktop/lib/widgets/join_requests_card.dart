@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../services/access_service.dart';
 import '../services/sound_effect_service.dart';
 import '../theme/app_colors.dart';
+import 'player_face_indicator.dart';
 import 'juicy_widgets.dart';
 
 const TextStyle _nameStyle = TextStyle(
@@ -18,11 +19,6 @@ const TextStyle _buttonStyle = TextStyle(
   fontSize: 13,
   color: AppColors.textPrimary,
 );
-
-Color _parseColor(String? hex) {
-  final value = int.tryParse((hex ?? '').replaceFirst('#', ''), radix: 16);
-  return value == null ? AppColors.highlightColor : Color(0xFF000000 | value);
-}
 
 /// Phones waiting for the host's answer ("I approve" rule), stacked in a
 /// corner over the lobby and the in-game overlay.
@@ -91,22 +87,8 @@ class _RequestTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: _parseColor(request.color),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.textPrimary, width: 2.5),
-                  ),
-                  child: Text(
-                    request.faceText ?? '',
-                    style: _buttonStyle.copyWith(color: Colors.white, fontSize: 12),
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                  ),
-                ),
+                // Drawn like in the lobby (dark face text, its rotation).
+                PlayerFaceIndicator(face: request.face, size: 44),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(

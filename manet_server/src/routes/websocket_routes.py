@@ -565,12 +565,12 @@ class WebSocketRoutes:
             await ws.send_json({"type": "access_password_wrong", "attemptsLeft": left})
 
     async def _wait_for_approval(self, ws, device_id, player_name, customization, lang, origin):
-        if not player_name:
-            # The host should see the name the player picks, not a random
-            # one: ask for it before the request goes out.
-            player_name = await self._wait_for_name(ws)
-            if player_name is None:
-                return False, None
+        # The host should see who is asking: the player sets their name and
+        # face first (every attempt, so they can change them after a
+        # refusal). `customization` is updated in place and registered as is.
+        player_name = await self._wait_for_profile(ws, customization)
+        if player_name is None:
+            return False, None
         identity = {
             key: customization[key]
             for key in ("color", "faceText", "faceRotation")
@@ -608,7 +608,7 @@ class WebSocketRoutes:
         await self._deny(ws, "rejected" if answered else "timeout")
         return False, player_name
 
-    async def _wait_for_name(self, ws) -> str | None:
+    async def _wait_for_profile(self, ws, customization) -> str | None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + ACCESS_WAIT_SECONDS
         await ws.send_json({"type": "access_required", "mode": "name"})
@@ -633,6 +633,9 @@ class WebSocketRoutes:
                 continue
             name = str(data.get("name") or "").strip()[:MAX_NAME_LENGTH]
             if name:
+                for key in ("color", "faceText", "faceRotation", "presetId"):
+                    if isinstance(data.get(key), str):
+                        customization[key] = data[key][:MAX_FIELD_LENGTH]
                 return name
             await ws.send_json({"type": "access_required", "mode": "name"})
 

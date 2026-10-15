@@ -896,9 +896,16 @@ class _ControllerScreenState extends State<ControllerScreen>
     ws?.send({'type': 'access_password', 'password': password});
   }
 
-  void _submitAccessName(String name) {
+  void _submitAccessName(String name, PlayerFaceData face) {
+    setState(() {
+      playerName = name;
+      _playerFace = face;
+      playerColor = face.color;
+      _faceController.text = face.faceText;
+    });
     unawaited(PreferencesService.instance.savePlayerName(name));
-    ws?.send({'type': 'access_name', 'name': name});
+    unawaited(PreferencesService.instance.savePlayerFace(face));
+    ws?.send({'type': 'access_name', 'name': name, ...face.toJson()});
   }
 
   void _retryAfterAccessDenied() {
@@ -2309,6 +2316,8 @@ class _ControllerScreenState extends State<ControllerScreen>
                   stage: _accessStage!,
                   reason: _accessReason,
                   attemptsLeft: _accessAttemptsLeft,
+                  initialName: playerName,
+                  initialFace: _playerFace,
                   onSubmitPassword: _submitAccessPassword,
                   onSubmitName: _submitAccessName,
                   onRetry: _retryAfterAccessDenied,

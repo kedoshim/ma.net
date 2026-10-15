@@ -488,9 +488,9 @@ class EnUsAndroidOnboardingStrings implements AndroidOnboardingStrings {
 
 class EnUsAccessStrings implements AccessStrings {
   @override
-  String get nameTitle => 'What should we call you?';
+  String get nameTitle => 'Make your face';
   @override
-  String get nameHint => 'The host sees this name on your request to join.';
+  String get nameHint => 'This is how the host sees your request to join.';
   @override
   String get nameField => 'Your name';
   @override

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/player_face.dart';
 import '../utils/app_preferences.dart';
 import 'admin_auth.dart';
 import 'host_api_service.dart';
@@ -21,23 +22,21 @@ class JoinRequest {
   final String deviceId;
   final String name;
   final bool online;
-  final String? color;
-  final String? faceText;
+  /// The face the player made on their phone before asking.
+  final PlayerFaceData face;
 
   const JoinRequest({
     required this.deviceId,
     required this.name,
     required this.online,
-    this.color,
-    this.faceText,
+    required this.face,
   });
 
   factory JoinRequest.fromJson(Map<String, dynamic> json) => JoinRequest(
     deviceId: json['deviceId'] as String,
     name: json['name'] as String? ?? '',
     online: json['origin'] == 'online',
-    color: json['color'] as String?,
-    faceText: json['faceText'] as String?,
+    face: PlayerFaceData.fromJson(json),
   );
 }
 

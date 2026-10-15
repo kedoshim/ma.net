@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../models/player_face.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/player_face_indicator.dart';
 
 /// What the host's join rule asks of this phone before it gets a seat.
 enum AccessGateStage { name, password, pending, denied }
@@ -29,13 +31,19 @@ class AccessGateView extends StatefulWidget {
     required this.onRetry,
     this.reason,
     this.attemptsLeft,
+    this.initialName,
+    this.initialFace,
   });
 
   final AccessGateStage stage;
   final String? reason;
   final int? attemptsLeft;
+
+  /// What the phone already has, so a retry starts from the last attempt.
+  final String? initialName;
+  final PlayerFaceData? initialFace;
   final ValueChanged<String> onSubmitPassword;
-  final ValueChanged<String> onSubmitName;
+  final void Function(String name, PlayerFaceData face) onSubmitName;
   final VoidCallback onRetry;
 
   @override
@@ -45,8 +53,18 @@ class AccessGateView extends StatefulWidget {
 class _AccessGateViewState extends State<AccessGateView> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _name = TextEditingController();
+  final TextEditingController _faceText = TextEditingController();
+  late PlayerFaceData _face;
   bool _visible = false;
   bool _nameMissing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _face = widget.initialFace ?? PlayerFaceData.random();
+    _name.text = widget.initialName ?? '';
+    _faceText.text = _face.faceText;
+  }
 
   @override
   void didUpdateWidget(AccessGateView oldWidget) {
@@ -58,6 +76,7 @@ class _AccessGateViewState extends State<AccessGateView> {
   void dispose() {
     _password.dispose();
     _name.dispose();
+    _faceText.dispose();
     super.dispose();
   }
 
@@ -72,8 +91,15 @@ class _AccessGateViewState extends State<AccessGateView> {
       setState(() => _nameMissing = true);
       return;
     }
-    widget.onSubmitName(value);
+    widget.onSubmitName(value, _face);
   }
+
+  void _setFace(PlayerFaceData face) => setState(() => _face = face);
+
+  Widget _sectionLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(text, style: _bodyStyle.copyWith(fontWeight: FontWeight.bold)),
+  );
 
   OutlineInputBorder get _fieldBorder => OutlineInputBorder(
     borderRadius: BorderRadius.circular(12),
@@ -82,16 +108,91 @@ class _AccessGateViewState extends State<AccessGateView> {
 
   List<Widget> _nameStage(BuildContext context) {
     final strings = context.l10n.access;
+    final presets = context.l10n.presets;
     return [
-      const Icon(Icons.badge_rounded, size: 48, color: AppColors.textPrimary),
-      const SizedBox(height: 12),
       Text(strings.nameTitle, style: _titleStyle, textAlign: TextAlign.center),
       const SizedBox(height: 6),
       Text(strings.nameHint, style: _bodyStyle, textAlign: TextAlign.center),
+      const SizedBox(height: 16),
+      PlayerFaceIndicator(
+        face: _face,
+        size: 96,
+        roundedSquare: true,
+        borderColor: AppColors.textPrimary,
+      ),
+      const SizedBox(height: 14),
+      _sectionLabel(presets.face),
+      SizedBox(
+        width: 120,
+        child: TextField(
+          controller: _faceText,
+          maxLength: 3,
+          textAlign: TextAlign.center,
+          onChanged: (text) => _setFace(_face.copyWith(faceText: text, clearPreset: true)),
+          style: _bodyStyle.copyWith(fontFamily: 'monomaniac', fontSize: 22),
+          decoration: InputDecoration(
+            isDense: true,
+            counterText: '',
+            filled: true,
+            fillColor: Colors.white,
+            border: _fieldBorder,
+            enabledBorder: _fieldBorder,
+            focusedBorder: _fieldBorder,
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+      _sectionLabel(presets.rotation),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: [
+          for (final rotation in PlayerFaceRotation.values)
+            GestureDetector(
+              onTap: () => _setFace(_face.copyWith(rotation: rotation, clearPreset: true)),
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: rotation == _face.rotation ? AppColors.textPrimary : Colors.transparent,
+                    width: 2.5,
+                  ),
+                ),
+                child: PlayerFaceIndicator(face: _face.copyWith(rotation: rotation), size: 36),
+              ),
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _sectionLabel(presets.colors),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: [
+          for (final color in playerFacePalette)
+            GestureDetector(
+              onTap: () => _setFace(_face.copyWith(color: color, clearPreset: true)),
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.textPrimary,
+                    width: color.toARGB32() == _face.color.toARGB32() ? 3.5 : 1.5,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
       const SizedBox(height: 18),
       TextField(
         controller: _name,
-        autofocus: true,
         maxLength: 15,
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.go,
