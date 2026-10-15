@@ -80,22 +80,38 @@ class _StripGeometry {
       topPadding + row * (cardHeight + rowGap) + cardHeight / 2;
 }
 
-/// A cursor sliding in from the left edge as the library opens.
+/// A cursor thrown in from the left edge as the library opens.
 class _CursorEntry {
+  final Offset from;
   final Offset to;
   final double start; // seconds since the library opened
+  final double arc; // how high the throw lifts it, in pixels
 
-  const _CursorEntry(this.to, this.start);
+  const _CursorEntry(this.from, this.to, this.start, this.arc);
+
+  /// Fast off the edge, then a long slowdown, on a slight upward arc.
+  Offset at(double t) {
+    final x = from.dx + (to.dx - from.dx) * Curves.easeOutQuart.transform(t);
+    final y = from.dy +
+        (to.dy - from.dy) * Curves.easeOutCubic.transform(t) -
+        arc * math.sin(math.pi * t) * (1 - t);
+    return Offset(x, y);
+  }
 }
 
 class _LibraryViewState extends State<LibraryView>
     with SingleTickerProviderStateMixin {
-  // Cursors present when the library opens glide in from the left edge,
-  // one after the other, as if the players walked in from the lobby.
+  // Cursors present when the library opens are thrown in from the left
+  // edge, one after the other, as if the players were flung in from the
+  // lobby, and slow down until they stop somewhere on the screen.
   static const double _entryWindow = 0.6;
-  static const double _entryDelay = 0.12;
-  static const double _entryStagger = 0.07;
-  static const double _entryDuration = 0.55;
+  static const double _entryDelay = 0.15;
+  static const double _entryStagger = 0.16;
+  static const double _entryDuration = 1.3;
+  final math.Random _entryRandom = math.Random();
+  // Each thrown cursor lands in its own (shuffled) slice of the screen, so
+  // a group spreads out instead of piling up.
+  List<int> _entryLanes = const [];
 
   // Full stick deflection crosses ~900 px per second.
   static const double _cursorSpeed = 900;
@@ -222,19 +238,24 @@ class _LibraryViewState extends State<LibraryView>
         );
         position = home;
         if (now < _entryWindow && !_parked(player)) {
-          _entering[id] = _CursorEntry(home, now + _entryDelay + i * _entryStagger);
-          position = Offset(-_cursorSize, home.dy);
+          if (_entryLanes.length != players.length) {
+            _entryLanes = List.generate(players.length, (lane) => lane)..shuffle(_entryRandom);
+          }
+          final entry = _throwIn(
+            size,
+            now + _entryDelay + i * _entryStagger,
+            _entryLanes[i],
+            players.length,
+          );
+          _entering[id] = entry;
+          position = entry.from;
         }
       }
       if (_entering[id] case final entry?) {
-        // Still gliding in: input waits (the stick is usually still held
+        // Still flying in: input waits (the stick is usually still held
         // from walking out of the lobby).
         final t = ((now - entry.start) / _entryDuration).clamp(0.0, 1.0);
-        final eased = Curves.easeOutBack.transform(t);
-        next[id] = Offset(
-          -_cursorSize + (entry.to.dx + _cursorSize) * eased,
-          entry.to.dy,
-        );
+        next[id] = entry.at(t);
         if (t >= 1) _entering.remove(id);
         continue;
       }
@@ -289,6 +310,21 @@ class _LibraryViewState extends State<LibraryView>
     };
     if (!_sameCursors(next, _cursors.value)) _cursors.value = next;
     if (!mapEquals(hovered, _hovered.value)) _hovered.value = hovered;
+  }
+
+  /// A throw from a random height on the left edge to a random spot,
+  /// clear of the sides (a cursor resting there would push the strip).
+  _CursorEntry _throwIn(Size size, double start, int lane, int lanes) {
+    double between(double a, double b) => a + (b - a) * _entryRandom.nextDouble();
+    final minX = math.min(_pushZone + 60, size.width / 2);
+    final maxX = math.max(minX, size.width - _pushZone - 60);
+    final x = minX + (maxX - minX) * (lane + between(0.15, 0.85)) / lanes;
+    return _CursorEntry(
+      Offset(-_cursorSize, size.height * between(0.3, 0.7)),
+      Offset(x, size.height * between(0.18, 0.82)),
+      start,
+      between(40, 110),
+    );
   }
 
   void _onStamped() {
