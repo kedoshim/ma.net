@@ -11,7 +11,7 @@
     "{prenoum_m} {noun_m}",
     "{prenoum_f} {noun_f}",
     "{prenoum_m} {adjective_m}",
-    "{prenoum_f} {adjectives_f}"
+    "{prenoum_f} {adjective_f}"
   ],
 
   "prenoum_m": [
