@@ -12,11 +12,10 @@ Widget _app(Widget gate) => AppLocalizations(
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({'manet_locale_language_code': 'pt'}));
 
-  testWidgets('name step: dice fills the suggestion, blank is refused, the typed name is sent', (tester) async {
+  testWidgets('name step: blank is refused, no suggestion, the typed name is sent', (tester) async {
     final sent = <String>[];
     await tester.pumpWidget(_app(AccessGateView(
       stage: AccessGateStage.name,
-      nameSuggestion: 'Quibe Boiadero',
       onSubmitName: sent.add,
       onSubmitPassword: (_) {},
       onRetry: () {},
@@ -29,11 +28,8 @@ void main() {
     expect(sent, isEmpty);
     expect(find.text('Escolha um nome'), findsOneWidget);
 
-    // The dice only fills the field; the player still confirms.
-    await tester.tap(find.byIcon(Icons.casino_rounded));
-    await tester.pump();
-    expect(find.text('Quibe Boiadero'), findsOneWidget);
-    expect(sent, isEmpty);
+    // The player picks the name: no random suggestion.
+    expect(find.byIcon(Icons.casino_rounded), findsNothing);
 
     await tester.enterText(find.byType(TextField), '  Abraão  ');
     await tester.tap(find.byType(ElevatedButton));

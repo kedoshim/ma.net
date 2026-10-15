@@ -22,7 +22,6 @@ abstract class AccessStrings {
   String get nameHint;
   String get nameField;
   String get nameRequired;
-  String get suggestName;
   String get requestToJoin;
   String get passwordTitle;
   String get passwordHint;

@@ -496,8 +496,6 @@ class EnUsAccessStrings implements AccessStrings {
   @override
   String get nameRequired => 'Pick a name';
   @override
-  String get suggestName => 'Suggest a name';
-  @override
   String get requestToJoin => 'Ask to join';
   @override
   String get passwordTitle => 'This room has a password';

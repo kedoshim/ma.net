@@ -29,13 +29,11 @@ class AccessGateView extends StatefulWidget {
     required this.onRetry,
     this.reason,
     this.attemptsLeft,
-    this.nameSuggestion,
   });
 
   final AccessGateStage stage;
   final String? reason;
   final int? attemptsLeft;
-  final String? nameSuggestion;
   final ValueChanged<String> onSubmitPassword;
   final ValueChanged<String> onSubmitName;
   final VoidCallback onRetry;
@@ -84,7 +82,6 @@ class _AccessGateViewState extends State<AccessGateView> {
 
   List<Widget> _nameStage(BuildContext context) {
     final strings = context.l10n.access;
-    final suggestion = widget.nameSuggestion;
     return [
       const Icon(Icons.badge_rounded, size: 48, color: AppColors.textPrimary),
       const SizedBox(height: 12),
@@ -111,16 +108,6 @@ class _AccessGateViewState extends State<AccessGateView> {
           errorText: _nameMissing ? strings.nameRequired : null,
           errorStyle: _bodyStyle.copyWith(fontSize: 12, color: const Color(0xFFEF4444)),
           counterStyle: _bodyStyle.copyWith(fontSize: 11),
-          suffixIcon: suggestion == null
-              ? null
-              : IconButton(
-                  tooltip: strings.suggestName,
-                  icon: const Icon(Icons.casino_rounded, color: AppColors.textPrimary),
-                  onPressed: () => setState(() {
-                    _name.text = suggestion;
-                    _nameMissing = false;
-                  }),
-                ),
           border: _fieldBorder,
           enabledBorder: _fieldBorder,
           focusedBorder: _fieldBorder,

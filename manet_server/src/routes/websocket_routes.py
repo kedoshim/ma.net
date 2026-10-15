@@ -568,7 +568,7 @@ class WebSocketRoutes:
         if not player_name:
             # The host should see the name the player picks, not a random
             # one: ask for it before the request goes out.
-            player_name = await self._wait_for_name(ws, lang)
+            player_name = await self._wait_for_name(ws)
             if player_name is None:
                 return False, None
         identity = {
@@ -608,15 +608,10 @@ class WebSocketRoutes:
         await self._deny(ws, "rejected" if answered else "timeout")
         return False, player_name
 
-    async def _wait_for_name(self, ws, lang) -> str | None:
-        from src.core.name_generator import NameGenerator
+    async def _wait_for_name(self, ws) -> str | None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + ACCESS_WAIT_SECONDS
-        await ws.send_json({
-            "type": "access_required",
-            "mode": "name",
-            "suggestion": NameGenerator.generate(lang),
-        })
+        await ws.send_json({"type": "access_required", "mode": "name"})
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:

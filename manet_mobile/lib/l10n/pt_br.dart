@@ -496,8 +496,6 @@ class PtBrAccessStrings implements AccessStrings {
   @override
   String get nameRequired => 'Escolha um nome';
   @override
-  String get suggestName => 'Sugerir um nome';
-  @override
   String get requestToJoin => 'Pedir para entrar';
   @override
   String get passwordTitle => 'Esta sala tem senha';
