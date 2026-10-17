@@ -364,7 +364,13 @@ class SessionState:
         # The screen decides, not window focus: the lobby and the game
         # selection always own the phones.
         loading = self.phase == SessionPhase.IN_GAME and not self.game_ready
-        menu = self.overlay_open or loading or self.phase in MENU_PHASES
+        # Tool mode: the lobby doesn't take the phones; they stay plain
+        # gamepads for whatever runs on the PC (the host can still open the
+        # game library by hand).
+        menu_phase = self.phase in MENU_PHASES and (
+            self.console or self.phase != SessionPhase.LOBBY
+        )
+        menu = self.overlay_open or loading or menu_phase
         if menu:
             mode = InputMode.MENU
         elif self.phase == SessionPhase.IN_GAME and not self.game_in_front:
@@ -599,7 +605,9 @@ class SessionState:
                 and in_zone >= needed
             )
         else:
-            should_run = self.phase == SessionPhase.LOBBY and self.all_ready()
+            # Tool mode: nobody is waiting to pick a game, never leave the
+            # lobby on our own.
+            should_run = False
         if should_run and self._lobby_countdown_task is None:
             self.lobby_countdown_ends_at = time.time() + LOBBY_COUNTDOWN_SECONDS
             self._lobby_countdown_task = asyncio.get_running_loop().create_task(
@@ -1532,6 +1540,8 @@ class SessionState:
         self.admin_panel.broadcast_update()
 
     def broadcast(self):
+        # Switching console/tool mode changes who owns the phones.
+        self._refresh_input_mode()
         self.admin_panel.broadcast_event(self.to_payload())
         for device_id in list(self.manager.device_ws_map.keys()):
             phone = self.phone_payload(device_id)
