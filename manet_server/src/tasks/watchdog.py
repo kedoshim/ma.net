@@ -13,7 +13,7 @@ async def stick_watchdog(manager, admin_panel=None):
         now = time.time()
 
         # Check expired reservations once per second
-        if now - last_res_check >= 1.0:
+        if now - last_res_check >= 1.0 and not manager.hold_reservations:
             last_res_check = now
             res_expired = False
             for slot in manager.slots:

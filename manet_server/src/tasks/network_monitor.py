@@ -46,10 +46,17 @@ async def network_monitor_task(connection_service: ConnectionService, admin_pane
                 snapshot = await asyncio.to_thread(connection_service.refresh_snapshot)
                 selected = snapshot.selected
                 LOG.info("Selected network option updated: %s (%s)", selected.ip, selected.kind)
+                hotspot_service = getattr(connection_service, "hotspot_service", None)
+                hotspot = (
+                    (await asyncio.to_thread(hotspot_service.refresh)).to_payload()
+                    if hotspot_service is not None
+                    else None
+                )
 
                 # Broadcast to admin clients
                 admin_panel.broadcast_event({
                     "type": "network_update",
+                    "hotspot": hotspot,
                     "data": {
                         "selectedConnection": selected.to_payload(
                             connection_service.port,

@@ -9,12 +9,17 @@ class AppPreferences {
   static const _fullScreenKey = 'full_screen';
   static const _matchSecondsKey = 'tournament_match_seconds';
   static const _freeModeKey = 'free_mode_enabled';
+  static const _abandonCloseKey = 'abandon_close_minutes';
   static const _consoleModeKey = 'console_mode';
   static const _lobbyStartRuleKey = 'lobby_start_rule';
   static const _mousePasswordKey = 'mouse_password';
   static const _accessModeLanKey = 'access_mode_lan';
   static const _accessModeOnlineKey = 'access_mode_online';
   static const _roomPasswordKey = 'room_password';
+  static const _onlineRuleOverrideKey = 'access_online_override';
+  static const _roomPasswordOnlineKey = 'room_password_online';
+  static const _networkModeKey = 'network_mode';
+  static const _qrTargetKey = 'qr_target';
   static const _launcherCardStyleKey = 'launcher_card_style';
   static const _launcherGridRowsKey = 'launcher_grid_rows';
   static const _launcherSortOrderKey = 'launcher_sort_order';
@@ -82,6 +87,17 @@ class AppPreferences {
   static Future<void> setMatchSeconds(int seconds) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_matchSecondsKey, seconds.clamp(3, 60));
+  }
+
+  /// Minutes a game nobody is connected to waits before closing (0: never).
+  static Future<int> abandonCloseMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getInt(_abandonCloseKey) ?? 30).clamp(0, 120);
+  }
+
+  static Future<void> setAbandonCloseMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_abandonCloseKey, minutes.clamp(0, 120));
   }
 
   /// Whether the game selection offers free mode (MaNet steps aside and
@@ -160,6 +176,55 @@ class AppPreferences {
   static Future<void> setRoomPassword(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_roomPasswordKey, value.trim());
+  }
+
+  /// Whether internet joins follow their own rule instead of the global
+  /// one. Unset: on when the saved rules already differ (or none saved,
+  /// since online defaults to approval).
+  static Future<bool> onlineRuleOverride() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getBool(_onlineRuleOverrideKey);
+    if (saved != null) return saved;
+    return await accessModeLan() != await accessModeOnline();
+  }
+
+  static Future<void> setOnlineRuleOverride(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onlineRuleOverrideKey, value);
+  }
+
+  /// Password for internet joins when they have their own rule (unset:
+  /// the global one).
+  static Future<String> roomPasswordOnline() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_roomPasswordOnlineKey) ?? await roomPassword();
+  }
+
+  static Future<void> setRoomPasswordOnline(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_roomPasswordOnlineKey, value.trim());
+  }
+
+  /// 'local', 'both' or 'online' (see NetworkModeService).
+  static Future<String> networkMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_networkModeKey) ?? 'local';
+  }
+
+  static Future<void> setNetworkMode(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_networkModeKey, value);
+  }
+
+  /// Which QR the lobby and the overlay show in "both": 'local' or 'online'.
+  static Future<String> qrTarget() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_qrTargetKey) ?? 'online';
+  }
+
+  static Future<void> setQrTarget(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_qrTargetKey, value);
   }
 
   static Future<void> setLobbyStartRule(String value) async {

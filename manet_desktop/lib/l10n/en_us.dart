@@ -35,6 +35,8 @@ class EnUsStrings implements AppStrings {
   final OnlineStrings online = EnUsOnlineStrings();
   @override
   final AccessStrings access = EnUsAccessStrings();
+  @override
+  final NetworkStrings network = EnUsNetworkStrings();
 }
 
 class EnUsSessionStrings implements SessionStrings {
@@ -54,6 +56,9 @@ class EnUsSessionStrings implements SessionStrings {
   String consoleJoinWifi(String name) => 'Connect to the Wi-Fi $name';
   @override
   String consoleJoinNetwork(String name) => 'Connect to the network $name';
+  @override
+  String consoleJoinWifiOrHotspot(String wifi, String hotspot) =>
+      'Connect to the Wi-Fi $wifi or the hotspot $hotspot';
   @override
   String consoleJoinScan(String link) => 'Point the camera at the QR code or open $link';
   @override
@@ -280,6 +285,22 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get overlayResume => 'Back to the game';
   @override
+  String get awayTitle => 'Game paused: nobody connected';
+  @override
+  String get awayScan => 'Scan the QR code to keep playing';
+  @override
+  String awayClosesIn(String time) => 'The game closes in $time and MaNet goes back to the lobby. Unsaved progress will be lost.';
+  @override
+  String get awayClosesUntracked => "MaNet can't close this game: it goes back to the lobby and the game stays open behind it.";
+  @override
+  String get awayWaits => 'The game will wait for you.';
+  @override
+  String get awayChooseTitle => 'Welcome back!';
+  @override
+  String get awayResume => 'Keep playing';
+  @override
+  String get awaySwitch => 'Pick another game';
+  @override
   String get overlayAddPlayers => 'Add players';
   @override
   String get overlayLayout => 'Controller layout';
@@ -289,6 +310,8 @@ class EnUsSessionStrings implements SessionStrings {
   String overlayConfirm(String action) => '$action? Press again';
   @override
   String get overlayPlayersTitle => 'Bring more people!';
+  @override
+  String get overlayQrZoom => 'Select shows the QR code big';
   @override
   String get overlayPlayersHint => 'Point a phone camera at the QR code or open the link.';
   @override
@@ -304,17 +327,9 @@ class EnUsSessionStrings implements SessionStrings {
   String get coverNotAnImage =>
       'That link opens a page, not an image. Right-click the image and use "Copy image address".';
   @override
-  String get playgroundTitle => 'Meanwhile...';
-  @override
-  String get playgroundHint => 'Stick moves, Select jumps. You can climb on top of each other!';
-  @override
   String get overlayInCharge => 'is in charge';
   @override
   String get overlayHostOwner => 'Menu opened on the PC';
-  @override
-  String overlayNextSeat(int seat) => 'Whoever joins now becomes p$seat';
-  @override
-  String get overlayNoSeat => 'All seats are taken: newcomers go to the bench.';
   @override
   String get overlaySeatsHint => 'To trade places or go to the bench, use the Seat button on the phone.';
   @override
@@ -770,6 +785,12 @@ class EnUsSettingsStrings implements SettingsStrings {
   @override
   String matchSecondsValue(int seconds) => '${seconds}s';
   @override
+  String get abandonCloseTitle => 'Close abandoned game after';
+  @override
+  String get abandonCloseHint => 'Counted once every phone has left. Whoever comes back before that can keep playing in the same seat.';
+  @override
+  String abandonCloseValue(int minutes) => minutes == 0 ? 'Never' : '$minutes min';
+  @override
   String get freeModeTitle => 'Free mode';
   @override
   String get freeModeHint => 'Lets the game selection minimize MaNet so phones work as plain controllers for any game.';
@@ -1111,10 +1132,6 @@ class EnUsAccessStrings implements AccessStrings {
   @override
   String get whoCanJoin => 'Who can join';
   @override
-  String get lanTitle => 'Who can join from the local network';
-  @override
-  String get lanHint => 'For people on the same Wi-Fi. Uses the same password as Play online.';
-  @override
   String get modeOpen => 'Anyone';
   @override
   String get modeOpenHint => 'Gets in right away.';
@@ -1148,4 +1165,57 @@ class EnUsAccessStrings implements AccessStrings {
   String get kickAndBan => 'Kick and ban';
   @override
   String unbanAll(int count) => 'Unban everyone ($count)';
+}
+
+class EnUsNetworkStrings implements NetworkStrings {
+  @override
+  String get modeLocal => 'Local';
+  @override
+  String get modeBoth => 'Both';
+  @override
+  String get modeOnline => 'Online';
+  @override
+  String get chipTooltip => 'Where players join from';
+  @override
+  String get optionsTooltip => 'Network and access options';
+  @override
+  String get panelTitle => 'Network and access';
+  @override
+  String get modeLocalHint => 'Only people on the same Wi-Fi (or the PC hotspot) can join.';
+  @override
+  String get modeBothHint => 'Both QR codes work at the same time. Use the switch above the QR to pick which one shows.';
+  @override
+  String get modeOnlineHint => 'Only the public link works. People on the local network cannot join.';
+  @override
+  String get localColumn => 'Local network';
+  @override
+  String get onlineColumn => 'Internet';
+  @override
+  String get defaultRule => 'Default rule';
+  @override
+  String get localHint => 'For people on the same Wi-Fi or the PC hotspot.';
+  @override
+  String get ownOnlineRule => 'Separate rule for the internet';
+  @override
+  String get ownOnlineRuleOff => 'Off: internet players follow the local network rule.';
+  @override
+  String get ownOnlineRuleOffDefault => 'Off: internet players follow the default rule.';
+  @override
+  String get hotspotOff => 'PC hotspot is off';
+  @override
+  String get hotspotOnUnknown => 'PC hotspot is on';
+  @override
+  String hotspotOn(String ssid) => 'PC hotspot is on: $ssid';
+  @override
+  String get hotspotHint => 'People without Wi-Fi can join the PC hotspot: its Wi-Fi QR shows in the lobby.';
+  @override
+  String get wifiQrTitle => 'No Wi-Fi?';
+  @override
+  String wifiQrCaption(String ssid) => 'Scan to join the $ssid Wi-Fi';
+  @override
+  String get qrSwitchLabel => 'Which QR to show';
+  @override
+  String get done => 'Done';
+  @override
+  String get saved => 'Join rules saved';
 }

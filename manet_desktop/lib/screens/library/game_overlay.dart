@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,25 +8,28 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/controller_branding.dart';
+import '../../models/session_models.dart';
 import '../../widgets/layout_preview_widgets.dart';
 import '../../services/host_api_service.dart';
-import '../../services/online_service.dart';
+import '../../services/network_mode_service.dart';
+import '../../widgets/hotspot_wifi_qr.dart';
+import '../../widgets/network_mode_chip.dart';
 import '../../widgets/player_kick_menu.dart';
 import '../../services/session_controller.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../home_page/gamepad_state.dart';
-import 'face_playground.dart';
 
 enum _OverlayItem { resume, layout, switchGame, closeGame }
 
-enum _OverlayPanel { menu, layouts }
+enum _OverlayPanel { menu, layouts, qr }
 
 /// In-game overlay (opened with the phones' Home button): MaNet's window over
 /// a dimmed snapshot of the game. Driven by any player's controller —
 /// up/down (d-pad or stick) moves, A confirms, B goes back — or by mouse.
 class GameOverlay extends StatefulWidget {
   final PresetCatalog? presetCatalog;
+
   /// Xbox or PlayStation button faces for the layout previews.
   final ValueListenable<ControllerBrandingMode>? brandingMode;
 
@@ -40,10 +42,15 @@ class GameOverlay extends StatefulWidget {
 class _GameOverlayState extends State<GameOverlay>
     with SingleTickerProviderStateMixin {
   static const _stickThreshold = 0.6;
+  static const _menuWidth = 380.0;
+  static const _joinCardWidth = 560.0;
   static const _repeatDelay = Duration(milliseconds: 260);
 
   _OverlayPanel _panel = _OverlayPanel.menu;
   int _index = 0;
+
+  /// The QR card above the menu has the focus (A shows it huge).
+  bool _qrFocused = false;
   int _layoutIndex = 0;
   _OverlayItem? _confirming;
   String? _activePresetId;
@@ -54,12 +61,18 @@ class _GameOverlayState extends State<GameOverlay>
   final Set<String> _stickArmed = {};
   final FocusNode _focus = FocusNode();
 
-  List<_OverlayItem> get _items => [
-    _OverlayItem.resume,
-    _OverlayItem.layout,
-    _OverlayItem.switchGame,
-    _OverlayItem.closeGame,
-  ];
+  /// Opened because everyone left: whoever comes back only chooses between
+  /// going back to the game and picking another one.
+  bool get _away => context.read<SessionController>().snapshot.away != null;
+
+  List<_OverlayItem> get _items => _away
+      ? const [_OverlayItem.resume, _OverlayItem.switchGame]
+      : const [
+          _OverlayItem.resume,
+          _OverlayItem.layout,
+          _OverlayItem.switchGame,
+          _OverlayItem.closeGame,
+        ];
 
   List<ControllerPreset> get _presets {
     final catalog = widget.presetCatalog;
@@ -137,11 +150,27 @@ class _GameOverlayState extends State<GameOverlay>
         _move(-1);
       case 'DOWN':
         _move(1);
+      case 'LEFT' || 'RIGHT':
+        _toggleQrTarget();
       case 'A':
         _activate();
       case 'B':
         _back();
     }
+  }
+
+  /// Left/right flips the giant QR between local and online ("both" only).
+  void _toggleQrTarget() {
+    if (_panel != _OverlayPanel.qr) return;
+    final network = NetworkModeService.of(
+      context.read<SessionController>().api,
+    );
+    if (!network.value.canSwitchQr || !network.online.value.isOnline) return;
+    network.setQrTarget(
+      network.effectiveTarget == QrTarget.local
+          ? QrTarget.online
+          : QrTarget.local,
+    );
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -151,6 +180,9 @@ class _GameOverlayState extends State<GameOverlay>
       _move(-1);
     } else if (key == LogicalKeyboardKey.arrowDown) {
       _move(1);
+    } else if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight) {
+      _toggleQrTarget();
     } else if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.space) {
       _activate();
@@ -170,7 +202,17 @@ class _GameOverlayState extends State<GameOverlay>
           _layoutIndex = (_layoutIndex + delta).clamp(0, _presets.length - 1);
         }
       } else if (_panel == _OverlayPanel.menu) {
-        _index = (_index + delta).clamp(0, _items.length - 1);
+        // The QR card sits above the first entry.
+        if (_qrFocused) {
+          if (delta > 0) {
+            _qrFocused = false;
+            _index = 0;
+          }
+        } else if (delta < 0 && _index == 0) {
+          _qrFocused = true;
+        } else {
+          _index = (_index + delta).clamp(0, _items.length - 1);
+        }
       }
     });
   }
@@ -180,7 +222,13 @@ class _GameOverlayState extends State<GameOverlay>
       case _OverlayPanel.layouts:
         _selectLayout(_layoutIndex);
       case _OverlayPanel.menu:
-        _runItem(_items[_index]);
+        if (_qrFocused) {
+          setState(() => _panel = _OverlayPanel.qr);
+        } else {
+          _runItem(_items[_index]);
+        }
+      case _OverlayPanel.qr:
+        setState(() => _panel = _OverlayPanel.menu);
     }
   }
 
@@ -238,6 +286,14 @@ class _GameOverlayState extends State<GameOverlay>
     final session = context.watch<SessionController>();
     final snapshot = session.snapshot;
     final strings = context.l10n.session;
+    final away = snapshot.away;
+    final gamepads = context.watch<GamepadState>();
+    final someone =
+        snapshot.players.isNotEmpty ||
+        gamepads.pool.any((device) => device.connected);
+    final showMenu = away == null || someone;
+    // The menu shrinks to two entries when the overlay turns into "away".
+    _index = _index.clamp(0, _items.length - 1);
 
     return Focus(
       focusNode: _focus,
@@ -247,44 +303,75 @@ class _GameOverlayState extends State<GameOverlay>
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // The game stays sharp behind the menu: seeing what is going on
+            // there helps decide whether to go back to it.
             if (snapshot.overlayShotId != null)
-              ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Image.network(
-                  session.api.overlayShotUrl(snapshot.overlayShotId!),
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  errorBuilder: (context, error, stack) =>
-                      const SizedBox.shrink(),
+              Image.network(
+                session.api.overlayShotUrl(snapshot.overlayShotId!),
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stack) =>
+                    const SizedBox.shrink(),
+              ),
+            // Darkened only behind the cards, fading out towards the game.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xC0000000),
+                    Color(0x59000000),
+                    Color(0x00000000),
+                  ],
+                  stops: [0, 0.4, 0.7],
                 ),
               ),
-            Container(color: Colors.black.withValues(alpha: 0.55)),
+            ),
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(32, 28, 32, 36),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // The left column is the overlay owner's area.
                     SizedBox(
-                      width: 380,
+                      // The QR card is wider (seats beside the code); the
+                      // cards under it keep the menu width.
+                      width: _joinCardWidth,
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildJoinCard(context),
-                          const SizedBox(height: 14),
-                          Flexible(
-                            child: SingleChildScrollView(
-                              child: _buildMenu(context),
+                          if (away != null && !someone)
+                            // Nobody here yet: the QR code is what matters.
+                            SizedBox(
+                              width: _menuWidth,
+                              child: _buildBigQr(context),
+                            )
+                          else
+                            _buildJoinCard(context),
+                          if (away != null) ...[
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: _menuWidth,
+                              child: _buildAwayStatus(context, away, someone),
                             ),
-                          ),
+                          ],
+                          if (showMenu) ...[
+                            const SizedBox(height: 14),
+                            Flexible(
+                              child: SizedBox(
+                                width: _menuWidth,
+                                child: SingleChildScrollView(
+                                  child: _buildMenu(context),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                     AnimatedSize(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
-                      child: _panel == _OverlayPanel.menu
+                      child: _panel != _OverlayPanel.layouts
                           ? const SizedBox(width: 0)
                           : Padding(
                               padding: const EdgeInsets.only(left: 24),
@@ -294,54 +381,84 @@ class _GameOverlayState extends State<GameOverlay>
                               ),
                             ),
                     ),
-                    const SizedBox(width: 24),
-                    // Everyone else plays with their faces meanwhile.
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            strings.playgroundTitle,
-                            style: _hintStyle.copyWith(fontSize: 18),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            strings.playgroundHint,
-                            style: _hintStyle.copyWith(
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Expanded(
-                            child: FacePlayground(
-                              deviceIds: [
-                                for (final player in snapshot.players)
-                                  if (player.deviceId != snapshot.overlayOwner)
-                                    player.deviceId,
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
             ),
-            Positioned(
-              left: 40,
-              right: 40,
-              bottom: 12,
-              child: Text(
-                strings.overlayHint,
-                textAlign: TextAlign.center,
-                style: _hintStyle,
+            if (showMenu)
+              Positioned(
+                left: 40,
+                right: 40,
+                bottom: 12,
+                child: Text(
+                  strings.overlayHint,
+                  textAlign: TextAlign.center,
+                  style: _hintStyle,
+                ),
               ),
-            ),
+            if (_panel == _OverlayPanel.qr) _buildGiantQr(context),
           ],
         ),
       ),
     );
+  }
+
+  /// Everyone left: what happened and when the game closes.
+  Widget _buildAwayStatus(BuildContext context, AwayState away, bool someone) {
+    final strings = context.l10n.session;
+    final snapshot = context.read<SessionController>().snapshot;
+    final tracked =
+        (snapshot.runningGame?.tracked ?? false) && !snapshot.freeMode;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.screenBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.textPrimary, width: 4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            someone ? strings.awayChooseTitle : strings.awayTitle,
+            style: _titleStyle.copyWith(fontSize: 20),
+          ),
+          if (!someone) ...[
+            const SizedBox(height: 4),
+            Text(strings.awayScan, style: _bodyStyle),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            strings.playing(snapshot.runningGame?.name ?? ''),
+            style: _itemStyle.copyWith(fontSize: 16),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          _AwayClock(
+            builder: (context, now) {
+              final closeAt = away.closeAt;
+              if (closeAt == null) {
+                return Text(strings.awayWaits, style: _bodyStyle);
+              }
+              final closes = strings.awayClosesIn(
+                _clock(closeAt.difference(now)),
+              );
+              return Text(
+                tracked ? closes : '$closes\n${strings.awayClosesUntracked}',
+                style: _bodyStyle,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _clock(Duration left) {
+    final seconds = left.inSeconds < 0 ? 0 : left.inSeconds;
+    final minutes = seconds ~/ 60;
+    return '$minutes:${(seconds % 60).toString().padLeft(2, '0')}';
   }
 
   Widget _buildPanel(BuildContext context) {
@@ -359,23 +476,152 @@ class _GameOverlayState extends State<GameOverlay>
             _selectLayout(i);
           },
         ),
-        _OverlayPanel.menu => const SizedBox.shrink(key: ValueKey('none')),
+        _OverlayPanel.menu ||
+        _OverlayPanel.qr => const SizedBox.shrink(key: ValueKey('none')),
       },
+    );
+  }
+
+  /// The away overlay's QR code while nobody is connected.
+  Widget _buildBigQr(BuildContext context) {
+    final api = context.read<SessionController>().api;
+    final network = NetworkModeService.of(api);
+    return ListenableBuilder(
+      listenable: network,
+      builder: (context, _) {
+        final connection = network.onlineConnection ?? _connection;
+        return AspectRatio(
+          aspectRatio: 1,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.textPrimary, width: 4),
+            ),
+            child: Image.network(
+              api.getQrCodeUrl(connection?.id),
+              key: ValueKey(connection?.id),
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.none,
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stack) => const Icon(
+                Icons.qr_code_2_rounded,
+                size: 160,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// The QR code in the middle of the screen, big enough to scan from the
+  /// couch. A, B or a click closes it.
+  Widget _buildGiantQr(BuildContext context) {
+    final api = context.read<SessionController>().api;
+    return GestureDetector(
+      key: const ValueKey('giant-qr'),
+      onTap: () => setState(() => _panel = _OverlayPanel.menu),
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.6),
+        child: ListenableBuilder(
+          listenable: NetworkModeService.of(api),
+          builder: (context, _) {
+            final connection =
+                NetworkModeService.of(api).onlineConnection ?? _connection;
+            final link = connection?.url;
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final side = (constraints.biggest.shortestSide * 0.7).clamp(
+                  200.0,
+                  900.0,
+                );
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      QrTargetSwitch(
+                        api: api,
+                        height: 52,
+                        fontSize: 18,
+                        padding: const EdgeInsets.only(bottom: 14),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: side,
+                            height: side,
+                            padding: EdgeInsets.all(side * 0.05),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: AppColors.textPrimary,
+                                width: 6,
+                              ),
+                            ),
+                            child: Image.network(
+                              api.getQrCodeUrl(connection?.id),
+                              key: ValueKey(connection?.id),
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.none,
+                              gaplessPlayback: true,
+                              errorBuilder: (context, error, stack) => Icon(
+                                Icons.qr_code_2_rounded,
+                                size: side * 0.6,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          HotspotWifiQr(
+                            api: api,
+                            size: side * 0.32,
+                            margin: const EdgeInsets.only(left: 24),
+                          ),
+                        ],
+                      ),
+                      if (link != null) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          link.replaceFirst(RegExp('^https?://'), ''),
+                          style: _hintStyle.copyWith(
+                            fontFamily: 'monomaniac',
+                            fontSize: 22,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
     );
   }
 
   /// Always on screen, so anyone watching can join without opening a menu.
   Widget _buildJoinCard(BuildContext context) {
     final api = context.read<SessionController>().api;
-    return ValueListenableBuilder<OnlineStatus>(
-      valueListenable: OnlineService.of(api),
-      builder: (context, online, _) {
-        // While "Play online" is up, latecomers join through the tunnel.
-        final connection = online.connection ?? _connection;
+    final network = NetworkModeService.of(api);
+    return ListenableBuilder(
+      listenable: network,
+      builder: (context, _) {
+        // Latecomers join through whichever QR the network mode picks.
+        final connection = network.onlineConnection ?? _connection;
         return _JoinCard(
           qrUrl: api.getQrCodeUrl(connection?.id),
           link: connection?.url,
           slots: context.watch<GamepadState>().slots,
+          focused: _panel == _OverlayPanel.menu && _qrFocused,
+          onTap: () => setState(() {
+            _qrFocused = true;
+            _panel = _OverlayPanel.qr;
+          }),
         );
       },
     );
@@ -417,7 +663,10 @@ class _GameOverlayState extends State<GameOverlay>
                 ),
                 Text(
                   strings.overlayInCharge,
-                  style: _bodyStyle.copyWith(fontWeight: FontWeight.bold, fontSize: 12),
+                  style: _bodyStyle.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -434,13 +683,17 @@ class _GameOverlayState extends State<GameOverlay>
     final tracked = running?.tracked ?? false;
     final freeMode = session.snapshot.freeMode;
 
+    final away = session.snapshot.away != null;
+
     String label(_OverlayItem item) => switch (item) {
-      _OverlayItem.resume => strings.overlayResume,
+      _OverlayItem.resume => away ? strings.awayResume : strings.overlayResume,
       _OverlayItem.layout => strings.overlayLayout,
-      _OverlayItem.switchGame => strings.overlaySwitchGame,
-      _OverlayItem.closeGame => freeMode
-          ? strings.leaveFreeMode
-          : (tracked ? strings.closeGame : strings.returnToLobby),
+      _OverlayItem.switchGame =>
+        away ? strings.awaySwitch : strings.overlaySwitchGame,
+      _OverlayItem.closeGame =>
+        freeMode
+            ? strings.leaveFreeMode
+            : (tracked ? strings.closeGame : strings.returnToLobby),
     };
 
     IconData icon(_OverlayItem item) => switch (item) {
@@ -462,15 +715,18 @@ class _GameOverlayState extends State<GameOverlay>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildOwnerHeader(context),
-          const SizedBox(height: 10),
-          Text(
-            strings.playing(running?.name ?? ''),
-            style: _titleStyle.copyWith(fontSize: 18),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 10),
+          // Away: the status card above already says what is going on.
+          if (!away) ...[
+            _buildOwnerHeader(context),
+            const SizedBox(height: 10),
+            Text(
+              strings.playing(running?.name ?? ''),
+              style: _titleStyle.copyWith(fontSize: 18),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 10),
+          ],
           for (var i = 0; i < _items.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -479,16 +735,23 @@ class _GameOverlayState extends State<GameOverlay>
                 label: _confirming == _items[i]
                     ? strings.overlayConfirm(label(_items[i]))
                     : label(_items[i]),
-                focused: _panel == _OverlayPanel.menu && i == _index,
+                focused:
+                    _panel == _OverlayPanel.menu && !_qrFocused && i == _index,
                 warning: _confirming == _items[i],
                 onHover: () {
-                  if (_panel == _OverlayPanel.menu && _index != i)
-                    setState(() => _index = i);
+                  if (_panel == _OverlayPanel.menu &&
+                      (_index != i || _qrFocused)) {
+                    setState(() {
+                      _index = i;
+                      _qrFocused = false;
+                    });
+                  }
                 },
                 onTap: () {
                   setState(() {
                     _panel = _OverlayPanel.menu;
                     _index = i;
+                    _qrFocused = false;
                   });
                   _runItem(_items[i]);
                 },
@@ -498,6 +761,37 @@ class _GameOverlayState extends State<GameOverlay>
       ),
     );
   }
+}
+
+/// Rebuilds every second for the close countdown.
+class _AwayClock extends StatefulWidget {
+  final Widget Function(BuildContext context, DateTime now) builder;
+
+  const _AwayClock({required this.builder});
+
+  @override
+  State<_AwayClock> createState() => _AwayClockState();
+}
+
+class _AwayClockState extends State<_AwayClock> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, DateTime.now());
 }
 
 class _MenuEntry extends StatelessWidget {
@@ -563,106 +857,123 @@ class _MenuEntry extends StatelessWidget {
   }
 }
 
-/// QR, link and seats: everything someone needs to hop in.
+/// QR, link and seats: everything someone needs to hop in. Selectable from
+/// the menu (and clickable): it then fills the middle of the screen.
 class _JoinCard extends StatelessWidget {
   final String qrUrl;
   final String? link;
   final List<SlotModel> slots;
+  final bool focused;
+  final VoidCallback onTap;
 
   const _JoinCard({
     required this.qrUrl,
     this.link,
     required this.slots,
+    required this.focused,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
     final nextFree = slots.indexWhere((slot) => slot.device == null);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.textPrimary, width: 4),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 120,
-                height: 120,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.textPrimary, width: 2.5),
-                ),
-                child: Image.network(
-                  qrUrl,
-                  key: ValueKey(qrUrl),
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.none,
-                  gaplessPlayback: true,
-                  errorBuilder: (context, error, stack) => const Icon(
-                    Icons.qr_code_2_rounded,
-                    size: 64,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedScale(
+          scale: focused ? 1.03 : 1,
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutBack,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: focused ? AppColors.highlightColor : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.textPrimary,
+                width: focused ? 6 : 4,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(strings.overlayPlayersTitle, style: _titleStyle.copyWith(fontSize: 18)),
-                    if (link != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        link!.replaceFirst(RegExp('^https?://'), ''),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: _bodyStyle.copyWith(
-                          fontFamily: 'monomaniac',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                    if (slots.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        nextFree >= 0
-                            ? strings.overlayNextSeat(nextFree + 1)
-                            : strings.overlayNoSeat,
-                        style: _bodyStyle.copyWith(fontSize: 13),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (slots.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (var i = 0; i < slots.length; i++)
-                  _SeatSquare(
-                    index: i,
-                    device: slots[i].device,
-                    isNext: i == nextFree,
+                Container(
+                  width: 180,
+                  height: 180,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.textPrimary,
+                      width: 2.5,
+                    ),
                   ),
+                  child: Image.network(
+                    qrUrl,
+                    key: ValueKey(qrUrl),
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.none,
+                    gaplessPlayback: true,
+                    errorBuilder: (context, error, stack) => const Icon(
+                      Icons.qr_code_2_rounded,
+                      size: 96,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        strings.overlayPlayersTitle,
+                        style: _titleStyle.copyWith(fontSize: 18),
+                      ),
+                      if (link != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          link!.replaceFirst(RegExp('^https?://'), ''),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: _bodyStyle.copyWith(
+                            fontFamily: 'monomaniac',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      Text(
+                        strings.overlayQrZoom,
+                        style: _bodyStyle.copyWith(fontSize: 12),
+                      ),
+                      if (slots.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (var i = 0; i < slots.length; i++)
+                              _SeatSquare(
+                                index: i,
+                                device: slots[i].device,
+                                isNext: i == nextFree,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -847,7 +1158,10 @@ class _LayoutsPanelState extends State<_LayoutsPanel> {
             Flexible(
               child: SingleChildScrollView(
                 // Room for the focused entry, which grows a little.
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

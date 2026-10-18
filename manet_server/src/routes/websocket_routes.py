@@ -11,7 +11,7 @@ from src.input.keyboard_controller import KeyboardController
 from src.input.mouse_controller import MouseController
 from src.core.slot_handler import reset_slot_gamepad
 from src.app.security import client_ip, request_origin
-from src.core.access_control import ADMITTED, BANNED, MODE_PASSWORD
+from src.core.access_control import ADMITTED, BANNED, LAN_DISABLED, MODE_PASSWORD
 
 LOG = logging.getLogger("websocket")
 
@@ -537,11 +537,14 @@ class WebSocketRoutes:
         if verdict == BANNED:
             await self._deny(ws, "banned")
             return False, player_name
+        if verdict == LAN_DISABLED:
+            await self._deny(ws, "lan_disabled")
+            return False, player_name
         if verdict == MODE_PASSWORD:
-            return await self._wait_for_password(ws, device_id, ip), player_name
+            return await self._wait_for_password(ws, device_id, ip, origin), player_name
         return await self._wait_for_approval(ws, device_id, player_name, customization, lang, origin)
 
-    async def _wait_for_password(self, ws, device_id, ip) -> bool:
+    async def _wait_for_password(self, ws, device_id, ip, origin) -> bool:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + ACCESS_WAIT_SECONDS
         await ws.send_json({"type": "access_required", "mode": "password"})
@@ -564,7 +567,7 @@ class WebSocketRoutes:
                 continue
             if not isinstance(data, dict) or data.get("type") != "access_password":
                 continue
-            result, left = self.access_gate.try_password(device_id, ip, data.get("password"))
+            result, left = self.access_gate.try_password(device_id, ip, data.get("password"), origin)
             if result == "ok":
                 await ws.send_json({"type": "access_granted"})
                 return True

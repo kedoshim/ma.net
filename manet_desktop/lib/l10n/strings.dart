@@ -16,6 +16,7 @@ abstract class AppStrings {
   SessionStrings get session;
   OnlineStrings get online;
   AccessStrings get access;
+  NetworkStrings get network;
 }
 
 abstract class CommonStrings {
@@ -90,6 +91,7 @@ abstract class SessionStrings {
   String get consoleJoinTitle;
   String consoleJoinWifi(String name);
   String consoleJoinNetwork(String name);
+  String consoleJoinWifiOrHotspot(String wifi, String hotspot);
   String consoleJoinScan(String link);
   String get consoleJoinFace;
   String get lineupTitle;
@@ -202,23 +204,28 @@ abstract class SessionStrings {
   String get fullscreenGameHint;
   String get overlayHint;
   String get overlayResume;
+  String get awayTitle;
+  String get awayScan;
+  String awayClosesIn(String time);
+  String get awayClosesUntracked;
+  String get awayWaits;
+  String get awayChooseTitle;
+  String get awayResume;
+  String get awaySwitch;
   String get overlayAddPlayers;
   String get overlayLayout;
   String get overlaySwitchGame;
   String overlayConfirm(String action);
   String get overlayPlayersTitle;
+  String get overlayQrZoom;
   String get overlayPlayersHint;
   String get overlayLayoutTitle;
   String overlayControlledBy(String name);
   String get inputPausedHint;
   String get coverInvalidLink;
   String get coverNotAnImage;
-  String get playgroundTitle;
-  String get playgroundHint;
   String get overlayInCharge;
   String get overlayHostOwner;
-  String overlayNextSeat(int seat);
-  String get overlayNoSeat;
   String get overlaySeatsHint;
   String get freeSeat;
   String playersInSession(int count);
@@ -380,6 +387,9 @@ abstract class SettingsStrings {
   String get fullScreenTitle;
   String get matchSecondsTitle;
   String matchSecondsValue(int seconds);
+  String get abandonCloseTitle;
+  String get abandonCloseHint;
+  String abandonCloseValue(int minutes);
   String get freeModeTitle;
   String get freeModeHint;
   String get consoleModeTitle;
@@ -527,8 +537,6 @@ abstract class OnlineStrings {
 /// Join rules (open / password / host approval) and the host's answers.
 abstract class AccessStrings {
   String get whoCanJoin;
-  String get lanTitle;
-  String get lanHint;
   String get modeOpen;
   String get modeOpenHint;
   String get modePassword;
@@ -546,4 +554,33 @@ abstract class AccessStrings {
   String get kick;
   String get kickAndBan;
   String unbanAll(int count);
+}
+
+/// Network modes (local / both / online), the QR switch and the hotspot.
+abstract class NetworkStrings {
+  String get modeLocal;
+  String get modeBoth;
+  String get modeOnline;
+  String get chipTooltip;
+  String get optionsTooltip;
+  String get panelTitle;
+  String get modeLocalHint;
+  String get modeBothHint;
+  String get modeOnlineHint;
+  String get localColumn;
+  String get onlineColumn;
+  String get defaultRule;
+  String get localHint;
+  String get ownOnlineRule;
+  String get ownOnlineRuleOff;
+  String get ownOnlineRuleOffDefault;
+  String get hotspotOff;
+  String get hotspotOnUnknown;
+  String hotspotOn(String ssid);
+  String get hotspotHint;
+  String get wifiQrTitle;
+  String wifiQrCaption(String ssid);
+  String get qrSwitchLabel;
+  String get done;
+  String get saved;
 }

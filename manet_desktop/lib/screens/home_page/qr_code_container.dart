@@ -10,6 +10,7 @@ import 'package:manet_desktop/theme/app_colors.dart';
 
 import 'gamepad_handler_widget.dart';
 import '../../widgets/juicy_widgets.dart';
+import '../../widgets/network_mode_chip.dart';
 import '../../l10n/app_localizations.dart';
 
 class QRCodePanel extends StatefulWidget {
@@ -319,6 +320,14 @@ class _QRCodePanelState extends State<QRCodePanel> {
     );
   }
 
+  /// Local | Online switch (only in "both" mode with the tunnel up).
+  Widget _qrSwitch() => QrTargetSwitch(
+    api: widget.api,
+    height: widget.scale.eighth * 1.6,
+    fontSize: widget.scale.eighth * 0.6,
+    padding: EdgeInsets.only(bottom: widget.scale.eighth * 0.5),
+  );
+
   /// [maxSize] keeps the code inside narrow/short panels; without it the QR
   /// kept its full size and pushed the panel content out of bounds.
   Widget _buildQR(double maxSize) {
@@ -523,6 +532,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
+                                    _qrSwitch(),
                                     _buildNetworkInfoRow(selectedConnection),
                                     SizedBox(height: widget.scale.eighth * 0.5),
                                     // Link gets the full width; sharing a row
@@ -562,6 +572,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                       children: [
                         _buildEncoragementText(),
                         SizedBox(height: widget.scale.eighth),
+                        _qrSwitch(),
                         _buildQR(constraints.maxWidth - widget.scale.eighth * 2),
                         SizedBox(height: widget.scale.eighth * 0.5),
                         _buildLink(connectionUrl),
@@ -590,6 +601,7 @@ class _QRCodePanelState extends State<QRCodePanel> {
                             children: [
                               _buildEncoragementText(),
                               SizedBox(height: widget.scale.eighth),
+                              _qrSwitch(),
                               _buildQR(
                                 constraints.maxWidth - widget.scale.eighth * 2,
                               ),

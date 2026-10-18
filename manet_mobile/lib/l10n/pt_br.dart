@@ -508,6 +508,7 @@ class PtBrAccessStrings implements AccessStrings {
     'banned' => 'Você não pode entrar nesta sala',
     'kicked' => 'Você foi removido da sala',
     'timeout' => 'O pedido expirou',
+    'lan_disabled' => 'Esta sala só aceita jogadores pela internet',
     'too_many_attempts' => 'Muitas tentativas erradas',
     _ => 'O host recusou sua entrada',
   };
@@ -515,6 +516,7 @@ class PtBrAccessStrings implements AccessStrings {
   String deniedBody(String? reason) => switch (reason) {
     'banned' => 'O host bloqueou este aparelho nesta sessão.',
     'timeout' => 'O host não respondeu a tempo. Você pode pedir de novo.',
+    'lan_disabled' => 'Peça o link online para o host e entre por ele.',
     'too_many_attempts' => 'Espere um minuto antes de tentar de novo.',
     _ => 'Você pode tentar de novo se o host pedir.',
   };

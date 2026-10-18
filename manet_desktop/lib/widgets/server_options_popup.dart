@@ -4,8 +4,6 @@ import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
 import 'juicy_widgets.dart';
 import '../utils/app_preferences.dart';
-import '../services/access_service.dart';
-import 'online_play_button.dart' show AccessModePicker, RoomPasswordField, UnbanAllButton;
 
 class ServerOptionsPopup extends StatefulWidget {
   final ColorTheme currentTheme;
@@ -13,12 +11,13 @@ class ServerOptionsPopup extends StatefulWidget {
   final int currentTimeoutMinutes;
   final ValueChanged<int> onTimeoutChanged;
   final ValueChanged<int>? onMatchSecondsChanged;
+  /// Minutes an abandoned game waits before closing (0: never).
+  final ValueChanged<int>? onAbandonCloseChanged;
   final ValueChanged<bool>? onFreeModeChanged;
   final ValueChanged<bool>? onConsoleModeChanged;
   final ValueChanged<String>? onLobbyStartRuleChanged;
   final ValueChanged<String>? onMousePasswordChanged;
   /// Join rule for the local network; the online one lives in "Play online".
-  final AccessService? access;
 
   const ServerOptionsPopup({
     super.key,
@@ -27,11 +26,11 @@ class ServerOptionsPopup extends StatefulWidget {
     required this.currentTimeoutMinutes,
     required this.onTimeoutChanged,
     this.onMatchSecondsChanged,
+    this.onAbandonCloseChanged,
     this.onFreeModeChanged,
     this.onConsoleModeChanged,
     this.onLobbyStartRuleChanged,
     this.onMousePasswordChanged,
-    this.access,
   });
 
   @override
@@ -43,19 +42,29 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
   late int _selectedTimeoutMinutes;
   bool _fullScreen = true;
   int _matchSeconds = 10;
+  static const _abandonSteps = [0, 10, 20, 30, 45, 60, 90, 120];
+  int _abandonMinutes = 30;
   bool _freeMode = true;
   bool _consoleMode = true;
   String _lobbyStartRule = 'majority';
   final TextEditingController _mousePassword = TextEditingController();
   bool _showPassword = false;
-  AccessMode _lanMode = AccessMode.open;
-  final TextEditingController _roomPassword = TextEditingController();
-  bool _showRoomPassword = false;
+
+  /// The slider position closest to the saved minutes.
+  int get _abandonStep {
+    var best = 0;
+    for (var i = 1; i < _abandonSteps.length; i++) {
+      if ((_abandonSteps[i] - _abandonMinutes).abs() <
+          (_abandonSteps[best] - _abandonMinutes).abs()) {
+        best = i;
+      }
+    }
+    return best;
+  }
 
   @override
   void dispose() {
     _mousePassword.dispose();
-    _roomPassword.dispose();
     super.dispose();
   }
 
@@ -70,6 +79,9 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
     AppPreferences.matchSeconds().then((value) {
       if (mounted) setState(() => _matchSeconds = value);
     });
+    AppPreferences.abandonCloseMinutes().then((value) {
+      if (mounted) setState(() => _abandonMinutes = value);
+    });
     AppPreferences.freeModeEnabled().then((value) {
       if (mounted) setState(() => _freeMode = value);
     });
@@ -81,12 +93,6 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
     });
     AppPreferences.mousePassword().then((value) {
       if (mounted) _mousePassword.text = value;
-    });
-    AppPreferences.accessModeLan().then((value) {
-      if (mounted) setState(() => _lanMode = value);
-    });
-    AppPreferences.roomPassword().then((value) {
-      if (mounted) _roomPassword.text = value;
     });
   }
 
@@ -263,6 +269,59 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
               ],
             ),
           ],
+          if (widget.onAbandonCloseChanged != null) ...[
+            const SizedBox(height: 24),
+            Text(
+              context.l10n.settings.abandonCloseTitle,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Text(
+              context.l10n.settings.abandonCloseHint,
+              style: const TextStyle(
+                fontFamily: 'momo',
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    value: _abandonStep.toDouble(),
+                    min: 0,
+                    max: (_abandonSteps.length - 1).toDouble(),
+                    divisions: _abandonSteps.length - 1,
+                    activeColor: AppColors.highlightColor,
+                    label: context.l10n.settings.abandonCloseValue(_abandonMinutes),
+                    onChanged: (value) => setState(
+                      () => _abandonMinutes = _abandonSteps[value.round()],
+                    ),
+                    onChangeEnd: (value) =>
+                        widget.onAbandonCloseChanged!(_abandonSteps[value.round()]),
+                  ),
+                ),
+                SizedBox(
+                  width: 70,
+                  child: Center(
+                    child: Text(
+                      context.l10n.settings.abandonCloseValue(_abandonMinutes),
+                      style: const TextStyle(
+                        fontFamily: 'momo',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (widget.onConsoleModeChanged != null) ...[
             const SizedBox(height: 24),
             Row(
@@ -359,51 +418,6 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
                 ],
               ],
             ),
-          ],
-          if (widget.access != null) ...[
-            const SizedBox(height: 24),
-            Text(
-              context.l10n.access.lanTitle,
-              style: const TextStyle(
-                fontFamily: 'momo',
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            Text(
-              context.l10n.access.lanHint,
-              style: TextStyle(
-                fontFamily: 'momo',
-                fontSize: 12,
-                color: AppColors.textPrimary.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 10),
-            AccessModePicker(
-              value: _lanMode,
-              onChanged: (mode) {
-                setState(() => _lanMode = mode);
-                widget.access!.configure(lanMode: mode);
-              },
-            ),
-            if (_lanMode == AccessMode.password) ...[
-              const SizedBox(height: 4),
-              RoomPasswordField(
-                controller: _roomPassword,
-                visible: _showRoomPassword,
-                error: _roomPassword.text.trim().isEmpty
-                    ? context.l10n.access.passwordRequired
-                    : null,
-                onToggleVisible: () =>
-                    setState(() => _showRoomPassword = !_showRoomPassword),
-                onChanged: (value) {
-                  setState(() {});
-                  widget.access!.configure(password: value);
-                },
-              ),
-            ],
-            UnbanAllButton(access: widget.access!),
           ],
           if (widget.onMousePasswordChanged != null && _consoleMode) ...[
             const SizedBox(height: 24),

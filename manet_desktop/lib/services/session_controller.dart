@@ -276,12 +276,21 @@ class SessionController extends ChangeNotifier with WindowListener {
     await _api.setMatchSeconds(seconds);
   }
 
+  Future<void> setAbandonCloseMinutes(int minutes) async {
+    await AppPreferences.setAbandonCloseMinutes(minutes);
+    await _api.setAbandonCloseMinutes(minutes);
+  }
+
   /// The server doesn't keep settings between runs: push the saved ones.
   Future<void> _pushSettings() async {
     try {
       final seconds = await AppPreferences.matchSeconds();
       if (seconds != snapshot.matchSeconds.round()) {
         await _api.setMatchSeconds(seconds);
+      }
+      final abandon = await AppPreferences.abandonCloseMinutes();
+      if (abandon != snapshot.abandonCloseMinutes) {
+        await _api.setAbandonCloseMinutes(abandon);
       }
       // The server doesn't echo the password: always push it.
       await _api.setMousePassword(await AppPreferences.mousePassword());

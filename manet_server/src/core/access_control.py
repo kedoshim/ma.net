@@ -1,7 +1,8 @@
 """Who may join: open, room password or the host's approval.
 
-The rule is set separately for phones on the local network and phones
-coming through the "Play online" tunnel. A phone let in once stays in for
+The rule (and its password) is set separately for phones on the local
+network and phones coming through the "Play online" tunnel, and the local
+network can be closed altogether ("online only"). A phone let in once stays in for
 the rest of the server's life, so a Wi-Fi hiccup or a change of rule never
 asks it again; kicking takes that away. Bans last until the server stops.
 """
@@ -20,9 +21,14 @@ MODES = (MODE_OPEN, MODE_PASSWORD, MODE_APPROVAL)
 
 ADMITTED = "admitted"
 BANNED = "banned"
+LAN_DISABLED = "lan_disabled"
 
 MAX_PASSWORD_ATTEMPTS = 5
 PASSWORD_LOCKOUT_SECONDS = 60.0
+
+
+def _clean_password(value) -> str:
+    return str(value).strip()[:64]
 
 
 @dataclass
@@ -48,7 +54,8 @@ class AccessGate:
     def __init__(self, on_change=None):
         self._on_change = on_change
         self.modes = {"lan": MODE_OPEN, "online": MODE_APPROVAL}
-        self.password = ""
+        self.passwords = {"lan": "", "online": ""}
+        self.lan_enabled = True
         self.admitted: set[str] = set()
         self.pending: dict[str, PendingRequest] = {}
         self.banned_devices: set[str] = set()
@@ -59,18 +66,31 @@ class AccessGate:
 
     # Settings
 
-    def configure(self, lan=None, online=None, password=None):
+    def configure(self, lan=None, online=None, password=None, online_password=None, lan_enabled=None):
+        """None leaves a field as it is. Without `online_password`, a new
+        `password` applies to both origins (older desktop builds)."""
         if lan in MODES:
             self.modes["lan"] = lan
         if online in MODES:
             self.modes["online"] = online
         if password is not None:
-            self.password = str(password).strip()[:64]
+            self.passwords["lan"] = _clean_password(password)
+            if online_password is None:
+                self.passwords["online"] = self.passwords["lan"]
+        if online_password is not None:
+            self.passwords["online"] = _clean_password(online_password)
+        if isinstance(lan_enabled, bool):
+            self.lan_enabled = lan_enabled
         self._changed()
+
+    @property
+    def password(self) -> str:
+        """The local network's password (kept for older callers)."""
+        return self.passwords["lan"]
 
     def mode_for(self, origin: str) -> str:
         mode = self.modes.get(origin, MODE_APPROVAL)
-        if mode == MODE_PASSWORD and not self.password:
+        if mode == MODE_PASSWORD and not self.passwords.get(origin):
             # A password rule without a password would lock everyone out.
             return MODE_APPROVAL
         return mode
@@ -85,13 +105,15 @@ class AccessGate:
             return BANNED
         if device_id in self.admitted:
             return ADMITTED
+        if origin == "lan" and not self.lan_enabled:
+            return LAN_DISABLED
         mode = self.mode_for(origin)
         if mode == MODE_OPEN:
             self.admitted.add(device_id)
             return ADMITTED
         return mode
 
-    def try_password(self, device_id: str, ip: str | None, password) -> tuple[str, int]:
+    def try_password(self, device_id: str, ip: str | None, password, origin: str = "lan") -> tuple[str, int]:
         """("ok" | "wrong" | "locked", attempts left)."""
         keys = [f"device:{device_id}"] + ([f"ip:{ip}"] if ip else [])
         now = time.monotonic()
@@ -101,7 +123,8 @@ class AccessGate:
                 return "locked", 0
             if until and until <= now:
                 self._failures.pop(key, None)
-        if self.password and str(password or "") == self.password:
+        expected = self.passwords.get(origin, "")
+        if expected and str(password or "") == expected:
             for key in keys:
                 self._failures.pop(key, None)
             self.admitted.add(device_id)
@@ -177,7 +200,9 @@ class AccessGate:
         return {
             "lanMode": self.modes["lan"],
             "onlineMode": self.modes["online"],
-            "passwordSet": bool(self.password),
+            "lanEnabled": self.lan_enabled,
+            "passwordSet": bool(self.passwords["lan"]),
+            "onlinePasswordSet": bool(self.passwords["online"]),
             "pending": [r.to_payload() for r in sorted(self.pending.values(), key=lambda r: r.since)],
             "bannedCount": len(self.banned_devices),
         }

@@ -39,7 +39,21 @@ class ConsoleLobbyView extends StatefulWidget {
   /// The network the phones should join.
   final ConnectionInfo? connection;
 
-  const ConsoleLobbyView({super.key, required this.qrCard, this.connection});
+  /// The PC's hotspot name, offered next to the Wi-Fi in the join steps
+  /// (null while it is off or the QR points at the internet).
+  final String? hotspotName;
+
+  /// Card with the hotspot's Wi-Fi QR at a given size, shown in the
+  /// background above "How to join".
+  final Widget Function(double size)? hotspotCard;
+
+  const ConsoleLobbyView({
+    super.key,
+    required this.qrCard,
+    this.connection,
+    this.hotspotName,
+    this.hotspotCard,
+  });
 
   @override
   State<ConsoleLobbyView> createState() => _ConsoleLobbyViewState();
@@ -155,7 +169,9 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
         }
       }
     }
-    _arrivals.removeWhere((id, _) => !checked.contains(id) || zone.contains(id));
+    _arrivals.removeWhere(
+      (id, _) => !checked.contains(id) || zone.contains(id),
+    );
     _morphing.removeWhere((id, _) => !checked.contains(id));
     _present = present;
     _checked = checked;
@@ -171,7 +187,10 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
           size.width - _faceRadius - 2,
           size.height * (0.22 + 0.16 * jitter.nextDouble()),
         ),
-        Offset(-480 - 140 * jitter.nextDouble(), -220 - 80 * jitter.nextDouble()),
+        Offset(
+          -480 - 140 * jitter.nextDouble(),
+          -220 - 80 * jitter.nextDouble(),
+        ),
       );
     }
     final from = _dropFrom.remove(id);
@@ -290,11 +309,26 @@ class _ConsoleLobbyViewState extends State<ConsoleLobbyView>
             // How to join (left) and where to go (right), behind everything:
             // two columns hanging from the same line, mirrored around the
             // QR card, like a Swiss poster.
+            if (widget.hotspotCard case final hotspotCard?)
+              Positioned(
+                left: margin,
+                bottom: size.height - posterTop + 24,
+                width: posterWidth,
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: hotspotCard(
+                    (posterTop - 140).clamp(80.0, 150.0).toDouble(),
+                  ),
+                ),
+              ),
             Positioned(
               left: margin,
               top: posterTop,
               width: posterWidth,
-              child: _JoinSteps(connection: widget.connection),
+              child: _JoinSteps(
+                connection: widget.connection,
+                hotspotName: widget.hotspotName,
+              ),
             ),
             Positioned(
               right: margin,
@@ -393,8 +427,8 @@ class _PosterColumn extends StatelessWidget {
   final Widget title;
   final List<(String, String)> lines;
 
-  /// Part of a line to stand out (the Wi-Fi name).
-  final String? emphasis;
+  /// Parts of a line to stand out (the Wi-Fi and hotspot names).
+  final List<String> emphasis;
 
   /// Flush right (the right column): plain lines, no number column.
   final bool alignRight;
@@ -403,7 +437,7 @@ class _PosterColumn extends StatelessWidget {
     required this.title,
     required this.lines,
     this.alignRight = false,
-    this.emphasis,
+    this.emphasis = const [],
   });
 
   @override
@@ -455,36 +489,48 @@ class _PosterColumn extends StatelessWidget {
 }
 
 extension on _PosterColumn {
-  /// A body line; [emphasis] inside it is marked with the highlight color.
+  /// A body line; each [emphasis] inside it is marked with the highlight
+  /// color.
   Widget _line(String text) {
     final style = _textStyle(_TypeScale.body, alpha: 0.7);
-    final mark = emphasis;
-    final at = mark == null || mark.isEmpty ? -1 : text.indexOf(mark);
-    if (at < 0) return Text(text, style: style);
-    return Text.rich(
-      TextSpan(
-        style: style,
-        children: [
-          TextSpan(text: text.substring(0, at)),
-          TextSpan(
-            text: ' $mark ',
-            style: style.copyWith(
-              color: AppColors.textPrimary,
-              backgroundColor: AppColors.highlightColor,
-            ),
-          ),
-          TextSpan(text: text.substring(at + mark!.length)),
-        ],
-      ),
+    final marks = [
+      for (final m in emphasis)
+        if (m.isNotEmpty) m,
+    ];
+    if (marks.isEmpty) return Text(text, style: style);
+    final markStyle = style.copyWith(
+      color: AppColors.textPrimary,
+      backgroundColor: AppColors.highlightColor,
     );
+    final spans = <TextSpan>[];
+    var rest = text;
+    while (rest.isNotEmpty) {
+      // The earliest mark left in the line.
+      (int, String)? next;
+      for (final mark in marks) {
+        final at = rest.indexOf(mark);
+        if (at >= 0 && (next == null || at < next.$1)) next = (at, mark);
+      }
+      if (next == null) {
+        spans.add(TextSpan(text: rest));
+        break;
+      }
+      final (at, mark) = next;
+      spans
+        ..add(TextSpan(text: rest.substring(0, at)))
+        ..add(TextSpan(text: ' $mark ', style: markStyle));
+      rest = rest.substring(at + mark.length);
+    }
+    return Text.rich(TextSpan(style: style, children: spans));
   }
 }
 
 /// "How to join", the left column of the poster.
 class _JoinSteps extends StatelessWidget {
   final ConnectionInfo? connection;
+  final String? hotspotName;
 
-  const _JoinSteps({required this.connection});
+  const _JoinSteps({required this.connection, this.hotspotName});
 
   @override
   Widget build(BuildContext context) {
@@ -498,8 +544,14 @@ class _JoinSteps extends StatelessWidget {
         ? parts[1]
         : QRCodePanel.displayName(context, conn);
     final link = conn?.url.replaceFirst(RegExp('^https?://'), '') ?? '';
+    // The hotspot is a second way in, unless the QR already points at it.
+    final hotspot = conn?.kind == 'hotspot' || hotspotName == network
+        ? ''
+        : hotspotName ?? '';
     final steps = [
-      if (network.isNotEmpty)
+      if (network.isNotEmpty && hotspot.isNotEmpty)
+        strings.consoleJoinWifiOrHotspot(network, hotspot)
+      else if (network.isNotEmpty)
         conn?.kind == 'wifi'
             ? strings.consoleJoinWifi(network)
             : strings.consoleJoinNetwork(network),
@@ -512,7 +564,7 @@ class _JoinSteps extends StatelessWidget {
         style: _textStyle(_TypeScale.display, alpha: 0.85),
       ),
       lines: [for (var i = 0; i < steps.length; i++) ('0${i + 1}', steps[i])],
-      emphasis: network,
+      emphasis: [network, hotspot],
     );
   }
 }
@@ -630,64 +682,69 @@ class _FormingFace extends StatelessWidget {
       left: center.dx - 110,
       top: center.dy - size / 2 - 34,
       width: 220,
-      child: KickMenuRegion(deviceId: deviceId, name: name, child: IgnorePointer(
-        child: ValueListenableBuilder<double>(
-          valueListenable: time,
-          builder: (context, t, _) {
-            final morph = morphStart == null
-                ? 0.0
-                : Curves.easeInOut.transform(
-                    ((t - morphStart!) / (_morphDuration.inMilliseconds / 1000))
-                        .clamp(0.0, 1.0),
-                  );
-            final ball = _faceRadius * 2;
-            final side = size + (ball - size) * morph;
-            // Gentle floating, gone once it is a circle about to drop.
-            final bob = math.sin(t * 0.9 + seed % 7) * 7 * (1 - morph);
-            final labels = 1 - morph;
-            return Transform.translate(
-              offset: Offset(0, bob),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Opacity(
-                    opacity: labels,
-                    child: SizedBox(
-                      height: 30,
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _textStyle(_TypeScale.body),
+      child: KickMenuRegion(
+        deviceId: deviceId,
+        name: name,
+        child: IgnorePointer(
+          child: ValueListenableBuilder<double>(
+            valueListenable: time,
+            builder: (context, t, _) {
+              final morph = morphStart == null
+                  ? 0.0
+                  : Curves.easeInOut.transform(
+                      ((t - morphStart!) /
+                              (_morphDuration.inMilliseconds / 1000))
+                          .clamp(0.0, 1.0),
+                    );
+              final ball = _faceRadius * 2;
+              final side = size + (ball - size) * morph;
+              // Gentle floating, gone once it is a circle about to drop.
+              final bob = math.sin(t * 0.9 + seed % 7) * 7 * (1 - morph);
+              final labels = 1 - morph;
+              return Transform.translate(
+                offset: Offset(0, bob),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Opacity(
+                      opacity: labels,
+                      child: SizedBox(
+                        height: 30,
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _textStyle(_TypeScale.body),
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: 4 + (size - side) / 2),
-                  SizedBox(
-                    width: side,
-                    height: side,
-                    child: CustomPaint(
-                      painter: _BlobPainter(
-                        color: face.color,
-                        time: t,
-                        seed: seed,
-                        wobble: 1 - morph,
-                        outlined: morph > 0,
-                      ),
-                      child: Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(side * 0.2),
-                          child: FittedBox(
-                            child: Transform.rotate(
-                              angle: playerFaceRotationAngle(face.rotation),
-                              child: Text(
-                                face.faceText,
-                                style: TextStyle(
-                                  fontFamily: 'monomaniac',
-                                  fontFamilyFallback: const ['noto_symbols'],
-                                  fontSize: side * 0.6,
-                                  height: 0.9,
-                                  color: Colors.black.withValues(alpha: 0.8),
+                    SizedBox(height: 4 + (size - side) / 2),
+                    SizedBox(
+                      width: side,
+                      height: side,
+                      child: CustomPaint(
+                        painter: _BlobPainter(
+                          color: face.color,
+                          time: t,
+                          seed: seed,
+                          wobble: 1 - morph,
+                          outlined: morph > 0,
+                        ),
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(side * 0.2),
+                            child: FittedBox(
+                              child: Transform.rotate(
+                                angle: playerFaceRotationAngle(face.rotation),
+                                child: Text(
+                                  face.faceText,
+                                  style: TextStyle(
+                                    fontFamily: 'monomaniac',
+                                    fontFamilyFallback: const ['noto_symbols'],
+                                    fontSize: side * 0.6,
+                                    height: 0.9,
+                                    color: Colors.black.withValues(alpha: 0.8),
+                                  ),
                                 ),
                               ),
                             ),
@@ -695,22 +752,22 @@ class _FormingFace extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: 6 + (size - side) / 2),
-                  Opacity(
-                    opacity: labels,
-                    child: Text(
-                      hint,
-                      maxLines: 1,
-                      style: _textStyle(_TypeScale.label, alpha: 0.6),
+                    SizedBox(height: 6 + (size - side) / 2),
+                    Opacity(
+                      opacity: labels,
+                      child: Text(
+                        hint,
+                        maxLines: 1,
+                        style: _textStyle(_TypeScale.label, alpha: 0.6),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+              );
+            },
+          ),
         ),
-      )),
+      ),
     );
   }
 }
@@ -806,35 +863,41 @@ class _ReadyPill extends StatelessWidget {
       top: top,
       width: width,
       height: height,
-      child: KickMenuRegion(deviceId: deviceId, name: name, child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 1, end: 0),
-        duration: const Duration(milliseconds: 380),
-        curve: Curves.easeOutBack,
-        builder: (context, slide, child) =>
-            Transform.translate(offset: Offset(width * slide, 0), child: child),
-        child: Container(
-          padding: EdgeInsets.all(height * 0.08),
-          decoration: BoxDecoration(
-            color: AppColors.screenBackground,
-            borderRadius: BorderRadius.horizontal(
-              left: Radius.circular(height / 2),
-            ),
-            border: Border.all(color: AppColors.textPrimary, width: 4),
+      child: KickMenuRegion(
+        deviceId: deviceId,
+        name: name,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 1, end: 0),
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeOutBack,
+          builder: (context, slide, child) => Transform.translate(
+            offset: Offset(width * slide, 0),
+            child: child,
           ),
-          child: Row(
-            children: [
-              PlayerFaceIndicator(face: face, size: height * 0.84),
-              const Spacer(),
-              Icon(
-                Icons.arrow_forward_rounded,
-                size: height * 0.32,
-                color: AppColors.textPrimary,
+          child: Container(
+            padding: EdgeInsets.all(height * 0.08),
+            decoration: BoxDecoration(
+              color: AppColors.screenBackground,
+              borderRadius: BorderRadius.horizontal(
+                left: Radius.circular(height / 2),
               ),
-              SizedBox(width: height * 0.1 + hidden),
-            ],
+              border: Border.all(color: AppColors.textPrimary, width: 4),
+            ),
+            child: Row(
+              children: [
+                PlayerFaceIndicator(face: face, size: height * 0.84),
+                const Spacer(),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: height * 0.32,
+                  color: AppColors.textPrimary,
+                ),
+                SizedBox(width: height * 0.1 + hidden),
+              ],
+            ),
           ),
         ),
-      )),
+      ),
     );
   }
 }

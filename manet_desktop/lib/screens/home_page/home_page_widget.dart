@@ -35,10 +35,11 @@ import 'server_alerts.dart';
 import 'onboarding_overlay.dart';
 import 'qr_code_container.dart';
 import '../../widgets/juicy_widgets.dart';
-import '../../widgets/online_play_button.dart';
+import '../../widgets/network_mode_chip.dart';
+import '../../widgets/hotspot_wifi_qr.dart';
+import '../../services/network_mode_service.dart';
 import '../../widgets/join_requests_card.dart';
 import '../../services/access_service.dart';
-import '../../services/online_service.dart';
 
 class HomePageScreen extends StatelessWidget {
   final String host;
@@ -82,7 +83,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   late final HostApiService _api;
-  late final OnlineService _online;
+  late final NetworkModeService _network;
   late final AccessService _access;
   late final SessionController _session;
   late final GamepadState _gamepadState;
@@ -135,7 +136,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     super.initState();
     SoundEffectService.instance.init();
     _api = HostApiService(host: widget.host, port: widget.port);
-    _online = OnlineService.of(_api)..addListener(_handleOnlineUpdate);
+    _network = NetworkModeService.of(_api)..addListener(_handleOnlineUpdate);
     // Created up front: it pushes the saved join rules to the server.
     _access = AccessService.of(_api);
     _hostWindowService = HostWindowService(api: _api);
@@ -637,7 +638,8 @@ class _HomePageWidgetState extends State<HomePageWidget> {
     }
   }
 
-  /// While "Play online" is up, the QR and join steps show the public link.
+  /// The network mode and QR switch decide which link the QR and join
+  /// steps show.
   void _handleOnlineUpdate() {
     if (mounted) setState(() {});
   }
@@ -646,7 +648,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
   void dispose() {
     _inventoryRefreshTimer?.cancel();
     _startupPipeline.state.removeListener(_handlePipelineUpdate);
-    _online.removeListener(_handleOnlineUpdate);
+    _network.removeListener(_handleOnlineUpdate);
     _brandingModeNotifier.dispose();
     _hostWindowService.dispose();
     _session.dispose();
@@ -738,7 +740,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                 ],
                               ),
                             ),
-                            const Spacer(),
+                            Expanded(
+                              child: Center(child: NetworkModeChip(api: _api)),
+                            ),
                             if (_alerts.isNotEmpty) ...[
                               AlertIcon(
                                 alerts: _alerts,
@@ -778,8 +782,6 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               ),
                               const SizedBox(width: 8),
                             ],
-                            OnlinePlayButton(api: _api),
-                            const SizedBox(width: 8),
                             _buildControllersButton(),
                             const SizedBox(width: 8),
                             Tooltip(
@@ -817,13 +819,14 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         _reservationTimeoutMinutes,
                                     onMatchSecondsChanged: (seconds) =>
                                         _session.setMatchSeconds(seconds),
+                                    onAbandonCloseChanged: (minutes) =>
+                                        _session.setAbandonCloseMinutes(minutes),
                                     onFreeModeChanged: (enabled) =>
                                         _session.setFreeModeEnabled(enabled),
                                     onLobbyStartRuleChanged: (rule) =>
                                         _session.setLobbyStartRule(rule),
                                     onMousePasswordChanged: (password) =>
                                         _session.setMousePassword(password),
-                                    access: _access,
                                     onConsoleModeChanged: (enabled) async {
                                       setState(() => _consoleMode = enabled);
                                       await _session.setConsoleMode(enabled);
@@ -976,6 +979,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                       ConsoleLobbyView(
                                                         qrCard: qrCard,
                                                         connection: connection,
+                                                        hotspotName: _network.showWifiQr
+                                                            ? _network.value.hotspot.ssid
+                                                            : null,
+                                                        hotspotCard: (size) => HotspotWifiQr(
+                                                          api: _api,
+                                                          size: size,
+                                                        ),
                                                       )
                                                 : null,
                                             lobbyToolbar: _consoleMode ? null : LobbyToolbar(
@@ -1240,13 +1250,13 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                                     .state
                                                     .value
                                                     .diagnosticsSnapshot,
-                                            selectedConnection: _online.value.connection ??
+                                            selectedConnection: _network.onlineConnection ??
                                                 _startupPipeline.state.value.selectedConnection,
-                                            qrEndpointUrl: _online.value.isOnline
-                                                ? _online.qrUrl
+                                            qrEndpointUrl: _network.onlineConnection != null
+                                                ? _network.online.qrUrl
                                                 : _startupPipeline.state.value.qrEndpointUrl,
-                                            qrImage: _online.value.isOnline
-                                                ? NetworkImage(_online.qrUrl)
+                                            qrImage: _network.onlineConnection != null
+                                                ? NetworkImage(_network.online.qrUrl)
                                                 : _startupPipeline.state.value.qrImage,
                                             api: _api,
                                             isLoadingConnections:
@@ -1304,6 +1314,23 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                   ),
                 )
               : const SizedBox.shrink(),
+        ),
+
+        // Hotspot Wi-Fi QR on the tool lobby's right, for phones with no
+        // Wi-Fi.
+        Positioned(
+          right: 24,
+          bottom: 24,
+          child: ListenableBuilder(
+            listenable: _session,
+            builder: (context, _) =>
+                // The console lobby shows it above "How to join".
+                !_consoleMode &&
+                    _session.snapshot.phase == SessionPhase.lobby &&
+                    !_session.snapshot.overlayOpen
+                ? HotspotWifiQr(api: _api)
+                : const SizedBox.shrink(),
+          ),
         ),
 
         // Join requests stay on top of the lobby and the in-game overlay.

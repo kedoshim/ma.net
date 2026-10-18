@@ -78,6 +78,23 @@ class LobbyRequest {
   }
 }
 
+/// Everyone left the running game: the overlay opened by itself with the QR
+/// code; whoever comes back resumes or picks another game in its menu.
+class AwayState {
+  /// When the game closes if nobody comes back (null: never, or someone is
+  /// connected).
+  final DateTime? closeAt;
+
+  const AwayState({this.closeAt});
+
+  factory AwayState.fromJson(Map<String, dynamic> json) {
+    final closeAt = json['closeAt'] as num?;
+    return AwayState(
+      closeAt: closeAt == null ? null : _fromEpochSeconds(closeAt),
+    );
+  }
+}
+
 DateTime _fromEpochSeconds(num seconds) =>
     DateTime.fromMillisecondsSinceEpoch((seconds * 1000).round());
 
@@ -206,6 +223,10 @@ class SessionSnapshot {
   final LobbyRequest? lobbyRequest;
   /// deviceId -> gameId whose details that player reads on their phone.
   final Map<String, String> reading;
+  /// Set while the game waits for its players (everyone left).
+  final AwayState? away;
+  /// Minutes an abandoned game waits before closing (0: never).
+  final int abandonCloseMinutes;
 
   const SessionSnapshot({
     this.phase = SessionPhase.lobby,
@@ -234,6 +255,8 @@ class SessionSnapshot {
     this.lobbyCountdown,
     this.lobbyRequest,
     this.reading = const {},
+    this.away,
+    this.abandonCloseMinutes = 30,
   });
 
   int get readyCount => players.where((p) => p.ready).length;
@@ -302,6 +325,10 @@ class SessionSnapshot {
         for (final e in (json['reading'] as Map<String, dynamic>? ?? const {}).entries)
           e.key: e.value as String,
       },
+      away: json['away'] == null
+          ? null
+          : AwayState.fromJson(json['away'] as Map<String, dynamic>),
+      abandonCloseMinutes: (json['abandonCloseMinutes'] as num?)?.toInt() ?? 30,
     );
   }
 }

@@ -508,6 +508,7 @@ class EnUsAccessStrings implements AccessStrings {
     'banned' => 'You can\'t join this room',
     'kicked' => 'You were removed from the room',
     'timeout' => 'The request expired',
+    'lan_disabled' => 'This room only accepts players over the internet',
     'too_many_attempts' => 'Too many wrong attempts',
     _ => 'The host declined your request',
   };
@@ -515,6 +516,7 @@ class EnUsAccessStrings implements AccessStrings {
   String deniedBody(String? reason) => switch (reason) {
     'banned' => 'The host blocked this device for this session.',
     'timeout' => 'The host didn\'t answer in time. You can ask again.',
+    'lan_disabled' => 'Ask the host for the online link and join through it.',
     'too_many_attempts' => 'Wait a minute before trying again.',
     _ => 'You can try again if the host asks you to.',
   };

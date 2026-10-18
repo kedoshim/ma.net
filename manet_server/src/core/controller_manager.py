@@ -32,6 +32,10 @@ class ControllerManager:
         # Console mode during a game: the seats are fixed. Phones without a
         # seat wait on the bench and join from the overlay (SessionState).
         self.bench_new_devices = False
+        # Nobody is connected to a running game: disconnected seats stay
+        # reserved until the session decides (players coming back get
+        # their seats back however long they were away).
+        self.hold_reservations = False
 
     def set_main_loop(self, loop):
         self.main_loop = loop

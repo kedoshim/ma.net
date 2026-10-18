@@ -13,6 +13,7 @@ from src.cli.debug_cli import DebugCLI
 from src.services.connection_service import ConnectionService
 from src.services.network_diagnostics_service import NetworkDiagnosticsService
 from src.services.tunnel_service import TunnelService
+from src.services.hotspot_service import HotspotService
 from src.core.access_control import AccessGate
 from src.app.security import admin_auth_middleware, load_admin_token, requires_admin
 
@@ -28,6 +29,8 @@ def create_app(config):
         port=config.http_port,
         ws_endpoint=config.ws_endpoint,
     )
+    # The network monitor and the routes reach it through the connections.
+    connection_service.hotspot_service = HotspotService(connection_service)
     diagnostics_service = NetworkDiagnosticsService(
         manager,
         connection_service,

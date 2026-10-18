@@ -111,6 +111,14 @@ SWAP_OFFER_SECONDS = 20.0
 # How often the running game's foreground status is checked.
 FOREGROUND_POLL_SECONDS = 0.3
 
+# Everyone left a running game: after this the overlay opens by itself with
+# the QR code ("game paused, scan to continue"). Absorbs short drops such as
+# a phone locking its screen.
+AWAY_GRACE_SECONDS = 60.0
+# Then, unless someone comes back, the game is closed after this many
+# minutes (0: never, the game waits for them).
+ABANDON_CLOSE_MINUTES_DEFAULT = 30
+
 
 class SessionState:
     def __init__(self, manager, admin_panel, library):
@@ -186,6 +194,13 @@ class SessionState:
         self.seat_limit = 16
         self.lineup: Lineup | None = None
         self._lineup_task: asyncio.Task | None = None
+        # Abandoned game: everyone left while in game. `away` is True once
+        # the overlay opened by itself; whoever comes back picks "resume" or
+        # "another game" in its menu.
+        self.away = False
+        self.away_close_at: float | None = None
+        self._away_task: asyncio.Task | None = None
+        self.abandon_close_minutes = ABANDON_CLOSE_MINUTES_DEFAULT
         manager.on_device_replaced = self._device_replaced
 
     # ---------------------------------------------------------------- players
@@ -333,6 +348,7 @@ class SessionState:
         if self.phase == SessionPhase.IN_GAME:
             # Console mode: someone joined or changed seats mid-game.
             self._schedule_pads()
+            self._check_away()
         # Always publish: a player joining changes "everyone ready" too.
         self.broadcast()
 
@@ -469,8 +485,113 @@ class SessionState:
             self.overlay_shot_id += 1
         self.overlay_owner = owner if open_ else None
         self.overlay_open = open_
+        if not open_ and self.away:
+            # Closed by hand (host keyboard/mouse): back to the game.
+            self._end_away()
         self._refresh_input_mode()
         self.broadcast()
+
+    # ------------------------------------------------------ abandoned game
+
+    def _check_away(self):
+        """In game, called whenever phones come and go. With nobody left the
+        seats stay reserved and the away watch starts; anyone coming back
+        stops the close timer (the overlay stays until they choose)."""
+        if self.phase != SessionPhase.IN_GAME:
+            return
+        task_running = self._away_task is not None and not self._away_task.done()
+        if not self.present_ids():
+            self.manager.hold_reservations = True
+            waiting_forever = self.away and self.abandon_close_minutes <= 0
+            if not task_running and not waiting_forever:
+                self._away_task = asyncio.get_running_loop().create_task(self._watch_away())
+            return
+        if task_running:
+            self._away_task.cancel()
+            self._away_task = None
+        if self.away:
+            if self.away_close_at is not None:
+                self.away_close_at = None
+                self.broadcast()
+        elif self.manager.hold_reservations:
+            # Back during the grace period: the others get the usual
+            # reservation again from now.
+            self._release_reservations()
+
+    async def _watch_away(self):
+        try:
+            if not self.away:
+                await asyncio.sleep(AWAY_GRACE_SECONDS)
+                if self.present_ids() or self.phase != SessionPhase.IN_GAME:
+                    return
+                LOGGER.info("Nobody connected for %.0fs; showing the away overlay", AWAY_GRACE_SECONDS)
+                if self.overlay_open:
+                    self.overlay_owner = None
+                else:
+                    await self.set_overlay(True, owner=None)
+                if self.present_ids() or not self.overlay_open:
+                    return  # someone came back while the screen was captured
+                self.away = True
+            minutes = self.abandon_close_minutes
+            if minutes <= 0:
+                self.away_close_at = None
+                self.broadcast()
+                return
+            self.away_close_at = time.time() + minutes * 60
+            self.broadcast()
+            await asyncio.sleep(minutes * 60)
+        except asyncio.CancelledError:
+            return
+        self._away_task = None
+        if self.present_ids() or self.phase != SessionPhase.IN_GAME:
+            return
+        LOGGER.info("Nobody came back for %d min; closing the abandoned game", minutes)
+        if self.running is not None and self.running.tracked:
+            self.stop_game()
+        else:
+            # Shortcut/URI launches and free mode can't be closed from here.
+            self.return_from_game()
+        # The lobby starts clean: the seats of who left are free again.
+        freed = False
+        for slot in self.manager.slots:
+            if slot.assigned_device_id and not slot.connected:
+                self.manager.unassign_slot(slot.slot_id)
+                freed = True
+        if freed:
+            self.admin_panel.broadcast_update()
+
+    def set_abandon_close_minutes(self, minutes: int):
+        self.abandon_close_minutes = max(0, min(24 * 60, int(minutes)))
+        if self.away and not self.present_ids():
+            # Restart the close timer with the new length.
+            if self._away_task is not None:
+                self._away_task.cancel()
+            self._away_task = None
+            self._check_away()
+
+    def _release_reservations(self):
+        """Stop holding the seats of who left: they get the usual
+        reservation from now on."""
+        if not self.manager.hold_reservations:
+            return
+        self.manager.hold_reservations = False
+        until = time.time() + self.manager.config.slot_reservation_timeout
+        for slot in self.manager.slots:
+            if slot.assigned_device_id and not slot.connected:
+                slot.reserved_until = until
+
+    def _end_away(self):
+        if self._away_task is not None and self._away_task is not asyncio.current_task():
+            self._away_task.cancel()
+        self._away_task = None
+        self.away = False
+        self.away_close_at = None
+        self._release_reservations()
+
+    def _away_payload(self) -> dict | None:
+        if not self.away:
+            return None
+        return {"closeAt": self.away_close_at}
 
     def _game_pids(self) -> set[int]:
         return self.running.alive_pids() if self.running and self.running.tracked else set()
@@ -1232,6 +1353,7 @@ class SessionState:
         self.return_from_game()
 
     def return_from_game(self):
+        self._end_away()
         for task in (self._watch_task, self._placement_task, self._guard_task, self._ready_task):
             if task is not None:
                 task.cancel()
@@ -1310,6 +1432,8 @@ class SessionState:
             "lobbyStartRule": self.lobby_start_rule,
             "playZone": sorted(self.play_zone),
             "lineup": self.lineup.to_payload() if self.lineup else None,
+            "away": self._away_payload(),
+            "abandonCloseMinutes": self.abandon_close_minutes,
         }
 
     def phone_payload(self, device_id: str | None = None) -> dict:
@@ -1348,6 +1472,7 @@ class SessionState:
             "benched": bool(device_id) and device_id in self.present_ids()
             and device_id not in self.manager.device_map,
             "lineup": self._lineup_phone_payload(device_id),
+            "away": self.away,
         }
 
     def _lineup_phone_payload(self, device_id: str | None) -> dict | None:

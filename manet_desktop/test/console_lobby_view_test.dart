@@ -63,7 +63,14 @@ void main() {
   late _FakePads pads;
   late _FakeSession session;
 
-  Future<void> pumpLobby(WidgetTester tester, SessionSnapshot snapshot, List<String> ids) async {
+  Future<void> pumpLobby(
+    WidgetTester tester,
+    SessionSnapshot snapshot,
+    List<String> ids, {
+    ConnectionInfo? connection,
+    String? hotspotName,
+    Widget Function(double size)? hotspotCard,
+  }) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -83,6 +90,9 @@ void main() {
           home: Scaffold(
             body: ConsoleLobbyView(
               qrCard: (_) => const ColoredBox(color: Colors.white),
+              connection: connection,
+              hotspotName: hotspotName,
+              hotspotCard: hotspotCard,
             ),
           ),
         ),
@@ -170,5 +180,37 @@ void main() {
     // The leftmost column of spots (8% of 1600 px, give or take jitter).
     expect(blobX, lessThan(220));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('join steps offer the Wi-Fi and the hotspot, with the card above', (tester) async {
+    final wifi = ConnectionInfo(
+      id: 'wifi',
+      url: 'http://192.168.0.20:8080',
+      wsUrl: 'ws://192.168.0.20:8080/ws',
+      ip: '192.168.0.20',
+      displayNameKey: 'connection_label_wifi__CasaNet',
+      kind: 'wifi',
+      recommended: true,
+      selected: true,
+      preferred: false,
+      lastSuccessful: false,
+    );
+    await pumpLobby(
+      tester,
+      _snapshot(players: const [], queue: const []),
+      const [],
+      connection: wifi,
+      hotspotName: 'MANET-PC',
+      hotspotCard: (size) => SizedBox(key: const ValueKey('hotspot-card'), width: size, height: size),
+    );
+    await run(tester, const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+
+    final step = find.textContaining('MANET-PC', findRichText: true);
+    expect(step, findsOneWidget);
+    expect(find.textContaining('CasaNet', findRichText: true), findsOneWidget);
+    final card = find.byKey(const ValueKey('hotspot-card'));
+    expect(card, findsOneWidget);
+    expect(tester.getRect(card).bottom, lessThan(tester.getRect(step).top));
   });
 }

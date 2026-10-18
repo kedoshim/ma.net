@@ -638,6 +638,10 @@ class HostApiService {
     {'deviceId': deviceId, 'side': side},
   );
 
+  /// Minutes a game nobody is connected to waits before closing (0: never).
+  Future<void> setAbandonCloseMinutes(int minutes) =>
+      _postJson('/api/session/settings', {'abandonCloseMinutes': minutes});
+
   /// Seconds each tournament match lasts.
   Future<void> setMatchSeconds(int seconds) =>
       _postJson('/api/session/settings', {'matchSeconds': seconds});

@@ -12,6 +12,7 @@ from src.core.game_library import GameValidationError
 from src.services.window_placement import list_displays
 from src.services.controller_inventory import build_inventory, close_other_servers, snapshot_own_pads
 from src.services.connection_service import ConnectionService
+from src.services.hotspot_service import HotspotInfo, wifi_qr_payload
 from src.services.network_diagnostics_service import NetworkDiagnosticsService
 from src.core.slot_handler import notify_device_slot, notify_device_unassigned
 
@@ -131,6 +132,8 @@ class HTTPRoutes:
             lan=data.get("lanMode"),
             online=data.get("onlineMode"),
             password=data.get("password") if "password" in data else None,
+            online_password=data.get("onlinePassword") if "onlinePassword" in data else None,
+            lan_enabled=data.get("lanEnabled"),
         )
         return web.json_response({"success": True, **self.access_gate.to_payload()})
 
@@ -256,6 +259,32 @@ class HTTPRoutes:
                 {"success": False, "code": "qr_generation_failed"},
                 status=500
             )
+
+    def _hotspot(self):
+        return getattr(self.connection_service, "hotspot_service", None)
+
+    async def hotspot_handler(self, request):
+        service = self._hotspot()
+        info = await asyncio.to_thread(service.get) if service else HotspotInfo()
+        return web.json_response({"success": True, **info.to_payload()})
+
+    async def hotspot_qr_handler(self, request):
+        """QR that joins a phone to the PC's hotspot (it holds the password,
+        so it is admin-only like every /api/ route)."""
+        service = self._hotspot()
+        info = await asyncio.to_thread(service.get) if service else HotspotInfo()
+        if not info.active or not info.ssid:
+            return web.json_response({"success": False, "code": "hotspot_unavailable"}, status=404)
+        payload = wifi_qr_payload(info.ssid, info.passphrase)
+        try:
+            png = self._qr_cache.get(payload)
+            if png is None:
+                png = await asyncio.to_thread(_render_qr_png, payload)
+                self._qr_cache[payload] = png
+            return web.Response(body=png, content_type="image/png")
+        except Exception as e:
+            LOG.error("Failed to generate hotspot QR code: %s", e)
+            return web.json_response({"success": False, "code": "qr_generation_failed"}, status=500)
 
     async def presets_handler(self, request):
         if request.query.get("format") == "catalog" or request.query.get("catalog") == "true":
@@ -719,6 +748,11 @@ class HTTPRoutes:
                 self.session.set_match_seconds(float(data["matchSeconds"]))
             except (TypeError, ValueError):
                 return _bad_request("invalid_matchSeconds")
+        if "abandonCloseMinutes" in data:
+            try:
+                self.session.set_abandon_close_minutes(int(data["abandonCloseMinutes"]))
+            except (TypeError, ValueError):
+                return _bad_request("invalid_abandonCloseMinutes")
         if "freeModeEnabled" in data:
             self.session.set_free_mode_enabled(data["freeModeEnabled"] is True)
         if "mousePassword" in data:
@@ -732,6 +766,7 @@ class HTTPRoutes:
         return web.json_response({
             "success": True,
             "matchSeconds": self.session.match_seconds,
+            "abandonCloseMinutes": self.session.abandon_close_minutes,
             "freeModeEnabled": self.session.free_mode_enabled,
             "consoleMode": self.manager.console_mode,
             "lobbyStartRule": self.session.lobby_start_rule,

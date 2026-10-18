@@ -35,6 +35,8 @@ class PtBrStrings implements AppStrings {
   final OnlineStrings online = PtBrOnlineStrings();
   @override
   final AccessStrings access = PtBrAccessStrings();
+  @override
+  final NetworkStrings network = PtBrNetworkStrings();
 }
 
 class PtBrSessionStrings implements SessionStrings {
@@ -54,6 +56,9 @@ class PtBrSessionStrings implements SessionStrings {
   String consoleJoinWifi(String name) => 'Conecte no Wi-Fi $name';
   @override
   String consoleJoinNetwork(String name) => 'Conecte na rede $name';
+  @override
+  String consoleJoinWifiOrHotspot(String wifi, String hotspot) =>
+      'Conecte no Wi-Fi $wifi ou no hotspot $hotspot';
   @override
   String consoleJoinScan(String link) => 'Aponte a câmera pro QR code ou acesse $link';
   @override
@@ -282,6 +287,22 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get overlayResume => 'Voltar ao jogo';
   @override
+  String get awayTitle => 'Jogo pausado: ninguém conectado';
+  @override
+  String get awayScan => 'Escaneie o QR code para continuar jogando';
+  @override
+  String awayClosesIn(String time) => 'O jogo fecha em $time e o MaNet volta ao lobby. O progresso não salvo será perdido.';
+  @override
+  String get awayClosesUntracked => 'O MaNet não consegue fechar este jogo: ele volta ao lobby e o jogo continua aberto atrás.';
+  @override
+  String get awayWaits => 'O jogo vai esperar vocês.';
+  @override
+  String get awayChooseTitle => 'Bem-vindos de volta!';
+  @override
+  String get awayResume => 'Continuar o jogo';
+  @override
+  String get awaySwitch => 'Escolher outro jogo';
+  @override
   String get overlayAddPlayers => 'Adicionar jogadores';
   @override
   String get overlayLayout => 'Layout do controle';
@@ -291,6 +312,8 @@ class PtBrSessionStrings implements SessionStrings {
   String overlayConfirm(String action) => '$action? Aperte de novo';
   @override
   String get overlayPlayersTitle => 'Chama mais gente!';
+  @override
+  String get overlayQrZoom => 'Selecionar amplia o QR code';
   @override
   String get overlayPlayersHint => 'Aponte a câmera do celular para o QR code ou abra o link.';
   @override
@@ -306,17 +329,9 @@ class PtBrSessionStrings implements SessionStrings {
   String get coverNotAnImage =>
       'Esse link abre uma página, não uma imagem. Clique com o botão direito na imagem e use "Copiar endereço da imagem".';
   @override
-  String get playgroundTitle => 'Enquanto isso...';
-  @override
-  String get playgroundHint => 'Analógico anda, Selecionar pula. Dá pra subir em cima dos outros!';
-  @override
   String get overlayInCharge => 'está no comando';
   @override
   String get overlayHostOwner => 'Menu aberto no PC';
-  @override
-  String overlayNextSeat(int seat) => 'Quem entrar agora vira o p$seat';
-  @override
-  String get overlayNoSeat => 'Todas as vagas estão ocupadas: quem entrar fica no banco.';
   @override
   String get overlaySeatsHint => 'Para trocar de lugar ou ir pro banco, use o botão Lugar no celular.';
   @override
@@ -772,6 +787,12 @@ class PtBrSettingsStrings implements SettingsStrings {
   @override
   String matchSecondsValue(int seconds) => '${seconds}s';
   @override
+  String get abandonCloseTitle => 'Fechar jogo abandonado após';
+  @override
+  String get abandonCloseHint => 'Contado depois que todos os celulares saem. Quem voltar antes pode continuar o jogo no mesmo lugar.';
+  @override
+  String abandonCloseValue(int minutes) => minutes == 0 ? 'Nunca' : '$minutes min';
+  @override
   String get freeModeTitle => 'Modo livre';
   @override
   String get freeModeHint => 'Permite minimizar o MaNet na escolha de jogos para os celulares virarem controles comuns em qualquer jogo.';
@@ -1111,10 +1132,6 @@ class PtBrAccessStrings implements AccessStrings {
   @override
   String get whoCanJoin => 'Quem pode entrar';
   @override
-  String get lanTitle => 'Quem pode entrar pela rede local';
-  @override
-  String get lanHint => 'Para quem está no mesmo Wi-Fi. A senha é a mesma do Jogar online.';
-  @override
   String get modeOpen => 'Qualquer pessoa';
   @override
   String get modeOpenHint => 'Entra direto.';
@@ -1148,4 +1165,57 @@ class PtBrAccessStrings implements AccessStrings {
   String get kickAndBan => 'Expulsar e banir';
   @override
   String unbanAll(int count) => 'Desbanir todos ($count)';
+}
+
+class PtBrNetworkStrings implements NetworkStrings {
+  @override
+  String get modeLocal => 'Local';
+  @override
+  String get modeBoth => 'Ambos';
+  @override
+  String get modeOnline => 'Online';
+  @override
+  String get chipTooltip => 'Por onde os jogadores entram';
+  @override
+  String get optionsTooltip => 'Opções de rede e acesso';
+  @override
+  String get panelTitle => 'Rede e acesso';
+  @override
+  String get modeLocalHint => 'Só quem está no mesmo Wi-Fi (ou no hotspot do PC) entra.';
+  @override
+  String get modeBothHint => 'Os dois QR funcionam ao mesmo tempo. Use o seletor em cima do QR para escolher qual aparece.';
+  @override
+  String get modeOnlineHint => 'Só entra quem usar o link público. Quem está na rede local não consegue entrar.';
+  @override
+  String get localColumn => 'Rede local';
+  @override
+  String get onlineColumn => 'Internet';
+  @override
+  String get defaultRule => 'Regra padrão';
+  @override
+  String get localHint => 'Para quem está no mesmo Wi-Fi ou no hotspot do PC.';
+  @override
+  String get ownOnlineRule => 'Regra própria para internet';
+  @override
+  String get ownOnlineRuleOff => 'Desligado: quem vem pela internet segue a regra da rede local.';
+  @override
+  String get ownOnlineRuleOffDefault => 'Desligado: quem vem pela internet segue a regra padrão.';
+  @override
+  String get hotspotOff => 'Hotspot do PC desligado';
+  @override
+  String get hotspotOnUnknown => 'Hotspot do PC ligado';
+  @override
+  String hotspotOn(String ssid) => 'Hotspot do PC ligado: $ssid';
+  @override
+  String get hotspotHint => 'Quem não tem Wi-Fi pode entrar no hotspot do PC: o QR do Wi-Fi aparece no lobby.';
+  @override
+  String get wifiQrTitle => 'Sem Wi-Fi?';
+  @override
+  String wifiQrCaption(String ssid) => 'Escaneie para entrar no Wi-Fi $ssid';
+  @override
+  String get qrSwitchLabel => 'Qual QR mostrar';
+  @override
+  String get done => 'Pronto';
+  @override
+  String get saved => 'Regras de entrada salvas';
 }

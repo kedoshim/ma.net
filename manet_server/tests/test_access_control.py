@@ -3,6 +3,7 @@ import asyncio
 from src.core.access_control import (
     ADMITTED,
     BANNED,
+    LAN_DISABLED,
     MAX_PASSWORD_ATTEMPTS,
     MODE_APPROVAL,
     MODE_OPEN,
@@ -100,3 +101,41 @@ def test_tunnel_loopback_address_is_never_banned():
     gate.check("a", "online", "127.0.0.1")
     gate.kick("a", ban=True)
     assert gate.check("b", "online", "127.0.0.1") != BANNED
+
+
+def test_online_only_refuses_new_lan_phones_but_keeps_admitted_ones():
+    gate = AccessGate()
+    assert gate.check("old", "lan", "192.168.0.10") == ADMITTED
+    gate.configure(lan_enabled=False)
+    assert gate.check("new", "lan", "192.168.0.11") == LAN_DISABLED
+    assert gate.check("old", "lan", "192.168.0.10") == ADMITTED
+    assert gate.check("far", "online", "203.0.113.1") == MODE_APPROVAL
+    assert gate.to_payload()["lanEnabled"] is False
+    gate.configure(lan_enabled=True)
+    assert gate.check("new", "lan", "192.168.0.11") == ADMITTED
+
+
+def test_each_origin_has_its_own_password():
+    gate = AccessGate()
+    gate.configure(lan=MODE_PASSWORD, online=MODE_PASSWORD, password="casa", online_password="live")
+    assert gate.try_password("a", "192.168.0.10", "live", "lan")[0] == "wrong"
+    assert gate.try_password("a", "192.168.0.10", "casa", "lan")[0] == "ok"
+    assert gate.try_password("b", "203.0.113.1", "casa", "online")[0] == "wrong"
+    assert gate.try_password("b", "203.0.113.1", "live", "online")[0] == "ok"
+    payload = gate.to_payload()
+    assert payload["passwordSet"] and payload["onlinePasswordSet"]
+
+
+def test_online_password_without_its_own_follows_the_lan_one():
+    # Older desktop builds send a single `password`.
+    gate = AccessGate()
+    gate.configure(online=MODE_PASSWORD, password="casa")
+    assert gate.mode_for("online") == MODE_PASSWORD
+    assert gate.try_password("b", "203.0.113.1", "casa", "online")[0] == "ok"
+
+
+def test_empty_online_password_falls_back_to_approval_online_only():
+    gate = AccessGate()
+    gate.configure(lan=MODE_PASSWORD, online=MODE_PASSWORD, password="casa", online_password="")
+    assert gate.mode_for("lan") == MODE_PASSWORD
+    assert gate.mode_for("online") == MODE_APPROVAL
