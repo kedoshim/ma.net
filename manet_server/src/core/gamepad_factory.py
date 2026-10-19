@@ -263,11 +263,14 @@ def create_gamepad(manager, config_type: str, existing_x360_count: int, main_loo
     LOGGER_CM.info("[GAMEPAD_FACTORY] Request to create gamepad: slot_index=%d, config_type=%s, existing_x360_count=%d", 
                   slot_index, config_type, existing_x360_count)
 
-    callback_state = {"alive": True}
+    # slot_index lives in the state: pads can be handed to other seats later
+    # (ControllerManager.order_pads_for_games).
+    callback_state = {"alive": True, "slot_index": slot_index}
 
     def rumble_callback(client, target, large_motor, small_motor, led_number, user_data):
         if not callback_state["alive"]:
             return
+        slot_index = callback_state["slot_index"]
         callback_state["last_large"] = large_motor
         if callback_state.get("probing"):
             # The controllers panel is identifying XInput slots with a

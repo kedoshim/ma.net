@@ -61,6 +61,7 @@ class AppLifecycle:
                                 break
                     except Exception:
                         logger.exception("Failed to initialize slot %d", i)
+                await self.manager.order_pads_for_games()
             self.admin_panel.broadcast_update()
 
         async def warm_gamepad_probe():

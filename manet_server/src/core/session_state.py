@@ -1245,7 +1245,7 @@ class SessionState:
                 # seat from the overlay.
                 self._fix_seats(game["maxPlayers"])
                 seats = min(16, game["maxPlayers"])
-                if await self.manager.ensure_pads(min_seats=seats, pad_first=seats):
+                if await self.manager.ensure_pads(min_seats=seats, pad_first=seats, reorder=True):
                     await asyncio.sleep(0.5)  # let Windows finish plugging them
                 self.admin_panel.broadcast_update()
             windows_before = set(await asyncio.to_thread(visible_windows))

@@ -4,6 +4,8 @@ from src.models.models import PlayerSlot
 from src.core.gamepad_factory import create_gamepad, NullGamepad, retire_gamepad
 from src.core.player_identity import normalize_identity
 from src.core.controller_presets import ControllerPresetStore
+from src.services.controller_inventory import vigem_serial
+from src.services.dinput_order import dinput_serial_order
 
 import logging
 
@@ -199,11 +201,13 @@ class ControllerManager:
         LOGGER.info("[LIFECYCLE] Plugged %s gamepad into seat %d", gp_type, slot.slot_id)
         return True
 
-    async def ensure_pads(self, min_seats: int = 0, every_seat: bool = False, pad_first: int = 0) -> int:
+    async def ensure_pads(self, min_seats: int = 0, every_seat: bool = False, pad_first: int = 0, reorder: bool = False) -> int:
         """Plug virtual pads into the seats with a player, the first
         `pad_first` seats, or every seat, in seat order so the XInput order
         follows the seats. Pads that already exist are kept. Also makes sure
-        there are at least `min_seats` seats. Returns how many were plugged in."""
+        there are at least `min_seats` seats. With `reorder` (no game running
+        yet), DS4 pads are then handed out in the order games list them.
+        Returns how many were plugged in."""
         created = 0
         async with self._slot_lock:
             while len(self.slots) < min(min_seats, 16):
@@ -218,6 +222,8 @@ class ControllerManager:
                     self._broadcast_limit_reached(sum(1 for s in self.slots if s.gamepad is not None))
                     break
                 created += 1
+            if created and reorder:
+                await self.order_pads_for_games()
         if created:
             for slot in self.slots:
                 if slot.assigned_device_id and slot.connected:
@@ -226,6 +232,49 @@ class ControllerManager:
                         "total_slots": len(self.slots),
                     })
         return created
+
+    async def order_pads_for_games(self, timeout: float = 3.0):
+        """Hand the DS4 pads to the seats in the order games list them, so
+        P1 is the game's first DualShock, P2 the second... Windows lists
+        DInput pads in a fixed shuffle of their serials, not in the order
+        they were plugged in (see dinput_order). Only call when no game is
+        relying on the current pads (it moves pads between seats). Call
+        with _slot_lock held."""
+        slots = [s for s in self.slots if s.gamepad is not None and s.controller_type == "ds4"]
+        serial_of = {id(s.gamepad): vigem_serial(s.gamepad) for s in slots}
+        wanted = {serial for serial in serial_of.values() if serial is not None}
+        if len(slots) < 2 or len(wanted) != len(slots):
+            return
+
+        # New pads take a moment to show up in DirectInput.
+        deadline = time.monotonic() + timeout
+        while True:
+            order = await asyncio.to_thread(dinput_serial_order)
+            if wanted <= set(order) or time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(0.25)
+        rank = {serial: index for index, serial in enumerate(order)}
+        if not wanted <= set(rank):
+            LOGGER.warning("DirectInput does not list every DS4 pad yet; seats keep their pads")
+            return
+
+        pads = sorted((s.gamepad for s in slots), key=lambda pad: rank[serial_of[id(pad)]])
+        moved = 0
+        for slot, pad in zip(slots, pads):
+            if slot.gamepad is pad:
+                continue
+            pad.reset()
+            pad.update()
+            slot.gamepad = pad
+            state = getattr(pad, "_manet_callback_state", None)
+            if state is not None:
+                state["slot_index"] = slot.slot_id
+            moved += 1
+        if moved:
+            LOGGER.info(
+                "Seats now follow the DirectInput order: %s",
+                ", ".join(f"P{s.slot_id + 1}=serial {serial_of[id(s.gamepad)]}" for s in slots),
+            )
 
     def needs_pads(self) -> bool:
         return any(slot.gamepad is None and slot.assigned_device_id for slot in self.slots)
@@ -247,7 +296,7 @@ class ControllerManager:
         self.config.console_mode = enabled
         if not enabled:
             # Tool mode: every seat is a plugged-in pad, as configured.
-            await self.ensure_pads(every_seat=True)
+            await self.ensure_pads(every_seat=True, reorder=True)
     
     def register_device(self, device_id, player_name=None, customization=None, lang="pt"):
         if not player_name or player_name.strip() == "":
@@ -815,7 +864,7 @@ class ControllerManager:
                 await self._resize_slots(slots)
         if not self.console_mode and any(slot.gamepad is None for slot in self.slots):
             # Seats left over from console mode get their pads.
-            await self.ensure_pads(every_seat=True)
+            await self.ensure_pads(every_seat=True, reorder=True)
 
 
     async def recreate_gamepads(self):
@@ -881,6 +930,8 @@ class ControllerManager:
                 "message": f"Não foi possível gerar mais controles. O limite foi ajustado para {created_count} controles no modo {mode_display}."
             })
 
+        await self.order_pads_for_games()
+
         # Reassign devices to previous slot indices
         LOGGER.info(f"Reassigning {len(assignments)} devices to new slots")
         for index, device_id, player_name in assignments:
@@ -917,6 +968,7 @@ class ControllerManager:
             if not self._attach_pad(slot):
                 self._broadcast_limit_reached(index)
                 break
+        await self.order_pads_for_games()
         try:
             self.broadcast_active_layout()
         except Exception:
@@ -951,7 +1003,9 @@ class ControllerManager:
                     "mode": self.config.controller_type,
                     "message": f"Não foi possível gerar mais controles. O limite foi ajustado para {created_count} controles no modo {mode_display}."
                 })
-            
+
+            await self.order_pads_for_games()
+
             # Broadcast the new limit to connected clients incrementally 
             # to avoid disruptive 'assigned' haptics/reconnections.
             for slot in self.slots:
