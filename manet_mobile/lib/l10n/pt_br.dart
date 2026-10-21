@@ -281,6 +281,11 @@ class PtBrOptionsStrings implements OptionsStrings {
   @override
   String get fireRing => 'Anel';
   @override
+  String get aimButtons => 'Botões de mira';
+  @override
+  String get aimButtonsHint =>
+      'Tocar: só o botão. Arrastar: segura o botão e mira com o analógico direito.';
+  @override
   String get fireButton => 'Botão';
   @override
   String get secondaryButtonsTitle => 'Botões Secundários';

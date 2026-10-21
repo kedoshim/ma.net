@@ -13,6 +13,7 @@ class ControllerLayoutPreset {
     required this.buttonSizes,
     required this.rightLayoutMode,
     this.leftButtons = const [],
+    this.aimButtons = const [],
     this.rightStickFire = kFireOff,
     this.rightStickFireButton = 'RT',
   });
@@ -25,6 +26,8 @@ class ControllerLayoutPreset {
   final Map<String, int> buttonSizes;
   final String rightLayoutMode;
   final List<String> leftButtons;
+  /// Right-side buttons that also aim with the right stick when dragged.
+  final List<String> aimButtons;
   /// Aim-and-fire the game asks for ('off', 'touch' or 'ring').
   final String rightStickFire;
   final String rightStickFireButton;
@@ -59,6 +62,9 @@ class ControllerLayoutPreset {
         layout['leftButtons'] as List<dynamic>? ?? const [],
       ),
       rightStickFire: normalizeFireMode(layout['rightStickFire']),
+      aimButtons: normalizeAimButtons(
+        layout['aimButtons'] as List<dynamic>? ?? const [],
+      ),
       rightStickFireButton: normalizeFireButton(layout['rightStickFireButton']),
     );
   }

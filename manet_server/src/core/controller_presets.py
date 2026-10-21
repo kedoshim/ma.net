@@ -54,6 +54,20 @@ def _normalize_right_stick_fire(value):
     return value if value in RIGHT_STICK_FIRE_MODES else "off"
 
 
+def _normalize_aim_buttons(raw):
+    """Right-side buttons that also aim with the right stick when dragged."""
+    result = []
+    for item in raw or []:
+        canonical = _canonical_button_id(item)
+        if (
+            canonical in BUTTON_ORDER
+            and canonical not in LEFT_ZONE_EXCLUDED
+            and canonical not in result
+        ):
+            result.append(canonical)
+    return result
+
+
 def _normalize_right_stick_fire_button(value):
     canonical = _canonical_button_id(value) if isinstance(value, str) else None
     return canonical if canonical in RIGHT_STICK_FIRE_BUTTONS else "RT"
@@ -95,6 +109,7 @@ def _preset(
     left_buttons=None,
     right_stick_fire="off",
     right_stick_fire_button="RT",
+    aim_buttons=None,
 ):
     left = _normalize_left_buttons(left_buttons)
     raw_order = []
@@ -120,6 +135,7 @@ def _preset(
             "rightStickFireButton": _normalize_right_stick_fire_button(
                 right_stick_fire_button
             ),
+            "aimButtons": _normalize_aim_buttons(aim_buttons),
         },
     }
 
@@ -392,6 +408,7 @@ class ControllerPresetStore:
             "rightStickFireButton": _normalize_right_stick_fire_button(
                 layout.get("rightStickFireButton")
             ),
+            "aimButtons": _normalize_aim_buttons(layout.get("aimButtons")),
         }
 
     def _normalize_custom_preset(self, payload):

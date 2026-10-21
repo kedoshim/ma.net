@@ -60,6 +60,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
   late String _rightLayoutMode;
   late Map<String, int> _buttonSizes;
   late List<String> _leftButtons;
+  late List<String> _aimButtons;
   late String _rightStickFire;
   late String _rightStickFireButton;
   bool _saving = false;
@@ -76,6 +77,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
     _rightLayoutMode = preset?.layout.rightLayoutMode ?? 'columns';
     _buttonSizes = Map<String, int>.from(preset?.layout.buttonSizes ?? const <String, int>{});
     _leftButtons = List<String>.from(preset?.layout.leftButtons ?? const <String>[]);
+    _aimButtons = List<String>.from(preset?.layout.aimButtons ?? const <String>[]);
     _rightStickFire = preset?.layout.rightStickFire ?? 'off';
     _rightStickFireButton = preset?.layout.rightStickFireButton ?? 'RT';
     _visibleButtons = <String, bool>{
@@ -220,6 +222,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
       leftButtons: _leftButtons,
       rightStickFire: _rightStickFire,
       rightStickFireButton: _rightStickFireButton,
+      aimButtons: _aimButtons,
     );
     try {
       ControllerPreset? createdPreset;
@@ -397,6 +400,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                         leftButtons: _leftButtons,
                         rightStickFire: _rightStickFire,
                         rightStickFireButton: _rightStickFireButton,
+                        aimButtons: _aimButtons,
                       ),
                       onReorder: (draggedId, targetId) {
                         setState(() {
@@ -441,7 +445,10 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                                 isSelected: _visibleButtons[id] == true,
                                 onTap: (val) => setState(() {
                                   _visibleButtons[id] = val;
-                                  if (!val) _leftButtons.remove(id);
+                                  if (!val) {
+                                    _leftButtons.remove(id);
+                                    _aimButtons.remove(id);
+                                  }
                                 }),
                               );
                             }).toList(),
@@ -512,6 +519,8 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                                     setState(() {
                                       if (val) {
                                         _leftButtons.add(id);
+                                        // Aiming is a right-side thing.
+                                        _aimButtons.remove(id);
                                       } else {
                                         _leftButtons.remove(id);
                                       }
@@ -520,6 +529,50 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                                 ),
                               );
                             }).toList(),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            context.l10n.layoutEditor.aimButtonsTitle,
+                            style: TextStyle(
+                              fontFamily: 'momo',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              color: AppColors.textPrimary.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            context.l10n.layoutEditor.aimButtonsTip,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: _allButtons
+                                .where((id) =>
+                                    _visibleButtons[id] == true &&
+                                    !_leftButtons.contains(id))
+                                .map((id) => _EditorToggleChip(
+                                      presentation: ControllerBranding.presentationFor(
+                                        id,
+                                        brandingMode,
+                                      ),
+                                      isSelected: _aimButtons.contains(id),
+                                      onTap: (val) => setState(() {
+                                        if (val) {
+                                          _aimButtons.add(id);
+                                        } else {
+                                          _aimButtons.remove(id);
+                                        }
+                                      }),
+                                    ))
+                                .toList(),
                           ),
                           const SizedBox(height: 24),
                           Text(

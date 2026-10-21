@@ -19,6 +19,10 @@ const String kFireFollowPreset = 'preset';
 const double kFireRingPress = 0.6;
 const double kFireRingRelease = 0.5;
 
+/// How far an aim button's touch must travel before it starts aiming; less
+/// than that is a plain press and leaves the right stick alone.
+const double kAimDragSlop = 12.0;
+
 /// Buttons the right stick can hold while aiming. RT comes first: it is what
 /// shooters fire with.
 const List<String> kFireButtons = ['RT', 'LT', 'RB', 'LB', 'A', 'B', 'X', 'Y'];
@@ -84,8 +88,9 @@ Widget _maybeFade(double opacity, Widget child) =>
 
 /// A stick's base. With aim-and-fire on it lights up while the stick holds
 /// the fire button, and in ring mode it shows where firing starts.
-class _StickBase extends StatelessWidget {
-  const _StickBase({
+class StickBase extends StatelessWidget {
+  const StickBase({
+    super.key,
     required this.size,
     required this.radius,
     required this.fireMode,
@@ -342,7 +347,7 @@ class _FloatingRightStickState extends State<FloatingRightStick>
                                       alignment: Alignment.center,
                                       clipBehavior: Clip.none,
                                       children: [
-                                        _StickBase(
+                                        StickBase(
                                           size: baseSize,
                                           radius: 36,
                                           fireMode: widget.output.config.fireMode,
@@ -500,7 +505,7 @@ class _FixedRightStickState extends State<FixedRightStick> {
                               scale: active ? 0.92 : 1.0,
                               duration: const Duration(milliseconds: 150),
                               curve: Curves.easeOutBack,
-                              child: _StickBase(
+                              child: StickBase(
                                 size: size,
                                 radius: borderRadius,
                                 fireMode: widget.output.config.fireMode,

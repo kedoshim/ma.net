@@ -909,6 +909,11 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightStickSwipeLabel => 'Touchpad';
   @override
+  String get aimButtonsTitle => 'BOTÕES DE MIRA';
+  @override
+  String get aimButtonsTip =>
+      'Botões do lado direito que também miram. Tocar é só o botão; arrastar segura o botão e mexe o analógico direito, para mirar e atirar com o mesmo dedo.';
+  @override
   String get rightStickFireTitle => 'ATIRAR COM O ANALÓGICO DIREITO';
   @override
   String get rightStickFireTip =>

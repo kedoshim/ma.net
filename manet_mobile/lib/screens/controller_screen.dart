@@ -96,6 +96,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   List<String> _buttonOrder = List<String>.from(_defaultButtonOrder);
   Map<String, int> _buttonSizes = const {};
   List<String> _leftButtons = const [];
+  List<String> _aimButtons = const [];
 
   WebSocketService? ws;
   final GlobalKey<NavigatorState> _controllerNavigatorKey =
@@ -1188,6 +1189,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       }
       _buttonSizes = Map<String, int>.from(preset.buttonSizes);
       _leftButtons = preset.leftButtons;
+      _aimButtons = preset.aimButtons;
       for (final id in _leftButtons) {
         visibleButtons[id] = true;
       }
@@ -1202,6 +1204,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setButtonOrder(_buttonOrder);
     PreferencesService.instance.setButtonSizes(_buttonSizes);
     PreferencesService.instance.setLeftButtons(_leftButtons);
+    PreferencesService.instance.setAimButtons(_aimButtons);
   }
 
   void _clearPlayerSlot() {
@@ -1895,6 +1898,11 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setLeftButtons(_leftButtons);
   }
 
+  void _setAimButtons(List<String> buttons) {
+    setState(() => _aimButtons = normalizeAimButtons(buttons));
+    PreferencesService.instance.setAimButtons(_aimButtons);
+  }
+
   void _setButtonOrder(List<String> order) {
     setState(() {
       _buttonOrder = List<String>.from(order);
@@ -1936,6 +1944,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       _menuMovementMode = MovementMode.values[menuModeIndex];
       _rightLayoutMode = await prefs.getRightLayoutMode();
       _leftButtons = normalizeLeftButtons(await prefs.getLeftButtons());
+      _aimButtons = normalizeAimButtons(await prefs.getAimButtons());
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
 
       leftStickSensitivity = await prefs.getLeftStickSensitivity();
@@ -2066,6 +2075,8 @@ class _ControllerScreenState extends State<ControllerScreen>
           onSetButtonVisibility: _setButtonVisibility,
           leftButtons: _leftButtons,
           onLeftButtonsChanged: _setLeftButtons,
+          aimButtons: _aimButtons,
+          onAimButtonsChanged: _setAimButtons,
           onButtonOrderChanged: _setButtonOrder,
           onButtonSizesChanged: _setButtonSizes,
           onRightLayoutModeChanged: (mode) {
@@ -2229,6 +2240,8 @@ class _ControllerScreenState extends State<ControllerScreen>
           onSetButtonVisibility: _setButtonVisibility,
           leftButtons: _leftButtons,
           onLeftButtonsChanged: _setLeftButtons,
+          aimButtons: _aimButtons,
+          onAimButtonsChanged: _setAimButtons,
           onButtonOrderChanged: _setButtonOrder,
           onButtonSizesChanged: _setButtonSizes,
           onRightLayoutModeChanged: (mode) {

@@ -26,3 +26,16 @@ List<String> normalizeLeftButtons(Iterable<dynamic> raw) {
   }
   return result;
 }
+
+/// Right-side buttons that also aim: a tap is just the button, a drag holds
+/// it and moves the right stick too. Any button the left row could take.
+List<String> normalizeAimButtons(Iterable<dynamic> raw) {
+  final result = <String>[];
+  for (final item in raw) {
+    final canonical = ControllerBranding.normalizeCanonicalId('$item');
+    if (isLeftZoneEligible(canonical) && !result.contains(canonical)) {
+      result.add(canonical);
+    }
+  }
+  return result;
+}

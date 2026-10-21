@@ -464,6 +464,8 @@ abstract class LayoutEditorStrings {
 
   String get rightLayoutTitle;
   String get leftRowTitle;
+  String get aimButtonsTitle;
+  String get aimButtonsTip;
   String get leftRowTip;
   String get rightLayoutColumnsLabel;
   String get rightLayoutRowsLabel;

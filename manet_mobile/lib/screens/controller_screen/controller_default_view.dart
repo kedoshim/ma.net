@@ -69,6 +69,8 @@ class ControllerDefaultView extends StatefulWidget {
     required this.onSetButtonVisibility,
     this.leftButtons = const [],
     this.onLeftButtonsChanged,
+    this.aimButtons = const [],
+    this.onAimButtonsChanged,
     required this.onButtonOrderChanged,
     required this.onButtonSizesChanged,
     required this.onRightLayoutModeChanged,
@@ -86,6 +88,8 @@ class ControllerDefaultView extends StatefulWidget {
   final void Function(String, bool) onSetButtonVisibility;
   final List<String> leftButtons;
   final ValueChanged<List<String>>? onLeftButtonsChanged;
+  final List<String> aimButtons;
+  final ValueChanged<List<String>>? onAimButtonsChanged;
   final void Function(List<String>) onButtonOrderChanged;
   final void Function(Map<String, int>) onButtonSizesChanged;
   final ValueChanged<String> onRightLayoutModeChanged;
@@ -663,6 +667,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
         rightStickResponseCurve: widget.rightStickResponseCurve,
         rightStickFire: widget.rightStickFire,
         rightStickFireButton: widget.rightStickFireButton,
+        aimButtons: widget.aimButtons,
       );
     }
   }
@@ -989,6 +994,14 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
       fireButton: widget.rightStickFireButton,
       fireFollowsGame: widget.rightStickFireFollowsGame,
       onFireChanged: widget.onRightStickFireChanged,
+      aimCandidates: widget.buttonOrder
+          .where((id) =>
+              widget.visibleButtons[id] == true &&
+              !widget.leftButtons.contains(id) &&
+              isLeftZoneEligible(id))
+          .toList(),
+      aimButtons: widget.aimButtons,
+      onAimButtonsChanged: widget.onAimButtonsChanged,
       onButtonDropped: (buttonKey) =>
           widget.onSetButtonVisibility(buttonKey, false),
       onDragStarted: () => setState(() => _isDragging = true),
@@ -1966,6 +1979,9 @@ class _AvailableButtonsPanel extends StatelessWidget {
     this.fireButton = 'RT',
     this.fireFollowsGame = true,
     this.onFireChanged,
+    this.aimCandidates = const [],
+    this.aimButtons = const [],
+    this.onAimButtonsChanged,
   });
 
   final ControllerBrandingMode brandingMode;
@@ -1974,6 +1990,9 @@ class _AvailableButtonsPanel extends StatelessWidget {
   final String fireButton;
   final bool fireFollowsGame;
   final void Function(String mode, String button)? onFireChanged;
+  final List<String> aimCandidates;
+  final List<String> aimButtons;
+  final ValueChanged<List<String>>? onAimButtonsChanged;
   final List<String> buttons;
   final List<String> rightStickControls;
   final ValueChanged<String> onButtonDropped;
@@ -2115,6 +2134,16 @@ class _AvailableButtonsPanel extends StatelessWidget {
                           );
                         }).toList(),
                       ),
+                      if (onAimButtonsChanged != null &&
+                          aimCandidates.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        _AimButtonsSection(
+                          brandingMode: brandingMode,
+                          candidates: aimCandidates,
+                          selected: aimButtons,
+                          onChanged: onAimButtonsChanged!,
+                        ),
+                      ],
                       if (onFireChanged != null) ...[
                         const SizedBox(height: 24),
                         _RightStickFireSection(
@@ -2137,6 +2166,81 @@ class _AvailableButtonsPanel extends StatelessWidget {
   }
 }
 
+
+/// Picks which right-side buttons also aim: tapping one is the plain button,
+/// dragging it moves the right stick as well.
+class _AimButtonsSection extends StatelessWidget {
+  const _AimButtonsSection({
+    required this.brandingMode,
+    required this.candidates,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final ControllerBrandingMode brandingMode;
+  final List<String> candidates;
+  final List<String> selected;
+  final ValueChanged<List<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final o = context.l10n.options;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          o.aimButtons,
+          style: TextStyle(
+            fontFamily: 'momo',
+            fontSize: 20,
+            color: AppColors.textPrimary.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          o.aimButtonsHint,
+          style: TextStyle(
+            fontFamily: 'momo',
+            fontSize: 12,
+            color: AppColors.textPrimary.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final id in candidates)
+              FilterChip(
+                avatar: const Icon(
+                  Icons.my_location_rounded,
+                  size: 16,
+                  color: AppColors.textPrimary,
+                ),
+                label: Text(
+                  ControllerBranding.presentationFor(id, brandingMode).shortLabel,
+                  style: const TextStyle(
+                    fontFamily: 'momo',
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                selected: selected.contains(id),
+                selectedColor: AppColors.highlightColor,
+                backgroundColor: AppColors.backgroundColor.withValues(alpha: 0.2),
+                side: const BorderSide(color: AppColors.textPrimary, width: 2),
+                showCheckmark: false,
+                onSelected: (on) => onChanged(
+                  on ? [...selected, id] : selected.where((b) => b != id).toList(),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
 
 /// Aim-and-fire in the edit panel: how the right stick fires and with which
 /// button. Starts on what the game's preset says; any pick becomes the

@@ -49,3 +49,11 @@ def test_right_stick_fire_button_defaults_to_rt(tmp_path):
     assert store._normalize_layout({})["rightStickFireButton"] == "RT"
     assert store._normalize_layout({"rightStickFireButton": "RS_FIXED"})["rightStickFireButton"] == "RT"
     assert store._normalize_layout({"rightStickFireButton": "RB"})["rightStickFireButton"] == "RB"
+
+
+def test_aim_buttons_deduped_and_never_sticks(tmp_path):
+    layout = _store(tmp_path)._normalize_layout({
+        "aimButtons": ["RT", "btnrt", "RS_BUTTON", "A"],
+    })
+    assert layout["aimButtons"] == ["RT", "A"]
+    assert _store(tmp_path)._normalize_layout({})["aimButtons"] == []

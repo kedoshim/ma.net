@@ -152,6 +152,8 @@ abstract class OptionsStrings {
   String get fireTouch;
   String get fireRing;
   String get fireButton;
+  String get aimButtons;
+  String get aimButtonsHint;
   String get secondaryButtonsTitle;
   String get movementTitle;
   String get rightStickTitle;

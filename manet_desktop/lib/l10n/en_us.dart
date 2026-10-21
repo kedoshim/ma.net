@@ -909,6 +909,11 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightStickSwipeLabel => 'Touchpad';
   @override
+  String get aimButtonsTitle => 'AIM BUTTONS';
+  @override
+  String get aimButtonsTip =>
+      'Right-side buttons that also aim. A tap is just the button; dragging holds it and moves the right stick, for shooting and aiming with one thumb.';
+  @override
   String get rightStickFireTitle => 'FIRE WITH THE RIGHT STICK';
   @override
   String get rightStickFireTip =>

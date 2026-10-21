@@ -281,6 +281,11 @@ class EnUsOptionsStrings implements OptionsStrings {
   @override
   String get fireRing => 'Fire ring';
   @override
+  String get aimButtons => 'Aim buttons';
+  @override
+  String get aimButtonsHint =>
+      'Tap: just the button. Drag: holds it and aims with the right stick.';
+  @override
   String get fireButton => 'Button';
   @override
   String get secondaryButtonsTitle => 'Secondary Buttons';

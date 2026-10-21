@@ -265,6 +265,8 @@ class ControllerPresetLayout {
   /// Aim-and-fire on the right stick: 'off', 'touch' or 'ring'.
   final String rightStickFire;
   final String rightStickFireButton;
+  /// Right-side buttons that also aim with the right stick when dragged.
+  final List<String> aimButtons;
 
   ControllerPresetLayout({
     required this.movementMode,
@@ -275,6 +277,7 @@ class ControllerPresetLayout {
     this.leftButtons = const [],
     this.rightStickFire = 'off',
     this.rightStickFireButton = 'RT',
+    this.aimButtons = const [],
   });
 
   factory ControllerPresetLayout.fromJson(Map<String, dynamic> json) {
@@ -305,6 +308,9 @@ class ControllerPresetLayout {
       ),
       rightStickFire: json['rightStickFire'] as String? ?? 'off',
       rightStickFireButton: json['rightStickFireButton'] as String? ?? 'RT',
+      aimButtons: normalizeAimButtons(
+        json['aimButtons'] as List<dynamic>? ?? const [],
+      ),
     );
   }
 
@@ -326,6 +332,7 @@ class ControllerPresetLayout {
       'leftButtons': leftButtons,
       'rightStickFire': rightStickFire,
       'rightStickFireButton': rightStickFireButton,
+      'aimButtons': aimButtons,
     };
   }
 }

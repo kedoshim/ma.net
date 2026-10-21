@@ -5,6 +5,7 @@ import '../models/controller_branding.dart';
 import '../services/haptics_manager.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
+import '../services/gamepad_input_engine.dart';
 import 'right_stick_controls.dart';
 
 int _failedDragTaps = 0;
@@ -35,6 +36,8 @@ class ActionButtons extends StatefulWidget {
   final double rightStickResponseCurve;
   final String rightStickFire;
   final String rightStickFireButton;
+  /// Buttons that also aim with the right stick when dragged.
+  final List<String> aimButtons;
 
   const ActionButtons({
     super.key,
@@ -60,6 +63,7 @@ class ActionButtons extends StatefulWidget {
     this.rightStickResponseCurve = 0.5,
     this.rightStickFire = kFireOff,
     this.rightStickFireButton = 'RT',
+    this.aimButtons = const [],
   });
 
   @override
@@ -286,6 +290,22 @@ class _ActionButtonsState extends State<ActionButtons> {
       btnConfig.xinput,
       widget.brandingMode,
     );
+
+    if (widget.aimButtons.contains(btnId)) {
+      return AimButton(
+        label: presentation.shortLabel,
+        labelWidget: ControllerButtonBrand(presentation: presentation, size: 28),
+        onStateChange: (state) =>
+            widget.onButtonStateChanged(btnConfig.xinput, state),
+        onPressedChanged: widget.onAnyButtonPressed,
+        tapHapticsEnabled: widget.tapHapticsEnabled,
+        stickConfig: RightStickConfig(
+          sensitivity: widget.rightStickSensitivity,
+          antiDeadzone: widget.rightStickAntiDeadzone,
+          responseCurve: widget.rightStickResponseCurve,
+        ),
+      );
+    }
 
     return GameButton(
       label: presentation.shortLabel,
@@ -516,12 +536,211 @@ ButtonConfig getButtonConfig(String btnId) {
   }
 }
 
+/// A button that is also the right stick: a tap is just the button; once the
+/// finger drags past [kAimDragSlop] the button stays held and the drag aims,
+/// with a floating stick appearing where the touch started.
+class AimButton extends StatefulWidget {
+  final String label;
+  final Widget? labelWidget;
+  final void Function(String state) onStateChange;
+  final ValueChanged<bool>? onPressedChanged;
+  final bool tapHapticsEnabled;
+  final RightStickConfig stickConfig;
+
+  const AimButton({
+    super.key,
+    required this.label,
+    this.labelWidget,
+    required this.onStateChange,
+    this.onPressedChanged,
+    this.tapHapticsEnabled = false,
+    required this.stickConfig,
+  });
+
+  @override
+  State<AimButton> createState() => _AimButtonState();
+}
+
+class _AimButtonState extends State<AimButton> {
+  static const double _baseSize = 150.0;
+  static const double _knobSize = 50.0;
+
+  final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _active = ValueNotifier(false);
+  final ValueNotifier<Offset> _basePos = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _firing = ValueNotifier(false);
+
+  int? _pointer;
+  Offset _start = Offset.zero;
+  bool _aiming = false;
+
+  @override
+  void dispose() {
+    GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
+    _visualOffset.dispose();
+    _active.dispose();
+    _basePos.dispose();
+    _firing.dispose();
+    super.dispose();
+  }
+
+  void _onDown(PointerDownEvent event) {
+    _pointer = event.pointer;
+    _start = event.position;
+    _aiming = false;
+  }
+
+  void _onMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer || _aiming) return;
+    if ((event.position - _start).distance < kAimDragSlop) return;
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    _aiming = true;
+    // The stick is centred where the finger first landed, so the slop
+    // already counts as aim. The engine follows this pointer from here on
+    // (this same move included) and lets go of the stick on its up event.
+    GamepadInputEngine.instance.handleRightPointerDown(
+      event: PointerDownEvent(pointer: event.pointer, position: _start),
+      parentSize: box.size,
+      layout: 'RS_BUTTON',
+      config: widget.stickConfig,
+      converter: (globalPos) {
+        final current = context.findRenderObject() as RenderBox?;
+        if (!mounted || current == null || !current.attached) return globalPos;
+        return current.globalToLocal(globalPos);
+      },
+      visualOffset: _visualOffset,
+      active: _active,
+      basePos: _basePos,
+      controlId: 'AIM_${identityHashCode(this)}',
+      controlHashCode: identityHashCode(this),
+      baseSize: _baseSize,
+      clampBase: (proposed) => proposed,
+      firing: _firing,
+    );
+  }
+
+  void _onEnd(PointerEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    _aiming = false;
+  }
+
+  Widget _buildStickOverlay() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _active,
+      builder: (context, active, _) {
+        // Positioned even when hidden: a plain child would size the Stack.
+        if (!active) {
+          return const Positioned(left: 0, top: 0, child: SizedBox.shrink());
+        }
+        return ValueListenableBuilder<Offset>(
+          valueListenable: _basePos,
+          builder: (context, basePos, _) {
+            return ValueListenableBuilder<Offset>(
+              valueListenable: _visualOffset,
+              builder: (context, visualOffset, _) {
+                return Positioned(
+                  left: basePos.dx - _baseSize / 2,
+                  top: basePos.dy - _baseSize / 2,
+                  child: IgnorePointer(
+                    child: SizedBox(
+                      width: _baseSize,
+                      height: _baseSize,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          StickBase(
+                            size: _baseSize,
+                            radius: 36,
+                            fireMode: kFireOff,
+                            firing: _firing,
+                          ),
+                          Transform.translate(
+                            offset: visualOffset,
+                            child: Container(
+                              width: _knobSize,
+                              height: _knobSize,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.highlightColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.textPrimary,
+                                  width: AppColors.borderThickness,
+                                ),
+                              ),
+                              child: Text(
+                                widget.label,
+                                style: const TextStyle(
+                                  fontFamily: 'momo',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: _onDown,
+      onPointerMove: _onMove,
+      onPointerUp: _onEnd,
+      onPointerCancel: _onEnd,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // The only plain child, so the Stack takes the button's size.
+          GameButton(
+            label: widget.label,
+            labelWidget: widget.labelWidget,
+            onStateChange: widget.onStateChange,
+            onPressedChanged: widget.onPressedChanged,
+            tapHapticsEnabled: widget.tapHapticsEnabled,
+            keepPressedWhenDragged: true,
+          ),
+          // Says the button can be dragged to aim.
+          Positioned(
+            top: 6,
+            right: 6,
+            child: IgnorePointer(
+              child: Icon(
+                Icons.my_location_rounded,
+                size: 16,
+                color: AppColors.textPrimary.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+          _buildStickOverlay(),
+        ],
+      ),
+    );
+  }
+}
+
 class GameButton extends StatefulWidget {
   final String label;
   final Widget? labelWidget;
   final void Function(String state) onStateChange;
   final ValueChanged<bool>? onPressedChanged;
   final bool tapHapticsEnabled;
+  /// Stays pressed when the finger leaves it (aim buttons are dragged).
+  final bool keepPressedWhenDragged;
 
   const GameButton({
     required this.label,
@@ -529,6 +748,7 @@ class GameButton extends StatefulWidget {
     required this.onStateChange,
     this.onPressedChanged,
     this.tapHapticsEnabled = false,
+    this.keepPressedWhenDragged = false,
   });
 
   @override
@@ -603,6 +823,7 @@ class _GameButtonState extends State<GameButton> with SingleTickerProviderStateM
         },
         onPointerMove: (event) {
           if (event.pointer != _pointerId) return;
+          if (widget.keepPressedWhenDragged) return;
           final RenderBox box = context.findRenderObject() as RenderBox;
           final isInside = _isInsideRetention(event.localPosition, box.size);
           if (_pressed && !isInside) {
