@@ -258,6 +258,32 @@ class PreferencesService {
   Future<double> getRightStickResponseCurve() async =>
       (await _getInstance).getDouble('rightStickResponseCurve') ?? 0.5;
 
+  /// The player's own aim-and-fire choice: 'preset' follows the game.
+  Future<void> setRightStickFireOverride(String value) async =>
+      (await _getInstance).setString('rightStickFireOverride', value);
+
+  Future<String> getRightStickFireOverride() async =>
+      (await _getInstance).getString('rightStickFireOverride') ?? 'preset';
+
+  /// Aim-and-fire the current game's preset asked for.
+  Future<void> setPresetRightStickFire(String value) async =>
+      (await _getInstance).setString('presetRightStickFire', value);
+
+  Future<String> getPresetRightStickFire() async =>
+      (await _getInstance).getString('presetRightStickFire') ?? 'off';
+
+  Future<void> setRightStickFireButtonOverride(String value) async =>
+      (await _getInstance).setString('rightStickFireButtonOverride', value);
+
+  Future<String> getRightStickFireButtonOverride() async =>
+      (await _getInstance).getString('rightStickFireButtonOverride') ?? 'RT';
+
+  Future<void> setPresetRightStickFireButton(String value) async =>
+      (await _getInstance).setString('presetRightStickFireButton', value);
+
+  Future<String> getPresetRightStickFireButton() async =>
+      (await _getInstance).getString('presetRightStickFireButton') ?? 'RT';
+
   Future<void> setShowDpadInSecondary(bool value) async =>
       (await _getInstance).setBool('showDpadInSecondary', value);
 

@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, orientation=landscape">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
   <meta name="description" content="A new Flutter project.">
 
   <!-- iOS meta tags & icons -->
@@ -34,6 +34,102 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+    // Firefox (Android) can stop sending pointermove for one finger while two
+    // are down, so one stick freezes, even though its touchmove events keep
+    // tracking that finger. Here each touchmove is checked against the last
+    // place every finger's pointer was seen, and a finger that moved with no
+    // pointermove gets one made from the touch, for Flutter to read as usual.
+    if (/firefox|fxios/i.test(navigator.userAgent) && window.PointerEvent) (function () {
+      var pointers = new Map(); // pointerId -> {x, y, primary, touch}
+      var touches = new Map();  // touch identifier -> pointerId
+      var unmatched = new Map(); // touch identifier -> {x, y}, no pointer yet
+
+      // Pointer and touch events for one finger share no id: pair them by
+      // where they started.
+      function pair() {
+        unmatched.forEach(function (t, touchId) {
+          var best = null, bestDist = 48;
+          pointers.forEach(function (p, pointerId) {
+            if (p.touch !== null) return;
+            var d = Math.hypot(p.x - t.x, p.y - t.y);
+            if (d < bestDist) { best = pointerId; bestDist = d; }
+          });
+          if (best === null) return;
+          pointers.get(best).touch = touchId;
+          touches.set(touchId, best);
+          unmatched.delete(touchId);
+        });
+      }
+
+      function forget(pointerId) {
+        var p = pointers.get(pointerId);
+        if (p && p.touch !== null) touches.delete(p.touch);
+        pointers.delete(pointerId);
+      }
+
+      window.addEventListener('pointerdown', function (e) {
+        if (e.pointerType !== 'touch') return;
+        forget(e.pointerId);
+        pointers.set(e.pointerId, {x: e.clientX, y: e.clientY, primary: e.isPrimary, touch: null});
+        pair();
+      }, true);
+      window.addEventListener('pointermove', function (e) {
+        var p = e.pointerType === 'touch' && pointers.get(e.pointerId);
+        if (p) { p.x = e.clientX; p.y = e.clientY; }
+      }, true);
+      ['pointerup', 'pointercancel'].forEach(function (type) {
+        window.addEventListener(type, function (e) {
+          if (e.pointerType === 'touch') forget(e.pointerId);
+        }, true);
+      });
+
+      window.addEventListener('touchstart', function (e) {
+        for (var i = 0; i < e.changedTouches.length; i++) {
+          var t = e.changedTouches[i];
+          unmatched.set(t.identifier, {x: t.clientX, y: t.clientY});
+        }
+        pair();
+      }, {capture: true, passive: true});
+      ['touchend', 'touchcancel'].forEach(function (type) {
+        window.addEventListener(type, function (e) {
+          for (var i = 0; i < e.changedTouches.length; i++) {
+            unmatched.delete(e.changedTouches[i].identifier);
+            touches.delete(e.changedTouches[i].identifier);
+          }
+        }, {capture: true, passive: true});
+      });
+
+      // Pointer events for an input come before its touch events, so by now
+      // any real pointermove has already moved its finger's record.
+      window.addEventListener('touchmove', function (e) {
+        for (var i = 0; i < e.touches.length; i++) {
+          var t = e.touches[i];
+          var pointerId = touches.get(t.identifier);
+          var p = pointerId === undefined ? null : pointers.get(pointerId);
+          if (!p || (p.x === t.clientX && p.y === t.clientY)) continue;
+          p.x = t.clientX; p.y = t.clientY;
+          document.body.dispatchEvent(new PointerEvent('pointermove', {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            pointerId: pointerId,
+            pointerType: 'touch',
+            isPrimary: p.primary,
+            clientX: t.clientX,
+            clientY: t.clientY,
+            screenX: t.screenX,
+            screenY: t.screenY,
+            button: -1,
+            buttons: 1,
+            pressure: t.force || 0.5,
+            width: (t.radiusX || 0.5) * 2,
+            height: (t.radiusY || 0.5) * 2,
+          }));
+        }
+      }, {capture: true, passive: true});
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

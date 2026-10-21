@@ -909,6 +909,17 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightStickSwipeLabel => 'Touchpad';
   @override
+  String get rightStickFireTitle => 'ATIRAR COM O ANALÓGICO DIREITO';
+  @override
+  String get rightStickFireTip =>
+      'Mirar e atirar com o mesmo dedo. Ao tocar: o botão fica apertado enquanto o analógico é tocado. Anel: só quando o analógico passa do anel. O jogador pode mudar no celular.';
+  @override
+  String get rightStickFireOff => 'Desligado';
+  @override
+  String get rightStickFireTouch => 'Ao tocar';
+  @override
+  String get rightStickFireRing => 'Anel';
+  @override
   String get rightLayoutTitle => 'ARRANJO DOS BOTÕES';
   @override
   String get leftRowTitle => 'LADO ESQUERDO';

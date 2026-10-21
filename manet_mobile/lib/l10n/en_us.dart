@@ -268,6 +268,21 @@ class EnUsOptionsStrings implements OptionsStrings {
   @override
   String get responseCurveAggressive => 'Aggressive';
   @override
+  String get rightStickFire => 'Fire with the right stick';
+  @override
+  String get rightStickFireHint =>
+      'Aim and shoot with one thumb. On touch: holds the button while you aim. Fire ring: only past the ring.';
+  @override
+  String get fireFollowGame => 'Game';
+  @override
+  String get fireOff => 'Off';
+  @override
+  String get fireTouch => 'On touch';
+  @override
+  String get fireRing => 'Fire ring';
+  @override
+  String get fireButton => 'Button';
+  @override
   String get secondaryButtonsTitle => 'Secondary Buttons';
   @override
   String get movementTitle => 'Movement';

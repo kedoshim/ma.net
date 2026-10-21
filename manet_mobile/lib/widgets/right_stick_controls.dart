@@ -1,8 +1,33 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../services/haptics_manager.dart';
 import '../services/gamepad_input_engine.dart';
+
+const String kFireOff = 'off';
+const String kFireTouch = 'touch';
+const String kFireRing = 'ring';
+const List<String> kFireModes = [kFireOff, kFireTouch, kFireRing];
+
+/// Player setting value meaning "do what the game's preset says".
+const String kFireFollowPreset = 'preset';
+
+/// Fraction of the stick's radius where the fire ring sits: fire starts past
+/// it and stops a little inside it, so a thumb resting on the edge won't
+/// flicker the trigger.
+const double kFireRingPress = 0.6;
+const double kFireRingRelease = 0.5;
+
+/// Buttons the right stick can hold while aiming. RT comes first: it is what
+/// shooters fire with.
+const List<String> kFireButtons = ['RT', 'LT', 'RB', 'LB', 'A', 'B', 'X', 'Y'];
+
+String normalizeFireButton(Object? value) =>
+    kFireButtons.contains(value) ? value as String : kFireButtons.first;
+
+String normalizeFireMode(Object? value) =>
+    kFireModes.contains(value) ? value as String : kFireOff;
 
 class RightStickConfig {
   final double sensitivity;
@@ -13,8 +38,14 @@ class RightStickConfig {
   final double swipeAccelerationIntensity;
   final double antiDeadzone;
   final double responseCurve;
+  /// Aim-and-fire: [kFireOff], [kFireTouch] (held while the finger is on the
+  /// stick) or [kFireRing] (held past the fire ring).
+  final String fireMode;
+  final String fireButton;
 
   const RightStickConfig({
+    this.fireMode = kFireOff,
+    this.fireButton = 'RT',
     this.sensitivity = 1.0,
     this.invertX = false,
     this.invertY = false,
@@ -46,12 +77,102 @@ class RightStickOutput {
   }
 }
 
-RenderBox? _getVirtualRoot(BuildContext context) {
-  try {
-    final overlay = Overlay.of(context);
-    return overlay.context.findRenderObject() as RenderBox?;
-  } catch (_) {
-    return null;
+/// An Opacity at 1.0 still costs a layer per frame on web, so it is only
+/// added while the stick is actually fading.
+Widget _maybeFade(double opacity, Widget child) =>
+    opacity >= 1.0 ? child : Opacity(opacity: opacity, child: child);
+
+/// A stick's base. With aim-and-fire on it lights up while the stick holds
+/// the fire button, and in ring mode it shows where firing starts.
+class _StickBase extends StatelessWidget {
+  const _StickBase({
+    required this.size,
+    required this.radius,
+    required this.fireMode,
+    required this.firing,
+  });
+
+  final double size;
+  final double radius;
+  final String fireMode;
+  final ValueListenable<bool> firing;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: firing,
+      builder: (context, on, _) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: on
+                    ? Color.alphaBlend(
+                        AppColors.highlightColor.withValues(alpha: 0.15),
+                        AppColors.backgroundColor,
+                      )
+                    : AppColors.backgroundColor,
+                borderRadius: BorderRadius.circular(radius),
+                border: Border.all(
+                  color: on ? AppColors.highlightColor : AppColors.textPrimary,
+                  width: AppColors.borderThickness,
+                ),
+              ),
+            ),
+            if (fireMode == kFireRing)
+              Container(
+                width: size * kFireRingPress,
+                height: size * kFireRingPress,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: on
+                        ? AppColors.highlightColor
+                        : AppColors.textPrimary.withValues(alpha: 0.3),
+                    width: on ? 3 : 1.5,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Small tag in the corner of an idle stick saying it also fires.
+class _FireBadge extends StatelessWidget {
+  const _FireBadge({required this.config});
+
+  final RightStickConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    if (config.fireMode == kFireOff) return const SizedBox.shrink();
+    return Positioned(
+      top: 4,
+      right: 4,
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.highlightColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            config.fireButton,
+            style: TextStyle(
+              color: AppColors.backgroundColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -76,14 +197,18 @@ class _FloatingRightStickState extends State<FloatingRightStick>
   final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _active = ValueNotifier(false);
   final ValueNotifier<Offset> _basePos = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _firing = ValueNotifier(false);
 
-  static const double baseSize = 150.0;
-  static const double stickSize = 50.0;
+  // Bigger with a fire ring, so there is room to aim inside it.
+  double get baseSize =>
+      widget.output.config.fireMode == kFireRing ? 210.0 : 150.0;
+  double get stickSize =>
+      widget.output.config.fireMode == kFireRing ? 60.0 : 50.0;
 
   @override
   void initState() {
     super.initState();
-    debugPrint('[INSTRUMENTATION] FloatingRightStick state created. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] FloatingRightStick state created. State Hash: ${identityHashCode(this)}');
     _appearController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
@@ -94,13 +219,14 @@ class _FloatingRightStickState extends State<FloatingRightStick>
 
   @override
   void dispose() {
-    debugPrint('[INSTRUMENTATION] FloatingRightStick state disposed. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] FloatingRightStick state disposed. State Hash: ${identityHashCode(this)}');
     _active.removeListener(_onActiveChanged);
     GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
     _appearController.dispose();
     _visualOffset.dispose();
     _active.dispose();
     _basePos.dispose();
+    _firing.dispose();
     super.dispose();
   }
 
@@ -113,28 +239,11 @@ class _FloatingRightStickState extends State<FloatingRightStick>
     }
   }
 
-  Offset _clampBase(Offset proposedLocalBase) {
-    if (!mounted) return proposedLocalBase;
-    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-    final rootBox = _getVirtualRoot(context);
-    if (renderBox != null && rootBox != null) {
-      final globalBase = renderBox.localToGlobal(proposedLocalBase);
-      final baseOverlay = rootBox.globalToLocal(globalBase);
-      final double padding = baseSize / 2;
-      final clampedOverlay = Offset(
-        baseOverlay.dx.clamp(padding, rootBox.size.width - padding),
-        baseOverlay.dy.clamp(padding, rootBox.size.height - padding),
-      );
-      return renderBox.globalToLocal(rootBox.localToGlobal(clampedOverlay));
-    }
-    return proposedLocalBase;
-  }
-
   void _handlePointerDown(PointerDownEvent event) {
     final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
-    debugPrint('[INSTRUMENTATION] FloatingRightStick pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] FloatingRightStick pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
 
     if (widget.tapHapticsEnabled) {
       try {
@@ -161,7 +270,11 @@ class _FloatingRightStickState extends State<FloatingRightStick>
       controlId: 'RS-BUTTON_${identityHashCode(this)}',
       controlHashCode: identityHashCode(this),
       baseSize: baseSize,
-      clampBase: _clampBase,
+      // Always under the finger, even near the screen's edge: keeping the
+      // whole base on screen pushed it off-centre from the touch.
+      clampBase: (proposed) => proposed,
+      firing: _firing,
+      tapHapticsEnabled: widget.tapHapticsEnabled,
     );
   }
 
@@ -183,7 +296,14 @@ class _FloatingRightStickState extends State<FloatingRightStick>
                   valueListenable: _active,
                   builder: (context, active, child) {
                     if (active) return const SizedBox.shrink();
-                    return const RightStickFloatingPreview(faded: true);
+                    return Stack(
+                      children: [
+                        const Positioned.fill(
+                          child: RightStickFloatingPreview(faded: true),
+                        ),
+                        _FireBadge(config: widget.output.config),
+                      ],
+                    );
                   },
                 ),
 
@@ -213,26 +333,20 @@ class _FloatingRightStickState extends State<FloatingRightStick>
                               top: effectiveBaseOffset.dy - baseSize / 2,
                               child: Transform.scale(
                                 scale: scale,
-                                child: Opacity(
-                                  opacity: opacity,
-                                  child: SizedBox(
+                                child: _maybeFade(
+                                  opacity,
+                                  SizedBox(
                                     width: baseSize,
                                     height: baseSize,
                                     child: Stack(
                                       alignment: Alignment.center,
                                       clipBehavior: Clip.none,
                                       children: [
-                                        Container(
-                                          width: baseSize,
-                                          height: baseSize,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.backgroundColor,
-                                            borderRadius: BorderRadius.circular(36),
-                                            border: Border.all(
-                                              color: AppColors.textPrimary,
-                                              width: AppColors.borderThickness,
-                                            ),
-                                          ),
+                                        _StickBase(
+                                          size: baseSize,
+                                          radius: 36,
+                                          fireMode: widget.output.config.fireMode,
+                                          firing: _firing,
                                         ),
                                         AnimatedPositioned(
                                           duration: _active.value
@@ -300,20 +414,22 @@ class _FixedRightStickState extends State<FixedRightStick> {
   final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _active = ValueNotifier(false);
   final ValueNotifier<Offset> _basePos = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _firing = ValueNotifier(false);
 
   @override
   void initState() {
     super.initState();
-    debugPrint('[INSTRUMENTATION] FixedRightStick state created. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] FixedRightStick state created. State Hash: ${identityHashCode(this)}');
   }
 
   @override
   void dispose() {
-    debugPrint('[INSTRUMENTATION] FixedRightStick state disposed. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] FixedRightStick state disposed. State Hash: ${identityHashCode(this)}');
     GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
     _visualOffset.dispose();
     _active.dispose();
     _basePos.dispose();
+    _firing.dispose();
     super.dispose();
   }
 
@@ -321,7 +437,7 @@ class _FixedRightStickState extends State<FixedRightStick> {
     final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
-    debugPrint('[INSTRUMENTATION] FixedRightStick pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] FixedRightStick pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
 
     if (widget.tapHapticsEnabled) {
       try {
@@ -350,6 +466,8 @@ class _FixedRightStickState extends State<FixedRightStick> {
       controlId: 'RS-FIXED_${identityHashCode(this)}',
       controlHashCode: identityHashCode(this),
       baseSize: stickSize,
+      firing: _firing,
+      tapHapticsEnabled: widget.tapHapticsEnabled,
     );
   }
 
@@ -382,19 +500,14 @@ class _FixedRightStickState extends State<FixedRightStick> {
                               scale: active ? 0.92 : 1.0,
                               duration: const Duration(milliseconds: 150),
                               curve: Curves.easeOutBack,
-                              child: Container(
-                                width: size,
-                                height: size,
-                                decoration: BoxDecoration(
-                                  color: AppColors.backgroundColor,
-                                  borderRadius: BorderRadius.circular(borderRadius),
-                                  border: Border.all(
-                                    color: AppColors.textPrimary,
-                                    width: AppColors.borderThickness,
-                                  ),
-                                ),
+                              child: _StickBase(
+                                size: size,
+                                radius: borderRadius,
+                                fireMode: widget.output.config.fireMode,
+                                firing: _firing,
                               ),
                             ),
+                            if (!active) _FireBadge(config: widget.output.config),
                             AnimatedPositioned(
                               duration: active ? Duration.zero : const Duration(milliseconds: 300),
                               curve: active ? Curves.linear : Curves.elasticOut,
@@ -451,20 +564,22 @@ class _RightStickSwipePadState extends State<RightStickSwipePad> {
   final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _active = ValueNotifier(false);
   final ValueNotifier<Offset> _basePos = ValueNotifier(Offset.zero);
+  final ValueNotifier<bool> _firing = ValueNotifier(false);
 
   @override
   void initState() {
     super.initState();
-    debugPrint('[INSTRUMENTATION] RightStickSwipePad state created. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] RightStickSwipePad state created. State Hash: ${identityHashCode(this)}');
   }
 
   @override
   void dispose() {
-    debugPrint('[INSTRUMENTATION] RightStickSwipePad state disposed. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] RightStickSwipePad state disposed. State Hash: ${identityHashCode(this)}');
     GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
     _visualOffset.dispose();
     _active.dispose();
     _basePos.dispose();
+    _firing.dispose();
     super.dispose();
   }
 
@@ -472,7 +587,7 @@ class _RightStickSwipePadState extends State<RightStickSwipePad> {
     final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
-    debugPrint('[INSTRUMENTATION] RightStickSwipePad pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] RightStickSwipePad pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
 
     if (widget.tapHapticsEnabled) {
       try {
@@ -499,6 +614,8 @@ class _RightStickSwipePadState extends State<RightStickSwipePad> {
       controlId: 'RS-SWIPE_${identityHashCode(this)}',
       controlHashCode: identityHashCode(this),
       baseSize: 150.0,
+      firing: _firing,
+      tapHapticsEnabled: widget.tapHapticsEnabled,
     );
   }
 
@@ -539,6 +656,7 @@ class _RightStickSwipePadState extends State<RightStickSwipePad> {
                       ),
                     ],
                   ),
+                  if (!active) _FireBadge(config: widget.output.config),
                   Positioned(
                     left: 10,
                     child: Icon(

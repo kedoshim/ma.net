@@ -909,6 +909,17 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightStickSwipeLabel => 'Touchpad';
   @override
+  String get rightStickFireTitle => 'FIRE WITH THE RIGHT STICK';
+  @override
+  String get rightStickFireTip =>
+      'Aim and shoot with one thumb. On touch: the button is held while the stick is touched. Fire ring: only once the stick goes past the ring. Players can change it on their phone.';
+  @override
+  String get rightStickFireOff => 'Off';
+  @override
+  String get rightStickFireTouch => 'On touch';
+  @override
+  String get rightStickFireRing => 'Fire ring';
+  @override
   String get rightLayoutTitle => 'BUTTON LAYOUT';
   @override
   String get leftRowTitle => 'LEFT SIDE';

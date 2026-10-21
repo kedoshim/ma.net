@@ -43,6 +43,10 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
     'L',
   ];
 
+  /// Buttons the right stick can hold while aiming (RT first: shooters).
+  static const List<String> _fireButtons = <String>[
+    'RT', 'LT', 'RB', 'LB', 'A', 'B', 'X', 'Y',
+  ];
   static const List<String> _rightStickButtons = <String>[
     'RS_FIXED',
     'RS_BUTTON',
@@ -56,6 +60,8 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
   late String _rightLayoutMode;
   late Map<String, int> _buttonSizes;
   late List<String> _leftButtons;
+  late String _rightStickFire;
+  late String _rightStickFireButton;
   bool _saving = false;
   bool _nameInitialized = false;
 
@@ -70,6 +76,8 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
     _rightLayoutMode = preset?.layout.rightLayoutMode ?? 'columns';
     _buttonSizes = Map<String, int>.from(preset?.layout.buttonSizes ?? const <String, int>{});
     _leftButtons = List<String>.from(preset?.layout.leftButtons ?? const <String>[]);
+    _rightStickFire = preset?.layout.rightStickFire ?? 'off';
+    _rightStickFireButton = preset?.layout.rightStickFireButton ?? 'RT';
     _visibleButtons = <String, bool>{
       for (final id in _allButtons)
         id: preset?.layout.visibleButtons[id] ?? _defaultVisible(id),
@@ -210,6 +218,8 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
       rightLayoutMode: _rightLayoutMode,
       buttonSizes: _buttonSizes,
       leftButtons: _leftButtons,
+      rightStickFire: _rightStickFire,
+      rightStickFireButton: _rightStickFireButton,
     );
     try {
       ControllerPreset? createdPreset;
@@ -385,6 +395,8 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                         rightLayoutMode: _rightLayoutMode,
                         buttonSizes: _buttonSizes,
                         leftButtons: _leftButtons,
+                        rightStickFire: _rightStickFire,
+                        rightStickFireButton: _rightStickFireButton,
                       ),
                       onReorder: (draggedId, targetId) {
                         setState(() {
@@ -545,6 +557,63 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                           _buildRightStickRow('RS_BUTTON', context.l10n.layoutEditor.rightStickFloatingLabel),
                           const SizedBox(height: 12),
                           _buildRightStickRow('RS_SWIPE', context.l10n.layoutEditor.rightStickSwipeLabel),
+                          if (_rightStickButtons.any((id) => _visibleButtons[id] == true)) ...[
+                            const SizedBox(height: 24),
+                            Text(
+                              context.l10n.layoutEditor.rightStickFireTitle,
+                              style: TextStyle(
+                                fontFamily: 'momo',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                                color: AppColors.textPrimary.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              context.l10n.layoutEditor.rightStickFireTip,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                for (final (mode, label) in [
+                                  ('off', context.l10n.layoutEditor.rightStickFireOff),
+                                  ('touch', context.l10n.layoutEditor.rightStickFireTouch),
+                                  ('ring', context.l10n.layoutEditor.rightStickFireRing),
+                                ])
+                                  _buildSegment(
+                                    label: label,
+                                    isSelected: _rightStickFire == mode,
+                                    onTap: () => setState(() => _rightStickFire = mode),
+                                  ),
+                              ],
+                            ),
+                            if (_rightStickFire != 'off') ...[
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  for (final id in _fireButtons)
+                                    _EditorToggleChip(
+                                      presentation: ControllerBranding.presentationFor(
+                                        id,
+                                        brandingMode,
+                                      ),
+                                      isSelected: _rightStickFireButton == id,
+                                      onTap: (_) => setState(() => _rightStickFireButton = id),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ],
                       ),
                     ),
@@ -559,13 +628,20 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
   }
 
   Widget _buildLayoutModeSegment(String mode, String label) {
-    final isSelected = _rightLayoutMode == mode;
+    return _buildSegment(
+      label: label,
+      isSelected: _rightLayoutMode == mode,
+      onTap: () => setState(() => _rightLayoutMode = mode),
+    );
+  }
+
+  Widget _buildSegment({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
-      onTap: () {
-        setState(() {
-          _rightLayoutMode = mode;
-        });
-      },
+      onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),

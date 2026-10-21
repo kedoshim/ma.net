@@ -21,8 +21,10 @@ class ActiveControlState {
   final CoordinateConverter converter;
   final Offset Function(Offset localPos)? clampBase;
   final double baseSize;
+  final ValueNotifier<bool>? firing;
 
   ActiveControlState({
+    this.firing,
     required this.pointerId,
     required this.controlId,
     required this.controlHashCode,
@@ -82,6 +84,14 @@ class GamepadInputEngine {
   double _swipeStickX = 0.0;
   double _swipeStickY = 0.0;
 
+  // Aim-and-fire: the right stick holding a button (RT) by itself.
+  bool _firePressed = false;
+  String _fireButton = 'RT';
+  bool _fireHaptics = false;
+  // Buttons held on screen, so the stick and a real RT button don't release
+  // each other's press.
+  final Set<String> _heldButtons = {};
+
   // Zero send trackers for clean releases
   int _leftZeroSendsLeft = 0;
   int _rightZeroSendsLeft = 0;
@@ -128,6 +138,8 @@ class GamepadInputEngine {
   }
 
   void dispose() {
+    _setFire(false);
+    _heldButtons.clear();
     _ticker?.dispose();
     _ticker = null;
     _sendFn = null;
@@ -149,14 +161,14 @@ class GamepadInputEngine {
 
   void releaseLeftIfMatched(int controlHashCode) {
     if (_activeLeft != null && _activeLeft!.controlHashCode == controlHashCode) {
-      debugPrint('[INPUT ENGINE] Widget dispose matched active left pointer. Releasing.');
+      if (kDebugMode) debugPrint('[INPUT ENGINE] Widget dispose matched active left pointer. Releasing.');
       _releaseLeftStick();
     }
   }
 
   void releaseRightIfMatched(int controlHashCode) {
     if (_activeRight != null && _activeRight!.controlHashCode == controlHashCode) {
-      debugPrint('[INPUT ENGINE] Widget dispose matched active right pointer. Releasing.');
+      if (kDebugMode) debugPrint('[INPUT ENGINE] Widget dispose matched active right pointer. Releasing.');
       _releaseRightStick();
     }
   }
@@ -229,11 +241,13 @@ class GamepadInputEngine {
         _rightY = _swipeStickY;
 
         // Diagnostic log for Swipe Pad (debugPrint is not stripped in release)
-        if (kDebugMode) debugPrint('[INPUT ENGINE] Swipe Pad:\n'
-            '  Pointer ID: ${_activeRight!.pointerId}\n'
-            '  Global Position: $_rightTouchCurrentGlobal\n'
-            '  Local Position: $_swipeCurrentPos\n'
-            '  Swipe Raw Output Vector: ($_rightX, $_rightY)');
+        if (kDebugMode) {
+          debugPrint('[INPUT ENGINE] Swipe Pad:\n'
+              '  Pointer ID: ${_activeRight!.pointerId}\n'
+              '  Global Position: $_rightTouchCurrentGlobal\n'
+              '  Local Position: $_swipeCurrentPos\n'
+              '  Swipe Raw Output Vector: ($_rightX, $_rightY)');
+        }
       }
 
       final processed = _processRightStickOutput(_rightX, _rightY);
@@ -275,15 +289,15 @@ class GamepadInputEngine {
   }) {
     // [INSTRUMENTATION] Pointer reuse and collision check
     if (_activeLeft != null) {
-      debugPrint('[INSTRUMENTATION] WARNING: Left pointer registration collision! Active Left Pointer: ${_activeLeft!.pointerId} (${_activeLeft!.controlId}), New Pointer: ${event.pointer} ($controlId)');
+      if (kDebugMode) debugPrint('[INSTRUMENTATION] WARNING: Left pointer registration collision! Active Left Pointer: ${_activeLeft!.pointerId} (${_activeLeft!.controlId}), New Pointer: ${event.pointer} ($controlId)');
       if (_activeLeft!.pointerId == event.pointer) {
-        debugPrint('[INSTRUMENTATION] WARNING: EXACT SAME pointer ID ${event.pointer} reused for Left Stick down while already active!');
+        if (kDebugMode) debugPrint('[INSTRUMENTATION] WARNING: EXACT SAME pointer ID ${event.pointer} reused for Left Stick down while already active!');
       }
-      debugPrint('[INPUT ENGINE] Stale left pointer ${_activeLeft!.pointerId} detected. Force releasing.');
+      if (kDebugMode) debugPrint('[INPUT ENGINE] Stale left pointer ${_activeLeft!.pointerId} detected. Force releasing.');
       _releaseLeftStick();
     }
     if (_activeRight != null && _activeRight!.pointerId == event.pointer) {
-      debugPrint('[INSTRUMENTATION] WARNING: Left Pointer ID ${event.pointer} matches active Right Stick pointer! Right Stick: ${_activeRight!.controlId}');
+      if (kDebugMode) debugPrint('[INSTRUMENTATION] WARNING: Left Pointer ID ${event.pointer} matches active Right Stick pointer! Right Stick: ${_activeRight!.controlId}');
     }
 
     _activeLeft = ActiveControlState(
@@ -324,21 +338,23 @@ class GamepadInputEngine {
 
     _updateLeftStickMath();
 
-    debugPrint(
-      '${mode == MovementMode.floatingJoystick ? "FloatingLeftStick" : "FixedLeftStick"} #$controlHashCode\n'
-      'Pointer: ${event.pointer}\n'
-      'Registered as: $controlId\n'
-      'Activated\n'
-      '  Visual Notifier Hash: ${identityHashCode(visualOffset)}\n'
-      '  Active Notifier Hash: ${identityHashCode(active)}\n'
-      '  BasePos Notifier Hash: ${identityHashCode(basePos)}'
-    );
+    if (kDebugMode) {
+      debugPrint(
+        '${mode == MovementMode.floatingJoystick ? "FloatingLeftStick" : "FixedLeftStick"} #$controlHashCode\n'
+        'Pointer: ${event.pointer}\n'
+        'Registered as: $controlId\n'
+        'Activated\n'
+        '  Visual Notifier Hash: ${identityHashCode(visualOffset)}\n'
+        '  Active Notifier Hash: ${identityHashCode(active)}\n'
+        '  BasePos Notifier Hash: ${identityHashCode(basePos)}'
+      );
+    }
 
     GestureBinding.instance.pointerRouter.addRoute(event.pointer, _leftPointerRoute);
   }
 
   void _leftPointerRoute(PointerEvent event) {
-    debugPrint('[INSTRUMENTATION] Left Router Event type: ${event.runtimeType}, pointerId: ${event.pointer}, position: ${event.position}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] Left Router Event type: ${event.runtimeType}, pointerId: ${event.pointer}, position: ${event.position}');
     if (_activeLeft == null || event.pointer != _activeLeft!.pointerId) return;
 
     if (event is PointerMoveEvent) {
@@ -352,12 +368,14 @@ class GamepadInputEngine {
 
   void _releaseLeftStick() {
     if (_activeLeft != null) {
-      debugPrint(
-        '${_activeLeft!.controlId.contains("floating") ? "FloatingLeftStick" : "FixedLeftStick"} #${_activeLeft!.controlHashCode}\n'
-        'Pointer: ${_activeLeft!.pointerId}\n'
-        'Registered as: ${_activeLeft!.controlId}\n'
-        'Deactivated'
-      );
+      if (kDebugMode) {
+        debugPrint(
+          '${_activeLeft!.controlId.contains("floating") ? "FloatingLeftStick" : "FixedLeftStick"} #${_activeLeft!.controlHashCode}\n'
+          'Pointer: ${_activeLeft!.pointerId}\n'
+          'Registered as: ${_activeLeft!.controlId}\n'
+          'Deactivated'
+        );
+      }
 
       try {
         GestureBinding.instance.pointerRouter.removeRoute(_activeLeft!.pointerId, _leftPointerRoute);
@@ -366,12 +384,12 @@ class GamepadInputEngine {
       try {
         _activeLeft!.active.value = false;
       } catch (e) {
-        debugPrint('[INSTRUMENTATION] ERROR: Failed setting left active value: $e');
+        if (kDebugMode) debugPrint('[INSTRUMENTATION] ERROR: Failed setting left active value: $e');
       }
       try {
         _activeLeft!.visualOffset.value = Offset.zero;
       } catch (e) {
-        debugPrint('[INSTRUMENTATION] ERROR: Failed setting left visualOffset value: $e');
+        if (kDebugMode) debugPrint('[INSTRUMENTATION] ERROR: Failed setting left visualOffset value: $e');
       }
       _activeLeft = null;
     }
@@ -444,14 +462,16 @@ class GamepadInputEngine {
     final Offset normalized = mag > 0.0 ? delta / mag : Offset.zero;
 
     // Diagnostic logging
-    debugPrint('[INPUT ENGINE] Left Stick:\n'
-        '  Pointer ID: ${_activeLeft!.pointerId}\n'
-        '  Global Position: $_leftTouchCurrentGlobal\n'
-        '  Local Position: $_leftTouchCurrent\n'
-        '  Control Center: $_leftBaseLocal\n'
-        '  Raw Delta: $delta\n'
-        '  Normalized Vector: $normalized\n'
-        '  Final Output Vector: ($_leftX, $_leftY)');
+    if (kDebugMode) {
+      debugPrint('[INPUT ENGINE] Left Stick:\n'
+          '  Pointer ID: ${_activeLeft!.pointerId}\n'
+          '  Global Position: $_leftTouchCurrentGlobal\n'
+          '  Local Position: $_leftTouchCurrent\n'
+          '  Control Center: $_leftBaseLocal\n'
+          '  Raw Delta: $delta\n'
+          '  Normalized Vector: $normalized\n'
+          '  Final Output Vector: ($_leftX, $_leftY)');
+    }
   }
 
   // --- RIGHT STICK API ---
@@ -469,18 +489,20 @@ class GamepadInputEngine {
     required int controlHashCode,
     required double baseSize,
     Offset Function(Offset localPos)? clampBase,
+    ValueNotifier<bool>? firing,
+    bool tapHapticsEnabled = false,
   }) {
     // [INSTRUMENTATION] Pointer reuse and collision check
     if (_activeRight != null) {
-      debugPrint('[INSTRUMENTATION] WARNING: Right pointer registration collision! Active Right Pointer: ${_activeRight!.pointerId} (${_activeRight!.controlId}), New Pointer: ${event.pointer} ($controlId)');
+      if (kDebugMode) debugPrint('[INSTRUMENTATION] WARNING: Right pointer registration collision! Active Right Pointer: ${_activeRight!.pointerId} (${_activeRight!.controlId}), New Pointer: ${event.pointer} ($controlId)');
       if (_activeRight!.pointerId == event.pointer) {
-        debugPrint('[INSTRUMENTATION] WARNING: EXACT SAME pointer ID ${event.pointer} reused for Right Stick down while already active!');
+        if (kDebugMode) debugPrint('[INSTRUMENTATION] WARNING: EXACT SAME pointer ID ${event.pointer} reused for Right Stick down while already active!');
       }
-      debugPrint('[INPUT ENGINE] Stale right pointer ${_activeRight!.pointerId} detected. Force releasing.');
+      if (kDebugMode) debugPrint('[INPUT ENGINE] Stale right pointer ${_activeRight!.pointerId} detected. Force releasing.');
       _releaseRightStick();
     }
     if (_activeLeft != null && _activeLeft!.pointerId == event.pointer) {
-      debugPrint('[INSTRUMENTATION] WARNING: Right Pointer ID ${event.pointer} matches active Left Stick pointer! Left Stick: ${_activeLeft!.controlId}');
+      if (kDebugMode) debugPrint('[INSTRUMENTATION] WARNING: Right Pointer ID ${event.pointer} matches active Left Stick pointer! Left Stick: ${_activeLeft!.controlId}');
     }
 
     _activeRight = ActiveControlState(
@@ -493,9 +515,11 @@ class GamepadInputEngine {
       converter: converter,
       clampBase: clampBase,
       baseSize: baseSize,
+      firing: firing,
     );
 
     _rightLayout = layout;
+    _fireHaptics = tapHapticsEnabled;
     _rightConfig = config;
     _rightSize = parentSize;
 
@@ -527,22 +551,25 @@ class GamepadInputEngine {
     _activeRight!.basePos.value = _rightBaseLocal;
 
     _updateRightStickMath(isInitial: true);
+    _updateFire();
 
-    debugPrint(
-      '${layout == "RS_BUTTON" ? "FloatingRightStick" : layout == "RS_FIXED" ? "FixedRightStick" : "SwipePad"} #$controlHashCode\n'
-      'Pointer: ${event.pointer}\n'
-      'Registered as: $controlId\n'
-      'Activated\n'
-      '  Visual Notifier Hash: ${identityHashCode(visualOffset)}\n'
-      '  Active Notifier Hash: ${identityHashCode(active)}\n'
-      '  BasePos Notifier Hash: ${identityHashCode(basePos)}'
-    );
+    if (kDebugMode) {
+      debugPrint(
+        '${layout == "RS_BUTTON" ? "FloatingRightStick" : layout == "RS_FIXED" ? "FixedRightStick" : "SwipePad"} #$controlHashCode\n'
+        'Pointer: ${event.pointer}\n'
+        'Registered as: $controlId\n'
+        'Activated\n'
+        '  Visual Notifier Hash: ${identityHashCode(visualOffset)}\n'
+        '  Active Notifier Hash: ${identityHashCode(active)}\n'
+        '  BasePos Notifier Hash: ${identityHashCode(basePos)}'
+      );
+    }
 
     GestureBinding.instance.pointerRouter.addRoute(event.pointer, _rightPointerRoute);
   }
 
   void _rightPointerRoute(PointerEvent event) {
-    debugPrint('[INSTRUMENTATION] Right Router Event type: ${event.runtimeType}, pointerId: ${event.pointer}, position: ${event.position}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] Right Router Event type: ${event.runtimeType}, pointerId: ${event.pointer}, position: ${event.position}');
     if (_activeRight == null || event.pointer != _activeRight!.pointerId) return;
 
     if (event is PointerMoveEvent) {
@@ -555,6 +582,7 @@ class GamepadInputEngine {
       } else {
         _updateRightStickMath();
       }
+      _updateFire();
     } else if (event is PointerUpEvent || event is PointerCancelEvent) {
       _releaseRightStick();
     }
@@ -563,12 +591,14 @@ class GamepadInputEngine {
   void _releaseRightStick() {
     if (_activeRight != null) {
       final String controlType = _activeRight!.controlId.split("_")[0];
-      debugPrint(
-        '${controlType == "RS-BUTTON" ? "FloatingRightStick" : controlType == "RS-FIXED" ? "FixedRightStick" : "SwipePad"} #${_activeRight!.controlHashCode}\n'
-        'Pointer: ${_activeRight!.pointerId}\n'
-        'Registered as: ${_activeRight!.controlId}\n'
-        'Deactivated'
-      );
+      if (kDebugMode) {
+        debugPrint(
+          '${controlType == "RS-BUTTON" ? "FloatingRightStick" : controlType == "RS-FIXED" ? "FixedRightStick" : "SwipePad"} #${_activeRight!.controlHashCode}\n'
+          'Pointer: ${_activeRight!.pointerId}\n'
+          'Registered as: ${_activeRight!.controlId}\n'
+          'Deactivated'
+        );
+      }
 
       try {
         GestureBinding.instance.pointerRouter.removeRoute(_activeRight!.pointerId, _rightPointerRoute);
@@ -577,13 +607,14 @@ class GamepadInputEngine {
       try {
         _activeRight!.active.value = false;
       } catch (e) {
-        debugPrint('[INSTRUMENTATION] ERROR: Failed setting right active value: $e');
+        if (kDebugMode) debugPrint('[INSTRUMENTATION] ERROR: Failed setting right active value: $e');
       }
       try {
         _activeRight!.visualOffset.value = Offset.zero;
       } catch (e) {
-        debugPrint('[INSTRUMENTATION] ERROR: Failed setting right visualOffset value: $e');
+        if (kDebugMode) debugPrint('[INSTRUMENTATION] ERROR: Failed setting right visualOffset value: $e');
       }
+      _setFire(false);
       _activeRight = null;
     }
     _rightX = 0.0;
@@ -656,14 +687,16 @@ class GamepadInputEngine {
     final processed = _processRightStickOutput(_rightX, _rightY);
 
     // Diagnostic logging
-    debugPrint('[INPUT ENGINE] Right Stick ($_rightLayout):\n'
-        '  Pointer ID: ${_activeRight!.pointerId}\n'
-        '  Global Position: $_rightTouchCurrentGlobal\n'
-        '  Local Position: $_rightTouchCurrent\n'
-        '  Control Center: $_rightBaseLocal\n'
-        '  Raw Delta: $delta\n'
-        '  Normalized Vector: $normalized\n'
-        '  Final Output Vector: (${processed.dx}, ${processed.dy})');
+    if (kDebugMode) {
+      debugPrint('[INPUT ENGINE] Right Stick ($_rightLayout):\n'
+          '  Pointer ID: ${_activeRight!.pointerId}\n'
+          '  Global Position: $_rightTouchCurrentGlobal\n'
+          '  Local Position: $_rightTouchCurrent\n'
+          '  Control Center: $_rightBaseLocal\n'
+          '  Raw Delta: $delta\n'
+          '  Normalized Vector: $normalized\n'
+          '  Final Output Vector: (${processed.dx}, ${processed.dy})');
+    }
   }
 
   Offset _processRightStickOutput(double rawX, double rawY) {
@@ -714,9 +747,56 @@ class GamepadInputEngine {
     return Offset(x, y);
   }
 
+  // --- AIM AND FIRE ---
+
+  bool get isFiring => _firePressed;
+
+  /// Holds or lets go of the fire button from where the right stick is.
+  void _updateFire() {
+    final active = _activeRight;
+    if (active == null) return;
+    var mode = _rightConfig.fireMode;
+    // A swipe pad has no resting deflection to measure a ring against.
+    if (mode == kFireRing && _rightLayout == 'RS_SWIPE') mode = kFireTouch;
+
+    switch (mode) {
+      case kFireTouch:
+        _setFire(true);
+      case kFireRing:
+        final deflection = math.sqrt(_rightX * _rightX + _rightY * _rightY);
+        _setFire(deflection >=
+            (_firePressed ? kFireRingRelease : kFireRingPress));
+      default:
+        _setFire(false);
+    }
+  }
+
+  void _setFire(bool on) {
+    if (on == _firePressed) return;
+    if (on) _fireButton = _rightConfig.fireButton;
+    _firePressed = on;
+    try {
+      _activeRight?.firing?.value = on;
+    } catch (_) {}
+    // A real button already holding it keeps the press; leave it alone.
+    if (_heldButtons.contains(_fireButton)) return;
+    _sendButton(_fireButton, on ? 'down' : 'up', on && _fireHaptics);
+  }
+
   // --- GENERAL BUTTON API ---
 
   void updateButtonState(String xinputId, String state, bool tapHapticsEnabled) {
+    if (state == 'down') {
+      _heldButtons.add(xinputId);
+    } else if (state == 'up') {
+      _heldButtons.remove(xinputId);
+      // The stick is still firing with it.
+      if (_firePressed && xinputId == _fireButton) return;
+    }
+    _sendButton(xinputId, state, tapHapticsEnabled);
+  }
+
+  void _sendButton(String xinputId, String state, bool tapHapticsEnabled) {
     if (state == 'down' && tapHapticsEnabled) {
       try {
         HapticsManager.instance.buttonTap(xinputId);

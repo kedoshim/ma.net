@@ -456,6 +456,11 @@ abstract class LayoutEditorStrings {
   String get rightStickFixedLabel;
   String get rightStickFloatingLabel;
   String get rightStickSwipeLabel;
+  String get rightStickFireTitle;
+  String get rightStickFireTip;
+  String get rightStickFireOff;
+  String get rightStickFireTouch;
+  String get rightStickFireRing;
 
   String get rightLayoutTitle;
   String get leftRowTitle;

@@ -1,6 +1,7 @@
 import '../models/controller_branding.dart';
 import '../models/controller_left_zone.dart';
 import '../services/preferences_service.dart';
+import '../widgets/right_stick_controls.dart';
 
 class ControllerLayoutPreset {
   const ControllerLayoutPreset({
@@ -12,6 +13,8 @@ class ControllerLayoutPreset {
     required this.buttonSizes,
     required this.rightLayoutMode,
     this.leftButtons = const [],
+    this.rightStickFire = kFireOff,
+    this.rightStickFireButton = 'RT',
   });
 
   final String id;
@@ -22,6 +25,9 @@ class ControllerLayoutPreset {
   final Map<String, int> buttonSizes;
   final String rightLayoutMode;
   final List<String> leftButtons;
+  /// Aim-and-fire the game asks for ('off', 'touch' or 'ring').
+  final String rightStickFire;
+  final String rightStickFireButton;
 
   factory ControllerLayoutPreset.fromJson(Map<String, dynamic> json) {
     final layout = json['layout'] as Map<String, dynamic>? ?? json;
@@ -52,6 +58,8 @@ class ControllerLayoutPreset {
       leftButtons: normalizeLeftButtons(
         layout['leftButtons'] as List<dynamic>? ?? const [],
       ),
+      rightStickFire: normalizeFireMode(layout['rightStickFire']),
+      rightStickFireButton: normalizeFireButton(layout['rightStickFireButton']),
     );
   }
 }

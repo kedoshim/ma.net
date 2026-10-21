@@ -31,3 +31,21 @@ def test_heave_ho_splits_triggers_between_hands(tmp_path):
     assert preset["leftButtons"] == ["LT"]
     assert preset["visibleButtons"]["RT"] is True
     assert preset["visibleButtons"]["RS_FIXED"] is True
+
+
+def test_right_stick_fire_kept_when_known(tmp_path):
+    layout = _store(tmp_path)._normalize_layout({"rightStickFire": "ring"})
+    assert layout["rightStickFire"] == "ring"
+
+
+def test_right_stick_fire_defaults_off(tmp_path):
+    store = _store(tmp_path)
+    assert store._normalize_layout({})["rightStickFire"] == "off"
+    assert store._normalize_layout({"rightStickFire": "laser"})["rightStickFire"] == "off"
+
+
+def test_right_stick_fire_button_defaults_to_rt(tmp_path):
+    store = _store(tmp_path)
+    assert store._normalize_layout({})["rightStickFireButton"] == "RT"
+    assert store._normalize_layout({"rightStickFireButton": "RS_FIXED"})["rightStickFireButton"] == "RT"
+    assert store._normalize_layout({"rightStickFireButton": "RB"})["rightStickFireButton"] == "RB"

@@ -262,6 +262,9 @@ class ControllerPresetLayout {
   final String rightLayoutMode;
   final Map<String, int> buttonSizes;
   final List<String> leftButtons;
+  /// Aim-and-fire on the right stick: 'off', 'touch' or 'ring'.
+  final String rightStickFire;
+  final String rightStickFireButton;
 
   ControllerPresetLayout({
     required this.movementMode,
@@ -270,6 +273,8 @@ class ControllerPresetLayout {
     required this.rightLayoutMode,
     required this.buttonSizes,
     this.leftButtons = const [],
+    this.rightStickFire = 'off',
+    this.rightStickFireButton = 'RT',
   });
 
   factory ControllerPresetLayout.fromJson(Map<String, dynamic> json) {
@@ -298,6 +303,8 @@ class ControllerPresetLayout {
       leftButtons: normalizeLeftButtons(
         json['leftButtons'] as List<dynamic>? ?? const [],
       ),
+      rightStickFire: json['rightStickFire'] as String? ?? 'off',
+      rightStickFireButton: json['rightStickFireButton'] as String? ?? 'RT',
     );
   }
 
@@ -317,6 +324,8 @@ class ControllerPresetLayout {
       'rightLayoutMode': rightLayoutMode,
       'buttonSizes': buttonSizes,
       'leftButtons': leftButtons,
+      'rightStickFire': rightStickFire,
+      'rightStickFireButton': rightStickFireButton,
     };
   }
 }

@@ -57,6 +57,10 @@ class ControllerDefaultView extends StatefulWidget {
     required this.swipeAccelerationIntensity,
     required this.rightStickAntiDeadzone,
     required this.rightStickResponseCurve,
+    this.rightStickFire = kFireOff,
+    this.rightStickFireButton = 'RT',
+    this.rightStickFireFollowsGame = true,
+    this.onRightStickFireChanged,
     required this.isPanelExpanded,
     required this.panelMode,
     required this.onPanelExpandedChanged,
@@ -95,6 +99,11 @@ class ControllerDefaultView extends StatefulWidget {
   final double swipeAccelerationIntensity;
   final double rightStickAntiDeadzone;
   final double rightStickResponseCurve;
+  final String rightStickFire;
+  final String rightStickFireButton;
+  final bool rightStickFireFollowsGame;
+  /// Player picks a fire mode (or [kFireFollowPreset]) and button.
+  final void Function(String mode, String button)? onRightStickFireChanged;
 
   final String? playerName;
   final ValueChanged<String> onNameChanged;
@@ -652,6 +661,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
         swipeAccelerationIntensity: widget.swipeAccelerationIntensity,
         rightStickAntiDeadzone: widget.rightStickAntiDeadzone,
         rightStickResponseCurve: widget.rightStickResponseCurve,
+        rightStickFire: widget.rightStickFire,
+        rightStickFireButton: widget.rightStickFireButton,
       );
     }
   }
@@ -931,6 +942,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                                 sensitivity: widget.rightStickSensitivity,
                                 antiDeadzone: widget.rightStickAntiDeadzone,
                                 responseCurve: widget.rightStickResponseCurve,
+                                fireMode: widget.rightStickFire,
+                                fireButton: widget.rightStickFireButton,
                               ),
                               onSendValue: (x, y) => widget.onRightStickChanged?.call(Offset(x, y)),
                               onReleased: () => widget.onRightStickRelease?.call(),
@@ -972,6 +985,10 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
       buttons: availableButtons,
       rightStickControls: availableRightStick,
       tapHapticsEnabled: widget.tapHapticsEnabled,
+      fireMode: widget.rightStickFire,
+      fireButton: widget.rightStickFireButton,
+      fireFollowsGame: widget.rightStickFireFollowsGame,
+      onFireChanged: widget.onRightStickFireChanged,
       onButtonDropped: (buttonKey) =>
           widget.onSetButtonVisibility(buttonKey, false),
       onDragStarted: () => setState(() => _isDragging = true),
@@ -1945,10 +1962,18 @@ class _AvailableButtonsPanel extends StatelessWidget {
     required this.onDragStarted,
     required this.onDragEnded,
     required this.tapHapticsEnabled,
+    this.fireMode = kFireOff,
+    this.fireButton = 'RT',
+    this.fireFollowsGame = true,
+    this.onFireChanged,
   });
 
   final ControllerBrandingMode brandingMode;
   final bool isDragging;
+  final String fireMode;
+  final String fireButton;
+  final bool fireFollowsGame;
+  final void Function(String mode, String button)? onFireChanged;
   final List<String> buttons;
   final List<String> rightStickControls;
   final ValueChanged<String> onButtonDropped;
@@ -2090,6 +2115,16 @@ class _AvailableButtonsPanel extends StatelessWidget {
                           );
                         }).toList(),
                       ),
+                      if (onFireChanged != null) ...[
+                        const SizedBox(height: 24),
+                        _RightStickFireSection(
+                          brandingMode: brandingMode,
+                          mode: fireMode,
+                          button: fireButton,
+                          followsGame: fireFollowsGame,
+                          onChanged: onFireChanged!,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -2102,6 +2137,112 @@ class _AvailableButtonsPanel extends StatelessWidget {
   }
 }
 
+
+/// Aim-and-fire in the edit panel: how the right stick fires and with which
+/// button. Starts on what the game's preset says; any pick becomes the
+/// player's own until they go back to "game".
+class _RightStickFireSection extends StatelessWidget {
+  const _RightStickFireSection({
+    required this.brandingMode,
+    required this.mode,
+    required this.button,
+    required this.followsGame,
+    required this.onChanged,
+  });
+
+  final ControllerBrandingMode brandingMode;
+  final String mode;
+  final String button;
+  final bool followsGame;
+  final void Function(String mode, String button) onChanged;
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'momo',
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      selected: selected,
+      selectedColor: AppColors.highlightColor,
+      backgroundColor: AppColors.backgroundColor.withValues(alpha: 0.2),
+      side: const BorderSide(color: AppColors.textPrimary, width: 2),
+      showCheckmark: false,
+      onSelected: (_) => onTap(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final o = context.l10n.options;
+    final modes = {kFireOff: o.fireOff, kFireTouch: o.fireTouch, kFireRing: o.fireRing};
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          o.rightStickFire,
+          style: TextStyle(
+            fontFamily: 'momo',
+            fontSize: 20,
+            color: AppColors.textPrimary.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          o.rightStickFireHint,
+          style: TextStyle(
+            fontFamily: 'momo',
+            fontSize: 12,
+            color: AppColors.textPrimary.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _chip(o.fireFollowGame, followsGame, () {
+              onChanged(kFireFollowPreset, button);
+            }),
+            for (final entry in modes.entries)
+              _chip(entry.value, !followsGame && mode == entry.key, () {
+                onChanged(entry.key, button);
+              }),
+          ],
+        ),
+        if (mode != kFireOff) ...[
+          const SizedBox(height: 12),
+          Text(
+            o.fireButton,
+            style: TextStyle(
+              fontFamily: 'momo',
+              fontSize: 14,
+              color: AppColors.textPrimary.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final id in kFireButtons)
+                _chip(
+                  ControllerBranding.presentationFor(id, brandingMode).shortLabel,
+                  button == id,
+                  // Changing the button keeps the mode, now as the player's.
+                  () => onChanged(mode, id),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
 
 /// Edit-mode stand-in for the left row: [kLeftZoneMax] slots that take any
 /// button but the sticks. Dragging one out sends it wherever it lands.

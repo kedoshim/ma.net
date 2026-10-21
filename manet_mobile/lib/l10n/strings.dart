@@ -145,6 +145,13 @@ abstract class OptionsStrings {
   String get responseCurveMild;
   String get responseCurveMedium;
   String get responseCurveAggressive;
+  String get rightStickFire;
+  String get rightStickFireHint;
+  String get fireFollowGame;
+  String get fireOff;
+  String get fireTouch;
+  String get fireRing;
+  String get fireButton;
   String get secondaryButtonsTitle;
   String get movementTitle;
   String get rightStickTitle;

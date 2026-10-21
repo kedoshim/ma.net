@@ -268,6 +268,21 @@ class PtBrOptionsStrings implements OptionsStrings {
   @override
   String get responseCurveAggressive => 'Agressiva';
   @override
+  String get rightStickFire => 'Atirar com o analógico direito';
+  @override
+  String get rightStickFireHint =>
+      'Mirar e atirar com o mesmo dedo. Ao tocar: aperta o botão enquanto mira. Anel: só além do anel.';
+  @override
+  String get fireFollowGame => 'Do jogo';
+  @override
+  String get fireOff => 'Desligado';
+  @override
+  String get fireTouch => 'Ao tocar';
+  @override
+  String get fireRing => 'Anel';
+  @override
+  String get fireButton => 'Botão';
+  @override
   String get secondaryButtonsTitle => 'Botões Secundários';
   @override
   String get movementTitle => 'Movimento';

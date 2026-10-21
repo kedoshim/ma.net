@@ -43,6 +43,21 @@ LEGACY_BUTTON_IDS = {
 LEFT_ZONE_MAX = 2
 LEFT_ZONE_EXCLUDED = {"RS_BUTTON", "RS_FIXED", "RS_SWIPE"}
 
+# Aim-and-fire: the right stick also holds RT, while touched or past a ring.
+RIGHT_STICK_FIRE_MODES = {"off", "touch", "ring"}
+
+
+RIGHT_STICK_FIRE_BUTTONS = ["RT", "LT", "RB", "LB", "A", "B", "X", "Y"]
+
+
+def _normalize_right_stick_fire(value):
+    return value if value in RIGHT_STICK_FIRE_MODES else "off"
+
+
+def _normalize_right_stick_fire_button(value):
+    canonical = _canonical_button_id(value) if isinstance(value, str) else None
+    return canonical if canonical in RIGHT_STICK_FIRE_BUTTONS else "RT"
+
 
 def _canonical_button_id(value):
     if value is None:
@@ -78,6 +93,8 @@ def _preset(
     button_order=None,
     right_layout_mode="columns",
     left_buttons=None,
+    right_stick_fire="off",
+    right_stick_fire_button="RT",
 ):
     left = _normalize_left_buttons(left_buttons)
     raw_order = []
@@ -99,6 +116,10 @@ def _preset(
             "buttonOrder": final_order,
             "rightLayoutMode": right_layout_mode,
             "leftButtons": left,
+            "rightStickFire": _normalize_right_stick_fire(right_stick_fire),
+            "rightStickFireButton": _normalize_right_stick_fire_button(
+                right_stick_fire_button
+            ),
         },
     }
 
@@ -365,6 +386,12 @@ class ControllerPresetStore:
             "buttonSizes": button_sizes,
             "rightLayoutMode": right_layout_mode,
             "leftButtons": left_buttons,
+            "rightStickFire": _normalize_right_stick_fire(
+                layout.get("rightStickFire")
+            ),
+            "rightStickFireButton": _normalize_right_stick_fire_button(
+                layout.get("rightStickFireButton")
+            ),
         }
 
     def _normalize_custom_preset(self, payload):

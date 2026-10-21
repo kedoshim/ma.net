@@ -18,6 +18,7 @@ import '../services/websocket_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/options_popup.dart';
 import '../widgets/player_face_indicator.dart';
+import '../widgets/right_stick_controls.dart';
 import 'controller_screen/controller_default_view.dart';
 import 'controller_screen/controller_menu_view.dart';
 import 'controller_screen/controller_face_view.dart';
@@ -132,6 +133,19 @@ class _ControllerScreenState extends State<ControllerScreen>
   MovementMode _overlayMovementMode = MovementMode.dpad;
   MovementMode _menuMovementMode = MovementMode.floatingJoystick;
   String _rightLayoutMode = 'columns';
+  // Aim-and-fire: the game's preset sets it, the player may override it.
+  String _presetRightStickFire = kFireOff;
+  String _rightStickFireOverride = kFireFollowPreset;
+  String _presetRightStickFireButton = 'RT';
+  String _rightStickFireButtonOverride = 'RT';
+  bool get _rightStickFireFollowsGame =>
+      _rightStickFireOverride == kFireFollowPreset;
+  String get _rightStickFire => _rightStickFireFollowsGame
+      ? _presetRightStickFire
+      : normalizeFireMode(_rightStickFireOverride);
+  String get _rightStickFireButton => _rightStickFireFollowsGame
+      ? _presetRightStickFireButton
+      : normalizeFireButton(_rightStickFireButtonOverride);
   bool _mouseModeOwned = false;
   String? _mouseModeOwnerName;
   bool _centerPulseExpanded = false;
@@ -1135,6 +1149,17 @@ class _ControllerScreenState extends State<ControllerScreen>
     });
   }
 
+  /// The player's own aim-and-fire choice; [kFireFollowPreset] goes back to
+  /// what the game's preset says.
+  void _setRightStickFire(String mode, String button) {
+    setState(() {
+      _rightStickFireOverride = mode;
+      _rightStickFireButtonOverride = button;
+    });
+    PreferencesService.instance.setRightStickFireOverride(mode);
+    PreferencesService.instance.setRightStickFireButtonOverride(button);
+  }
+
   void _handleLayoutPresetUpdate(Map<String, dynamic> data) {
     final presetData = data['preset'];
     if (presetData is! Map<String, dynamic>) {
@@ -1148,6 +1173,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     setState(() {
       _movementMode = preset.movementMode;
       _rightLayoutMode = preset.rightLayoutMode;
+      _presetRightStickFire = preset.rightStickFire;
+      _presetRightStickFireButton = preset.rightStickFireButton;
       _brandingMode = ControllerBranding.modeFromWire(
         data['controllerMode'] as String?,
       );
@@ -1168,6 +1195,9 @@ class _ControllerScreenState extends State<ControllerScreen>
 
     PreferencesService.instance.setMovementMode(_movementMode.index);
     PreferencesService.instance.setRightLayoutMode(_rightLayoutMode);
+    PreferencesService.instance.setPresetRightStickFire(_presetRightStickFire);
+    PreferencesService.instance
+        .setPresetRightStickFireButton(_presetRightStickFireButton);
     PreferencesService.instance.setButtonVisibility(visibleButtons);
     PreferencesService.instance.setButtonOrder(_buttonOrder);
     PreferencesService.instance.setButtonSizes(_buttonSizes);
@@ -1913,6 +1943,13 @@ class _ControllerScreenState extends State<ControllerScreen>
       swipeAccelerationIntensity = await prefs.getSwipeAccelerationIntensity();
       rightStickAntiDeadzone = await prefs.getRightStickAntiDeadzone();
       rightStickResponseCurve = await prefs.getRightStickResponseCurve();
+      _presetRightStickFire =
+          normalizeFireMode(await prefs.getPresetRightStickFire());
+      _rightStickFireOverride = await prefs.getRightStickFireOverride();
+      _presetRightStickFireButton =
+          normalizeFireButton(await prefs.getPresetRightStickFireButton());
+      _rightStickFireButtonOverride =
+          await prefs.getRightStickFireButtonOverride();
 
       final savedVisibility = await prefs.getButtonVisibility();
       if (savedVisibility != null) {
@@ -2009,6 +2046,10 @@ class _ControllerScreenState extends State<ControllerScreen>
           swipeAccelerationIntensity: swipeAccelerationIntensity,
           rightStickAntiDeadzone: rightStickAntiDeadzone,
           rightStickResponseCurve: rightStickResponseCurve,
+          rightStickFire: _rightStickFire,
+          rightStickFireButton: _rightStickFireButton,
+          rightStickFireFollowsGame: _rightStickFireFollowsGame,
+          onRightStickFireChanged: _setRightStickFire,
           isPanelExpanded: true,
           panelMode: ControllerPanelMode.edit,
           onPanelExpandedChanged: (expanded) {
@@ -2168,6 +2209,10 @@ class _ControllerScreenState extends State<ControllerScreen>
           swipeAccelerationIntensity: swipeAccelerationIntensity,
           rightStickAntiDeadzone: rightStickAntiDeadzone,
           rightStickResponseCurve: rightStickResponseCurve,
+          rightStickFire: _rightStickFire,
+          rightStickFireButton: _rightStickFireButton,
+          rightStickFireFollowsGame: _rightStickFireFollowsGame,
+          onRightStickFireChanged: _setRightStickFire,
           isPanelExpanded: _isPanelExpanded,
           panelMode: _panelMode,
           onPanelExpandedChanged: (expanded) {

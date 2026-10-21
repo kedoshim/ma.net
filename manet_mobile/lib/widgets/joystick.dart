@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../services/gamepad_input_engine.dart';
@@ -42,12 +43,12 @@ class _JoystickState extends State<Joystick> {
   @override
   void initState() {
     super.initState();
-    debugPrint('[INSTRUMENTATION] Joystick (fixed) state created. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] Joystick (fixed) state created. State Hash: ${identityHashCode(this)}');
   }
 
   @override
   void dispose() {
-    debugPrint('[INSTRUMENTATION] Joystick (fixed) state disposed. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] Joystick (fixed) state disposed. State Hash: ${identityHashCode(this)}');
     GamepadInputEngine.instance.releaseLeftIfMatched(identityHashCode(this));
     _visualOffset.dispose();
     _active.dispose();
@@ -59,7 +60,7 @@ class _JoystickState extends State<Joystick> {
     final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
-    debugPrint('[INSTRUMENTATION] Joystick (fixed) pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] Joystick (fixed) pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
 
     GamepadInputEngine.instance.handleLeftPointerDown(
       event: event,
@@ -206,7 +207,7 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
   @override
   void initState() {
     super.initState();
-    debugPrint('[INSTRUMENTATION] AdaptiveJoystick (floating) state created. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] AdaptiveJoystick (floating) state created. State Hash: ${identityHashCode(this)}');
     _appearController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
@@ -237,7 +238,7 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
 
   @override
   void dispose() {
-    debugPrint('[INSTRUMENTATION] AdaptiveJoystick (floating) state disposed. State Hash: ${identityHashCode(this)}');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] AdaptiveJoystick (floating) state disposed. State Hash: ${identityHashCode(this)}');
     _active.removeListener(_onActiveChanged);
     GamepadInputEngine.instance.releaseLeftIfMatched(identityHashCode(this));
     _appearController.dispose();
@@ -286,7 +287,7 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
     final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
-    debugPrint('[INSTRUMENTATION] AdaptiveJoystick (floating) pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
+    if (kDebugMode) debugPrint('[INSTRUMENTATION] AdaptiveJoystick (floating) pointer down. State Hash: ${identityHashCode(this)}, Position: ${event.position}, LocalPosition: ${renderBox.globalToLocal(event.position)}, Size: $size');
 
     GamepadInputEngine.instance.handleLeftPointerDown(
       event: event,
@@ -353,9 +354,13 @@ class _AdaptiveJoystickState extends State<AdaptiveJoystick>
                                         ? 1.0
                                         : 0.2 + (_appearController.value * 0.8);
 
+                                    // An Opacity at 1.0 still costs a layer
+                                    // per frame on web; skip it while held.
                                     return Transform.scale(
                                       scale: scale,
-                                      child: Opacity(opacity: opacity, child: child),
+                                      child: opacity >= 1.0
+                                          ? child
+                                          : Opacity(opacity: opacity, child: child),
                                     );
                                   },
                                   child: SizedBox(

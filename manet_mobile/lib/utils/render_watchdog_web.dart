@@ -56,8 +56,21 @@ void _check() {
   _reload();
 }
 
+// Walking every element and shadow root is too slow to repeat every 2s while
+// both sticks are held (it shows as a hitch), so the canvases found are kept
+// and the walk only runs again once one of them leaves the page.
+List<html.CanvasElement> _canvases = const [];
+
+List<html.CanvasElement> _currentCanvases() {
+  if (_canvases.isEmpty || _canvases.any((c) => c.isConnected != true)) {
+    _canvases =
+        _flutterCanvases(html.document.querySelectorAll('*')).toList();
+  }
+  return _canvases;
+}
+
 bool _anyCanvasLost() {
-  for (final canvas in _flutterCanvases(html.document.querySelectorAll('*'))) {
+  for (final canvas in _currentCanvases()) {
     // Only looks up the canvas's existing context: Flutter's canvases
     // always have one, and asking for another type returns null.
     final context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');

@@ -33,6 +33,8 @@ class ActionButtons extends StatefulWidget {
   final double swipeAccelerationIntensity;
   final double rightStickAntiDeadzone;
   final double rightStickResponseCurve;
+  final String rightStickFire;
+  final String rightStickFireButton;
 
   const ActionButtons({
     super.key,
@@ -56,6 +58,8 @@ class ActionButtons extends StatefulWidget {
     this.swipeAccelerationIntensity = 0.0,
     this.rightStickAntiDeadzone = 0.10,
     this.rightStickResponseCurve = 0.5,
+    this.rightStickFire = kFireOff,
+    this.rightStickFireButton = 'RT',
   });
 
   @override
@@ -232,6 +236,8 @@ class _ActionButtonsState extends State<ActionButtons> {
           sensitivity: widget.rightStickSensitivity,
           antiDeadzone: widget.rightStickAntiDeadzone,
           responseCurve: widget.rightStickResponseCurve,
+          fireMode: widget.rightStickFire,
+          fireButton: widget.rightStickFireButton,
         ),
         onSendValue: (x, y) => widget.onRightStickChanged?.call(Offset(x, y)),
         onReleased: () => widget.onRightStickRelease?.call(),
@@ -246,6 +252,8 @@ class _ActionButtonsState extends State<ActionButtons> {
           sensitivity: widget.rightStickSensitivity,
           antiDeadzone: widget.rightStickAntiDeadzone,
           responseCurve: widget.rightStickResponseCurve,
+          fireMode: widget.rightStickFire,
+          fireButton: widget.rightStickFireButton,
         ),
         onSendValue: (x, y) => widget.onRightStickChanged?.call(Offset(x, y)),
         onReleased: () => widget.onRightStickRelease?.call(),
@@ -261,6 +269,8 @@ class _ActionButtonsState extends State<ActionButtons> {
           swipeAccelerationIntensity: widget.swipeAccelerationIntensity,
           antiDeadzone: widget.rightStickAntiDeadzone,
           responseCurve: widget.rightStickResponseCurve,
+          fireMode: widget.rightStickFire,
+          fireButton: widget.rightStickFireButton,
         ),
         onSendValue: (x, y) => widget.onRightStickChanged?.call(Offset(x, y)),
         onReleased: () => widget.onRightStickRelease?.call(),
