@@ -355,6 +355,8 @@ class EnUsEditControlsStrings implements EditControlsStrings {
   @override
   String get rightStickControls => 'Right Stick Controls';
   @override
+  String get leftRowTitle => 'Left side (up to 2)';
+  @override
   String get dragToMove => 'Drag to move';
   @override
   String get noButtonsVisible => 'No visible buttons';

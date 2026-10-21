@@ -911,6 +911,10 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightLayoutTitle => 'BUTTON LAYOUT';
   @override
+  String get leftRowTitle => 'LEFT SIDE';
+  @override
+  String get leftRowTip => 'Up to 2 buttons in a row above the stick, for games that use both sticks.';
+  @override
   String get rightLayoutColumnsLabel => 'Columns';
   @override
   String get rightLayoutRowsLabel => 'Rows';

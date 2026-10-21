@@ -178,6 +178,7 @@ abstract class EditControlsStrings {
   String get title;
   String get availableButtons;
   String get rightStickControls;
+  String get leftRowTitle;
   String get dragToMove;
   String get noButtonsVisible;
   String get enableButtonsInSettings;

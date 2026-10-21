@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/controller_screen.dart';
 import 'l10n/app_localizations.dart';
+import 'utils/render_watchdog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  startRenderWatchdog();
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
@@ -37,4 +39,4 @@ class ControllerApp extends StatelessWidget {
       home: const ControllerScreen(),
     );
   }
-}
+}

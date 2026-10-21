@@ -1,4 +1,5 @@
 import '../models/controller_branding.dart';
+import '../models/controller_left_zone.dart';
 import '../services/preferences_service.dart';
 
 class ControllerLayoutPreset {
@@ -10,6 +11,7 @@ class ControllerLayoutPreset {
     required this.buttonOrder,
     required this.buttonSizes,
     required this.rightLayoutMode,
+    this.leftButtons = const [],
   });
 
   final String id;
@@ -19,6 +21,7 @@ class ControllerLayoutPreset {
   final List<String> buttonOrder;
   final Map<String, int> buttonSizes;
   final String rightLayoutMode;
+  final List<String> leftButtons;
 
   factory ControllerLayoutPreset.fromJson(Map<String, dynamic> json) {
     final layout = json['layout'] as Map<String, dynamic>? ?? json;
@@ -46,6 +49,9 @@ class ControllerLayoutPreset {
       buttonOrder: ControllerBranding.normalizeCanonicalOrder(rawOrder),
       buttonSizes: parsedSizes,
       rightLayoutMode: layout['rightLayoutMode'] as String? ?? 'columns',
+      leftButtons: normalizeLeftButtons(
+        layout['leftButtons'] as List<dynamic>? ?? const [],
+      ),
     );
   }
 }

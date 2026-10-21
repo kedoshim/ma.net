@@ -458,6 +458,8 @@ abstract class LayoutEditorStrings {
   String get rightStickSwipeLabel;
 
   String get rightLayoutTitle;
+  String get leftRowTitle;
+  String get leftRowTip;
   String get rightLayoutColumnsLabel;
   String get rightLayoutRowsLabel;
 

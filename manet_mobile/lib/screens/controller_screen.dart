@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/controller_layout_preset.dart';
+import '../models/controller_left_zone.dart';
 import '../models/controller_branding.dart';
 import '../models/player_face.dart';
 import '../services/controller_connection_manager.dart';
@@ -93,6 +94,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   };
   List<String> _buttonOrder = List<String>.from(_defaultButtonOrder);
   Map<String, int> _buttonSizes = const {};
+  List<String> _leftButtons = const [];
 
   WebSocketService? ws;
   final GlobalKey<NavigatorState> _controllerNavigatorKey =
@@ -1158,6 +1160,10 @@ class _ControllerScreenState extends State<ControllerScreen>
         );
       }
       _buttonSizes = Map<String, int>.from(preset.buttonSizes);
+      _leftButtons = preset.leftButtons;
+      for (final id in _leftButtons) {
+        visibleButtons[id] = true;
+      }
     });
 
     PreferencesService.instance.setMovementMode(_movementMode.index);
@@ -1165,6 +1171,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setButtonVisibility(visibleButtons);
     PreferencesService.instance.setButtonOrder(_buttonOrder);
     PreferencesService.instance.setButtonSizes(_buttonSizes);
+    PreferencesService.instance.setLeftButtons(_leftButtons);
   }
 
   void _clearPlayerSlot() {
@@ -1836,11 +1843,26 @@ class _ControllerScreenState extends State<ControllerScreen>
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 
+  /// Showing a button puts it on the right side, hiding it sends it to the
+  /// secondary panel: either way it leaves the left row.
   void _setButtonVisibility(String buttonKey, bool visible) {
     setState(() {
       visibleButtons[buttonKey] = visible;
+      _leftButtons = _leftButtons.where((id) => id != buttonKey).toList();
     });
     PreferencesService.instance.setButtonVisibility(visibleButtons);
+    PreferencesService.instance.setLeftButtons(_leftButtons);
+  }
+
+  void _setLeftButtons(List<String> buttons) {
+    setState(() {
+      _leftButtons = normalizeLeftButtons(buttons);
+      for (final id in _leftButtons) {
+        visibleButtons[id] = true;
+      }
+    });
+    PreferencesService.instance.setButtonVisibility(visibleButtons);
+    PreferencesService.instance.setLeftButtons(_leftButtons);
   }
 
   void _setButtonOrder(List<String> order) {
@@ -1883,6 +1905,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       final menuModeIndex = await prefs.getMenuMovementMode();
       _menuMovementMode = MovementMode.values[menuModeIndex];
       _rightLayoutMode = await prefs.getRightLayoutMode();
+      _leftButtons = normalizeLeftButtons(await prefs.getLeftButtons());
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
 
       leftStickSensitivity = await prefs.getLeftStickSensitivity();
@@ -2000,6 +2023,8 @@ class _ControllerScreenState extends State<ControllerScreen>
           },
           editableButtons: _editableButtons,
           onSetButtonVisibility: _setButtonVisibility,
+          leftButtons: _leftButtons,
+          onLeftButtonsChanged: _setLeftButtons,
           onButtonOrderChanged: _setButtonOrder,
           onButtonSizesChanged: _setButtonSizes,
           onRightLayoutModeChanged: (mode) {
@@ -2157,6 +2182,8 @@ class _ControllerScreenState extends State<ControllerScreen>
           },
           editableButtons: _editableButtons,
           onSetButtonVisibility: _setButtonVisibility,
+          leftButtons: _leftButtons,
+          onLeftButtonsChanged: _setLeftButtons,
           onButtonOrderChanged: _setButtonOrder,
           onButtonSizesChanged: _setButtonSizes,
           onRightLayoutModeChanged: (mode) {

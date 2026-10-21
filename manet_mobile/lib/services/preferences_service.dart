@@ -221,6 +221,12 @@ class PreferencesService {
   Future<String> getRightLayoutMode() async =>
       (await _getInstance).getString('rightLayoutMode') ?? 'columns';
 
+  Future<void> setLeftButtons(List<String> buttons) async =>
+      (await _getInstance).setStringList('leftButtons', buttons);
+
+  Future<List<String>> getLeftButtons() async =>
+      (await _getInstance).getStringList('leftButtons') ?? const [];
+
   // --- Sensitivity Settings ---
   Future<void> setLeftStickSensitivity(double value) async =>
       (await _getInstance).setDouble('leftStickSensitivity', value);

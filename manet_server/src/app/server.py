@@ -108,8 +108,10 @@ def log_startup_diagnostics(config):
     import subprocess
     from pathlib import Path
     
-    app_version = "0.2.0"
-    server_version = "0.2.0"
+    from src.app.version import APP_VERSION
+
+    app_version = APP_VERSION
+    server_version = APP_VERSION
     frozen = getattr(sys, 'frozen', False)
     exe_path = sys.executable
     working_dir = os.getcwd()

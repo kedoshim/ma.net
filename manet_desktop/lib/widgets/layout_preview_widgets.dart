@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/controller_branding.dart';
+import '../models/controller_left_zone.dart';
 import '../services/host_api_service.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
@@ -72,9 +73,7 @@ class StructuredLayoutPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final double height = compact ? 100 : 140;
 
-    final visible = layout.buttonOrder
-        .where((buttonId) => layout.visibleButtons[buttonId] == true)
-        .toList();
+    final visible = layout.rightButtons;
 
     final bool isRows = layout.rightLayoutMode == 'rows';
     final groups = isRows ? _splitIntoRows(visible) : _splitIntoColumns(visible);
@@ -100,12 +99,16 @@ class StructuredLayoutPreview extends StatelessWidget {
         children: [
           Expanded(
             flex: 3,
-            child: layout.movementMode == 'dpad'
-                ? const PreviewDpad()
-                : const PreviewStick(
-                    floating:
-                        false, // In static preview, stick is always visible center
-                  ).scale(1.1),
+            child: PreviewLeftSide(
+              brandingMode: brandingMode,
+              buttons: layout.shownLeftButtons,
+              movement: layout.movementMode == 'dpad'
+                  ? const PreviewDpad()
+                  : const PreviewStick(
+                      floating:
+                          false, // In static preview, stick is always visible center
+                    ).scale(1.1),
+            ),
           ),
           SizedBox(width: compact ? 4 : 8),
           Expanded(
@@ -221,9 +224,7 @@ class ReorderLayoutPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color surface = AppColors.backgroundColor;
 
-    final visible = layout.buttonOrder
-        .where((buttonId) => layout.visibleButtons[buttonId] == true)
-        .toList();
+    final visible = layout.rightButtons;
 
     final bool isRows = layout.rightLayoutMode == 'rows';
     final groups = isRows ? _splitIntoRows(visible) : _splitIntoColumns(visible);
@@ -243,12 +244,17 @@ class ReorderLayoutPreview extends StatelessWidget {
             children: [
               Expanded(
                 flex: 3,
-                child: (layout.movementMode == 'dpad'
-                        ? const PreviewDpad()
-                        : PreviewStick(
-                            floating: layout.movementMode == 'floatingJoystick',
-                          ))
-                    .scale(1.15),
+                child: PreviewLeftSide(
+                  brandingMode: brandingMode,
+                  buttons: layout.shownLeftButtons,
+                  movement: (layout.movementMode == 'dpad'
+                          ? const PreviewDpad()
+                          : PreviewStick(
+                              floating:
+                                  layout.movementMode == 'floatingJoystick',
+                            ))
+                      .scale(1.15),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -309,6 +315,51 @@ class ReorderLayoutPreview extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Movement, with the optional row of buttons on top (see controller_left_zone).
+class PreviewLeftSide extends StatelessWidget {
+  const PreviewLeftSide({
+    super.key,
+    required this.brandingMode,
+    required this.buttons,
+    required this.movement,
+  });
+
+  final ControllerBrandingMode brandingMode;
+  final List<String> buttons;
+  final Widget movement;
+
+  @override
+  Widget build(BuildContext context) {
+    if (buttons.isEmpty) return movement;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              for (var i = 0; i < kLeftZoneMax; i++)
+                Expanded(
+                  child: i < buttons.length
+                      ? Row(
+                          children: [
+                            PreviewColumn(
+                              brandingMode: brandingMode,
+                              buttons: [buttons[i]],
+                              isHorizontal: true,
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
+            ],
+          ),
+        ),
+        Expanded(flex: 3, child: movement),
+      ],
     );
   }
 }

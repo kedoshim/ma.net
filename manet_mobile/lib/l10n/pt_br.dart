@@ -355,6 +355,8 @@ class PtBrEditControlsStrings implements EditControlsStrings {
   @override
   String get rightStickControls => 'Controles do Analógico Direito';
   @override
+  String get leftRowTitle => 'Lado esquerdo (até 2)';
+  @override
   String get dragToMove => 'Arraste para mover';
   @override
   String get noButtonsVisible => 'Sem botões visíveis';

@@ -911,6 +911,10 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightLayoutTitle => 'ARRANJO DOS BOTÕES';
   @override
+  String get leftRowTitle => 'LADO ESQUERDO';
+  @override
+  String get leftRowTip => 'Até 2 botões numa linha acima do analógico, para jogos que usam os dois analógicos.';
+  @override
   String get rightLayoutColumnsLabel => 'Colunas';
   @override
   String get rightLayoutRowsLabel => 'Linhas';

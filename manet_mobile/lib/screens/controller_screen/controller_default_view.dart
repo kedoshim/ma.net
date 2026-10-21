@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../models/controller_branding.dart';
+import '../../models/controller_left_zone.dart';
 import '../../models/player_face.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../theme/app_colors.dart';
@@ -62,6 +63,8 @@ class ControllerDefaultView extends StatefulWidget {
     required this.onPanelModeChanged,
     required this.editableButtons,
     required this.onSetButtonVisibility,
+    this.leftButtons = const [],
+    this.onLeftButtonsChanged,
     required this.onButtonOrderChanged,
     required this.onButtonSizesChanged,
     required this.onRightLayoutModeChanged,
@@ -77,6 +80,8 @@ class ControllerDefaultView extends StatefulWidget {
   final ValueChanged<ControllerPanelMode> onPanelModeChanged;
   final List<String> editableButtons;
   final void Function(String, bool) onSetButtonVisibility;
+  final List<String> leftButtons;
+  final ValueChanged<List<String>>? onLeftButtonsChanged;
   final void Function(List<String>) onButtonOrderChanged;
   final void Function(Map<String, int>) onButtonSizesChanged;
   final ValueChanged<String> onRightLayoutModeChanged;
@@ -255,22 +260,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                     // Left side (flex: 12)
                     Expanded(
                       flex: 12,
-                      child: widget.movementMode == MovementMode.dpad
-                          ? ControllerDpad(
-                              onButtonStateChanged: widget.onButtonStateChanged,
-                            )
-                          : widget.movementMode == MovementMode.floatingJoystick
-                          ? AdaptiveJoystick(
-                              onChanged: (x, y) => widget.onStickChanged(Offset(x, y)),
-                              onReleased: widget.onStickRelease,
-                              sensitivity: widget.leftStickSensitivity,
-                            )
-                          : Joystick(
-                              size: 220,
-                              onChanged: (x, y) => widget.onStickChanged(Offset(x, y)),
-                              onReleased: widget.onStickRelease,
-                              sensitivity: widget.leftStickSensitivity,
-                            ),
+                      child: _buildLeftSide(),
                     ),
                     // Center (flex: 7)
                     Expanded(
@@ -488,6 +478,85 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
     );
   }
 
+  /// Buttons in the left row that are actually on screen.
+  List<String> get _shownLeftButtons => widget.leftButtons
+      .where((id) => widget.visibleButtons[id] == true)
+      .toList();
+
+  Widget _buildMovement() {
+    switch (widget.movementMode) {
+      case MovementMode.dpad:
+        return ControllerDpad(onButtonStateChanged: widget.onButtonStateChanged);
+      case MovementMode.floatingJoystick:
+        return AdaptiveJoystick(
+          onChanged: (x, y) => widget.onStickChanged(Offset(x, y)),
+          onReleased: widget.onStickRelease,
+          sensitivity: widget.leftStickSensitivity,
+        );
+      case MovementMode.fixedJoystick:
+        // Shrinks when the left row takes part of the height.
+        return LayoutBuilder(
+          builder: (context, constraints) => Joystick(
+            size: math.min(
+              220.0,
+              math.min(constraints.maxWidth, constraints.maxHeight) - 8,
+            ),
+            onChanged: (x, y) => widget.onStickChanged(Offset(x, y)),
+            onReleased: widget.onStickRelease,
+            sensitivity: widget.leftStickSensitivity,
+          ),
+        );
+    }
+  }
+
+  static const double _leftRowHeightFactor = 0.24;
+
+  /// Movement owns the left side. Games that need both sticks can add a short
+  /// row of buttons on top of it, never more than [kLeftZoneMax].
+  Widget _buildLeftSide() {
+    final buttons = _shownLeftButtons;
+    if (buttons.isEmpty) return _buildMovement();
+
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: constraints.maxHeight * _leftRowHeightFactor,
+            child: Row(
+              children: [
+                for (var i = 0; i < kLeftZoneMax; i++)
+                  Expanded(
+                    child: i < buttons.length
+                        ? Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: _buildLeftGameButton(buttons[i]),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(child: _buildMovement()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeftGameButton(String btnId) {
+    final btnConfig = getButtonConfig(btnId);
+    final presentation = ControllerBranding.presentationFor(
+      btnConfig.xinput,
+      widget.brandingMode,
+    );
+    return GameButton(
+      label: presentation.shortLabel,
+      labelWidget: ControllerButtonBrand(presentation: presentation, size: 28),
+      onStateChange: (state) =>
+          widget.onButtonStateChanged(btnConfig.xinput, state),
+    );
+  }
+
   Widget _buildRightSideContent() {
     if (widget.panelMode == ControllerPanelMode.edit && widget.isPanelExpanded) {
       final availableButtons = widget.editableButtons
@@ -531,7 +600,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
             child: DragTarget<String>(
               onWillAcceptWithDetails: (details) {
                 return availableButtons.contains(details.data) ||
-                    availableRightStick.contains(details.data);
+                    availableRightStick.contains(details.data) ||
+                    widget.leftButtons.contains(details.data);
               },
               onAcceptWithDetails: (details) {
                 widget.onSetButtonVisibility(details.data, true);
@@ -558,6 +628,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                     buttonSizes: widget.buttonSizes,
                     onButtonSizesChanged: widget.onButtonSizesChanged,
                     rightLayoutMode: widget.rightLayoutMode,
+                    excludedButtons: widget.leftButtons,
                   ),
                 );
               },
@@ -576,6 +647,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
         onRightStickRelease: widget.onRightStickRelease,
         buttonSizes: widget.buttonSizes,
         rightLayoutMode: widget.rightLayoutMode,
+        excludedButtons: widget.leftButtons,
         rightStickSensitivity: widget.rightStickSensitivity,
         swipeAccelerationIntensity: widget.swipeAccelerationIntensity,
         rightStickAntiDeadzone: widget.rightStickAntiDeadzone,
@@ -894,7 +966,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
         .where((key) => widget.visibleButtons[key] != true)
         .toList();
 
-    return _AvailableButtonsPanel(
+    final panel = _AvailableButtonsPanel(
       brandingMode: widget.brandingMode,
       isDragging: _isDragging,
       buttons: availableButtons,
@@ -904,6 +976,29 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
           widget.onSetButtonVisibility(buttonKey, false),
       onDragStarted: () => setState(() => _isDragging = true),
       onDragEnded: () => setState(() => _isDragging = false),
+    );
+    final onLeftButtonsChanged = widget.onLeftButtonsChanged;
+    if (onLeftButtonsChanged == null) return panel;
+
+    // Where the row sits on the controller itself: on top of the left side.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 96,
+          child: _LeftRowSlots(
+            brandingMode: widget.brandingMode,
+            buttons: _shownLeftButtons,
+            tapHapticsEnabled: widget.tapHapticsEnabled,
+            onButtonAdded: (id) =>
+                onLeftButtonsChanged([..._shownLeftButtons, id]),
+            onDragStarted: () => setState(() => _isDragging = true),
+            onDragEnded: () => setState(() => _isDragging = false),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(child: panel),
+      ],
     );
   }
 
@@ -1108,10 +1203,31 @@ class _ControllerDpadState extends State<ControllerDpad> {
   // Otherwise, it falls back to a cardinal direction.
   static const double diagonalConeHalfWidthDegrees = 15.0;
 
+  static const double _dpadWidth = 240.0;
+  static const double _dpadHeight = 258.0;
+  static const double _cornerPadLeft = 24.0;
+  static const double _cornerPadBottom = 8.0;
+
+  /// In the corner layout the D-pad shrinks to fit when it gets less room
+  /// (e.g. under the left row of buttons), never grows.
+  double _cornerScale(Size size) => math
+      .min(
+        1.0,
+        math.min(
+          (size.width - _cornerPadLeft) / _dpadWidth,
+          (size.height - _cornerPadBottom) / _dpadHeight,
+        ),
+      )
+      .clamp(0.1, 1.0);
+
   void _updateDirection(Offset localPosition, Size size) {
+    final scale = _cornerScale(size);
     final center = widget.centered || widget.isMini
         ? Offset(size.width / 2, size.height / 2)
-        : Offset(144.0, size.height - 137.0);
+        : Offset(
+            _cornerPadLeft + _dpadWidth / 2 * scale,
+            size.height - _cornerPadBottom - _dpadHeight / 2 * scale,
+          );
     final delta = localPosition - center;
 
     if (delta.distance < 30) {
@@ -1296,12 +1412,24 @@ class _ControllerDpadState extends State<ControllerDpad> {
       onPointerUp: _handlePointerUp,
       onPointerCancel: _handlePointerCancel,
       child: RepaintBoundary(
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          alignment: Alignment.bottomLeft,
-          padding: const EdgeInsets.only(left: 24.0, bottom: 8.0),
-          child: dpadWidget,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final scale = _cornerScale(constraints.biggest);
+            return Container(
+              width: double.infinity,
+              height: double.infinity,
+              alignment: Alignment.bottomLeft,
+              padding: const EdgeInsets.only(
+                left: _cornerPadLeft,
+                bottom: _cornerPadBottom,
+              ),
+              child: SizedBox(
+                width: _dpadWidth * scale,
+                height: _dpadHeight * scale,
+                child: FittedBox(child: dpadWidget),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -1974,6 +2102,114 @@ class _AvailableButtonsPanel extends StatelessWidget {
   }
 }
 
+
+/// Edit-mode stand-in for the left row: [kLeftZoneMax] slots that take any
+/// button but the sticks. Dragging one out sends it wherever it lands.
+class _LeftRowSlots extends StatelessWidget {
+  const _LeftRowSlots({
+    required this.brandingMode,
+    required this.buttons,
+    required this.tapHapticsEnabled,
+    required this.onButtonAdded,
+    required this.onDragStarted,
+    required this.onDragEnded,
+  });
+
+  final ControllerBrandingMode brandingMode;
+  final List<String> buttons;
+  final bool tapHapticsEnabled;
+  final ValueChanged<String> onButtonAdded;
+  final VoidCallback onDragStarted;
+  final VoidCallback onDragEnded;
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) =>
+          buttons.length < kLeftZoneMax &&
+          !buttons.contains(details.data) &&
+          isLeftZoneEligible(details.data),
+      onAcceptWithDetails: (details) => onButtonAdded(details.data),
+      builder: (context, candidateData, rejectedData) {
+        final isTarget = candidateData.isNotEmpty;
+        final isRejected = rejectedData.isNotEmpty;
+        return Container(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+          decoration: BoxDecoration(
+            color: isTarget
+                ? AppColors.dragTargetGreen.withValues(alpha: 0.3)
+                : AppColors.backgroundColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isRejected ? Colors.red : AppColors.textPrimary,
+              width: AppColors.borderThickness / 2,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.editControls.leftRowTitle,
+                style: const TextStyle(
+                  fontFamily: 'momo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: Row(
+                  children: [
+                    for (var i = 0; i < kLeftZoneMax; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      Expanded(
+                        child: i < buttons.length
+                            ? _buildButton(buttons[i])
+                            : _buildEmptySlot(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildButton(String id) {
+    final presentation = ControllerBranding.presentationFor(id, brandingMode);
+    return DraggableEditButton(
+      btnId: id,
+      label: presentation.shortLabel,
+      labelWidget: ControllerButtonBrand(presentation: presentation, size: 20),
+      onDragStarted: onDragStarted,
+      onDragEnded: onDragEnded,
+      tapHapticsEnabled: tapHapticsEnabled,
+      width: double.infinity,
+      height: double.infinity,
+      baseColor: AppColors.backgroundColor,
+    );
+  }
+
+  Widget _buildEmptySlot() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.textPrimary.withValues(alpha: 0.25),
+          width: AppColors.borderThickness / 2,
+        ),
+      ),
+      child: Icon(
+        Icons.add_rounded,
+        color: AppColors.textPrimary.withValues(alpha: 0.3),
+      ),
+    );
+  }
+}
 
 /// Takes the face button's place while a game runs: opens/closes the
 /// in-game overlay on the PC, like a console's guide button.

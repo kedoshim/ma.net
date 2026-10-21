@@ -474,8 +474,11 @@ class _StartPageWidgetState extends State<StartPageWidget> {
                   right: 24,
                   child: Builder(
                     builder: (context) {
-                      final displayVersion = (_appVersion == '1.0.0' || _appVersion.isEmpty) ? '0.2.0' : _appVersion;
-                      final versionText = context.l10n.startPage.version(displayVersion) + (isDemoMode ? ' Demo' : '');
+                      // The version comes from pubspec.yaml via the exe's
+                      // version resource; no hardcoded fallback, so a stale
+                      // exe shows its real version instead of a plausible one.
+                      if (_appVersion.isEmpty) return const SizedBox.shrink();
+                      final versionText = context.l10n.startPage.version(_appVersion) + (isDemoMode ? ' Demo' : '');
                       return Text(
                         versionText,
                         style: AppTheme.bodyMedium.copyWith(

@@ -38,11 +38,30 @@ LEGACY_BUTTON_IDS = {
 }
 
 
+# The left side of the screen is movement first: at most a short row of
+# buttons on top of it, never the sticks.
+LEFT_ZONE_MAX = 2
+LEFT_ZONE_EXCLUDED = {"RS_BUTTON", "RS_FIXED", "RS_SWIPE"}
+
+
 def _canonical_button_id(value):
     if value is None:
         return None
     upper = str(value).upper()
     return LEGACY_BUTTON_IDS.get(upper, upper)
+
+
+def _normalize_left_buttons(items):
+    result = []
+    for item in items or []:
+        canonical = _canonical_button_id(item)
+        if (
+            canonical in BUTTON_ORDER
+            and canonical not in LEFT_ZONE_EXCLUDED
+            and canonical not in result
+        ):
+            result.append(canonical)
+    return result[:LEFT_ZONE_MAX]
 
 
 def _build_visibility(visible_ids):
@@ -58,7 +77,9 @@ def _preset(
     visible_ids,
     button_order=None,
     right_layout_mode="columns",
+    left_buttons=None,
 ):
+    left = _normalize_left_buttons(left_buttons)
     raw_order = []
     for item in button_order or []:
         canonical = _canonical_button_id(item)
@@ -74,9 +95,10 @@ def _preset(
         "isBuiltIn": category != "user",
         "layout": {
             "movementMode": movement_mode,
-            "visibleButtons": _build_visibility(visible_ids),
+            "visibleButtons": _build_visibility([*visible_ids, *left]),
             "buttonOrder": final_order,
             "rightLayoutMode": right_layout_mode,
+            "leftButtons": left,
         },
     }
 
@@ -216,6 +238,16 @@ GAME_PRESETS = [
         button_order=["X","B","LB","RB","A","Y"],
     ),
     _preset(
+        "game-heave-ho",
+        name="Heave Ho",
+        category="game",
+        movement_mode="floatingJoystick",
+        visible_ids=["RT", "RS_FIXED"],
+        button_order=["RT", "RS_FIXED"],
+        right_layout_mode="rows",
+        left_buttons=["LT"],
+    ),
+    _preset(
         "game-judofuri",
         name="Judofuri",
         category="game",
@@ -322,12 +354,17 @@ class ControllerPresetStore:
         if right_layout_mode not in {"columns", "rows"}:
             right_layout_mode = "columns"
 
+        left_buttons = _normalize_left_buttons(layout.get("leftButtons"))
+        for button_id in left_buttons:
+            base_visibility[button_id] = True
+
         return {
             "movementMode": movement_mode,
             "visibleButtons": base_visibility,
             "buttonOrder": [*raw_order, *remaining],
             "buttonSizes": button_sizes,
             "rightLayoutMode": right_layout_mode,
+            "leftButtons": left_buttons,
         }
 
     def _normalize_custom_preset(self, payload):

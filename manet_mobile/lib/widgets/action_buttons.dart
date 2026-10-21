@@ -27,6 +27,8 @@ class ActionButtons extends StatefulWidget {
   final Map<String, int> buttonSizes;
   final void Function(Map<String, int> sizes)? onButtonSizesChanged;
   final String rightLayoutMode;
+  // Shown elsewhere (the left row): left out of this grid.
+  final List<String> excludedButtons;
   final double rightStickSensitivity;
   final double swipeAccelerationIntensity;
   final double rightStickAntiDeadzone;
@@ -49,6 +51,7 @@ class ActionButtons extends StatefulWidget {
     this.buttonSizes = const {},
     this.onButtonSizesChanged,
     this.rightLayoutMode = 'columns',
+    this.excludedButtons = const [],
     this.rightStickSensitivity = 1.0,
     this.swipeAccelerationIntensity = 0.0,
     this.rightStickAntiDeadzone = 0.10,
@@ -128,7 +131,9 @@ class _ActionButtonsState extends State<ActionButtons> {
 
   List<String> _getVisibleButtons() {
     return _buttonOrder
-        .where((btnId) => widget.visibleButtons[btnId] != false)
+        .where((btnId) =>
+            widget.visibleButtons[btnId] != false &&
+            !widget.excludedButtons.contains(btnId))
         .toList();
   }
 
@@ -308,6 +313,7 @@ class _ActionButtonsState extends State<ActionButtons> {
       child = DragTarget<String>(
         onWillAcceptWithDetails: (details) {
           return widget.visibleButtons[details.data] == true &&
+              !widget.excludedButtons.contains(details.data) &&
               details.data != btnId;
         },
         onAcceptWithDetails: (details) {
@@ -382,6 +388,7 @@ class _ActionButtonsState extends State<ActionButtons> {
       child = DragTarget<String>(
         onWillAcceptWithDetails: (details) {
           return widget.visibleButtons[details.data] == true &&
+              !widget.excludedButtons.contains(details.data) &&
               details.data != btnId;
         },
         onAcceptWithDetails: (details) {

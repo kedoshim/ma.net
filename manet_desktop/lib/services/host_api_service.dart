@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:manet_desktop/models/controller_branding.dart';
+import 'package:manet_desktop/models/controller_left_zone.dart';
 import 'package:manet_desktop/models/player_face.dart';
 import 'package:manet_desktop/models/session_models.dart';
 import 'package:manet_desktop/theme/app_theme.dart';
@@ -260,6 +261,7 @@ class ControllerPresetLayout {
   final List<String> buttonOrder;
   final String rightLayoutMode;
   final Map<String, int> buttonSizes;
+  final List<String> leftButtons;
 
   ControllerPresetLayout({
     required this.movementMode,
@@ -267,6 +269,7 @@ class ControllerPresetLayout {
     required this.buttonOrder,
     required this.rightLayoutMode,
     required this.buttonSizes,
+    this.leftButtons = const [],
   });
 
   factory ControllerPresetLayout.fromJson(Map<String, dynamic> json) {
@@ -292,8 +295,19 @@ class ControllerPresetLayout {
       ),
       rightLayoutMode: json['rightLayoutMode'] as String? ?? 'columns',
       buttonSizes: buttonSizes,
+      leftButtons: normalizeLeftButtons(
+        json['leftButtons'] as List<dynamic>? ?? const [],
+      ),
     );
   }
+
+  /// Buttons on the right side: the visible ones not in the left row.
+  List<String> get rightButtons => buttonOrder
+      .where((id) => visibleButtons[id] == true && !leftButtons.contains(id))
+      .toList();
+
+  List<String> get shownLeftButtons =>
+      leftButtons.where((id) => visibleButtons[id] == true).toList();
 
   Map<String, dynamic> toJson() {
     return {
@@ -302,6 +316,7 @@ class ControllerPresetLayout {
       'buttonOrder': buttonOrder,
       'rightLayoutMode': rightLayoutMode,
       'buttonSizes': buttonSizes,
+      'leftButtons': leftButtons,
     };
   }
 }

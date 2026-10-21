@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import '../models/controller_branding.dart';
+import '../models/controller_left_zone.dart';
 import '../services/host_api_service.dart';
 import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
@@ -54,6 +55,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
   late List<String> _buttonOrder;
   late String _rightLayoutMode;
   late Map<String, int> _buttonSizes;
+  late List<String> _leftButtons;
   bool _saving = false;
   bool _nameInitialized = false;
 
@@ -67,6 +69,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
     _movementMode = preset?.layout.movementMode ?? 'floatingJoystick';
     _rightLayoutMode = preset?.layout.rightLayoutMode ?? 'columns';
     _buttonSizes = Map<String, int>.from(preset?.layout.buttonSizes ?? const <String, int>{});
+    _leftButtons = List<String>.from(preset?.layout.leftButtons ?? const <String>[]);
     _visibleButtons = <String, bool>{
       for (final id in _allButtons)
         id: preset?.layout.visibleButtons[id] ?? _defaultVisible(id),
@@ -206,6 +209,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
       buttonOrder: _buttonOrder,
       rightLayoutMode: _rightLayoutMode,
       buttonSizes: _buttonSizes,
+      leftButtons: _leftButtons,
     );
     try {
       ControllerPreset? createdPreset;
@@ -380,6 +384,7 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                         buttonOrder: _buttonOrder,
                         rightLayoutMode: _rightLayoutMode,
                         buttonSizes: _buttonSizes,
+                        leftButtons: _leftButtons,
                       ),
                       onReorder: (draggedId, targetId) {
                         setState(() {
@@ -422,8 +427,10 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                                   brandingMode,
                                 ),
                                 isSelected: _visibleButtons[id] == true,
-                                onTap: (val) =>
-                                    setState(() => _visibleButtons[id] = val),
+                                onTap: (val) => setState(() {
+                                  _visibleButtons[id] = val;
+                                  if (!val) _leftButtons.remove(id);
+                                }),
                               );
                             }).toList(),
                           ),
@@ -450,6 +457,57 @@ class _LayoutEditorViewState extends State<LayoutEditorView> {
                                 height: 1.4,
                               ),
                             ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            context.l10n.layoutEditor.leftRowTitle,
+                            style: TextStyle(
+                              fontFamily: 'momo',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              color: AppColors.textPrimary.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            context.l10n.layoutEditor.leftRowTip,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: _allButtons
+                                .where((id) => _visibleButtons[id] == true)
+                                .map((id) {
+                              final inRow = _leftButtons.contains(id);
+                              final full = _leftButtons.length >= kLeftZoneMax;
+                              return Opacity(
+                                opacity: inRow || !full ? 1.0 : 0.35,
+                                child: _EditorToggleChip(
+                                  presentation: ControllerBranding.presentationFor(
+                                    id,
+                                    brandingMode,
+                                  ),
+                                  isSelected: inRow,
+                                  onTap: (val) {
+                                    if (val && full) return;
+                                    setState(() {
+                                      if (val) {
+                                        _leftButtons.add(id);
+                                      } else {
+                                        _leftButtons.remove(id);
+                                      }
+                                    });
+                                  },
+                                ),
+                              );
+                            }).toList(),
                           ),
                           const SizedBox(height: 24),
                           Text(
