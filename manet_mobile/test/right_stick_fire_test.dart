@@ -50,16 +50,16 @@ void main() {
 
   tearDown(engine.dispose);
 
-  test('ring fires past 60% and lets go under 50%', () {
+  test('ring fires past 75% and lets go under 65%', () {
     touch(kFireRing);
-    move(30); // 0.4
+    move(45); // 0.6
     expect(rtStates(), isEmpty);
-    move(50); // 0.67
+    move(60); // 0.8
     expect(rtStates(), ['down']);
     expect(firing.value, isTrue);
-    move(40); // 0.53: still inside the hysteresis band
+    move(52); // 0.69: still inside the hysteresis band
     expect(rtStates(), ['down']);
-    move(30); // 0.4
+    move(45); // 0.6
     expect(rtStates(), ['down', 'up']);
     expect(firing.value, isFalse);
     lift();

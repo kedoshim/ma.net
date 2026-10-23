@@ -16,8 +16,8 @@ const String kFireFollowPreset = 'preset';
 /// Fraction of the stick's radius where the fire ring sits: fire starts past
 /// it and stops a little inside it, so a thumb resting on the edge won't
 /// flicker the trigger.
-const double kFireRingPress = 0.6;
-const double kFireRingRelease = 0.5;
+const double kFireRingPress = 0.75;
+const double kFireRingRelease = 0.65;
 
 /// How far an aim button's touch must travel before it starts aiming; less
 /// than that is a plain press and leaves the right stick alone.
@@ -293,7 +293,11 @@ class _FloatingRightStickState extends State<FloatingRightStick>
           behavior: HitTestBehavior.opaque,
           onPointerDown: _handlePointerDown,
           child: RepaintBoundary(
+            // Fills the cell even while held: the idle preview is gone then,
+            // and in a loose-width column the Stack used to shrink to nothing
+            // and re-centre, drawing the stick half a cell right of the touch.
             child: Stack(
+              fit: StackFit.expand,
               clipBehavior: Clip.none,
               children: [
                 // Activation Cell (idle button state)

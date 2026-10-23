@@ -4,6 +4,8 @@ import 'dart:js_util' as js_util;
 
 import 'package:flutter/scheduler.dart';
 
+import 'render_watchdog_check.dart';
+
 // When a tab goes to the background the browser may drop its WebGL context.
 // Flutter then makes a new one, but only on its next frame, and nothing asks
 // for a frame when the tab comes back: the pad stays blank (touches still
@@ -16,14 +18,20 @@ const _reloadKey = 'manet_render_reload_at';
 const _minReloadGap = Duration(seconds: 30);
 
 bool _started = false;
-bool _lostLastCheck = false;
+
+// Walks the whole page on every check (see RenderWatchdogCheck for why a
+// cached list of canvases broke this).
+final _watch = RenderWatchdogCheck<html.CanvasElement>(
+  findCanvases: () => _flutterCanvases(html.document.querySelectorAll('*')),
+  isLost: _contextLost,
+);
 
 void startRenderWatchdog() {
   if (_started) return;
   _started = true;
   html.document.onVisibilityChange.listen((_) {
     if (html.document.hidden == true) {
-      _lostLastCheck = false;
+      _watch.tabHidden();
       return;
     }
     _repaintSoon();
@@ -43,45 +51,26 @@ void _repaintSoon() {
 
 void _check() {
   if (html.document.hidden == true) return;
-  if (!_anyCanvasLost()) {
-    _lostLastCheck = false;
-    return;
+  switch (_watch.check()) {
+    case WatchdogAction.none:
+      break;
+    case WatchdogAction.repaint:
+      _repaint();
+    case WatchdogAction.reload:
+      _reload();
   }
-  if (!_lostLastCheck) {
-    // Give Flutter one frame to replace it.
-    _lostLastCheck = true;
-    _repaint();
-    return;
-  }
-  _reload();
 }
 
-// Walking every element and shadow root is too slow to repeat every 2s while
-// both sticks are held (it shows as a hitch), so the canvases found are kept
-// and the walk only runs again once one of them leaves the page.
-List<html.CanvasElement> _canvases = const [];
-
-List<html.CanvasElement> _currentCanvases() {
-  if (_canvases.isEmpty || _canvases.any((c) => c.isConnected != true)) {
-    _canvases =
-        _flutterCanvases(html.document.querySelectorAll('*')).toList();
+bool _contextLost(html.CanvasElement canvas) {
+  // Only looks up the canvas's existing context: Flutter's canvases always
+  // have one, and asking for another type returns null.
+  final context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+  if (context == null) return false;
+  try {
+    return js_util.callMethod<bool>(context, 'isContextLost', const []) == true;
+  } catch (_) {
+    return false;
   }
-  return _canvases;
-}
-
-bool _anyCanvasLost() {
-  for (final canvas in _currentCanvases()) {
-    // Only looks up the canvas's existing context: Flutter's canvases
-    // always have one, and asking for another type returns null.
-    final context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
-    if (context == null) continue;
-    try {
-      if (js_util.callMethod<bool>(context, 'isContextLost', const []) == true) {
-        return true;
-      }
-    } catch (_) {}
-  }
-  return false;
 }
 
 /// Flutter's <canvas> elements, which live in shadow roots.
