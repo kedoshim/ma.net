@@ -164,7 +164,9 @@ class SessionController extends ChangeNotifier with WindowListener {
         debugPrint('[SESSION] could not get the game window: $e');
       }
     }
-    await windowManager.minimize();
+    if (!focusGame || !minimizeWithoutActivating()) {
+      await windowManager.minimize();
+    }
     if (focusGame && !focused) {
       try {
         await _api.focusGame();
