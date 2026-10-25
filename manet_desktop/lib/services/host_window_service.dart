@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../utils/app_preferences.dart';
 import 'host_api_service.dart';
 
 class HostWindowService {
@@ -38,7 +39,7 @@ class HostWindowService {
         await windowManager.show();
         await windowManager.restore();
         if (_restoreToFullScreen) {
-          await windowManager.setFullScreen(true);
+          await AppPreferences.enterFullScreen();
           debugPrint('Restored to full screen');
         }
         await windowManager.focus();

@@ -75,7 +75,11 @@ class AppPreferences {
   static Future<void> setFullScreen(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_fullScreenKey, value);
-    await windowManager.setFullScreen(value);
+    if (value) {
+      await enterFullScreen();
+    } else {
+      await windowManager.setFullScreen(false);
+    }
   }
 
   /// How long each tournament duel lasts.
@@ -235,6 +239,22 @@ class AppPreferences {
   /// Re-applies the full screen preference (e.g. after coming back from a
   /// game, since minimizing drops full screen).
   static Future<void> applyFullScreen() async {
-    if (await fullScreen()) await windowManager.setFullScreen(true);
+    if (await fullScreen()) await enterFullScreen();
+  }
+
+  /// Goes full screen only once the window is really on screen.
+  ///
+  /// window_manager saves the window style when entering full screen and
+  /// writes it back without the frame. show() is asynchronous on Windows, so
+  /// right after it the saved style can still lack "visible": the window then
+  /// stays drawn over the screen but hidden to Windows (frozen picture on
+  /// black, no clicks, missing from Alt+Tab). About 4 in 10 launches did this.
+  static Future<void> enterFullScreen() async {
+    for (var i = 0; i < 100 && !await windowManager.isVisible(); i++) {
+      await Future.delayed(const Duration(milliseconds: 20));
+    }
+    await windowManager.setFullScreen(true);
+    // Never leave a hidden window behind, even if it took too long to show.
+    if (!await windowManager.isVisible()) await windowManager.show();
   }
 }
