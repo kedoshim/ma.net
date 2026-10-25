@@ -125,7 +125,22 @@ def normalize_game(data: dict, game_id: str | None = None) -> dict:
         "lastPlayedAt": last_played_at,
         # Image URLs shown on a player's phone with the game details.
         "screenshots": screenshots[:8],
+        # Games played in the phone's browser (Jackbox): while the game runs
+        # the pad shows a button that opens this page. Empty: no button.
+        # Set by the host in the game editor (jackbox.tv is suggested there).
+        "phoneUrl": _web_url(data.get("phoneUrl")),
     }
+
+
+def _web_url(value) -> str:
+    url = str(value or "").strip()
+    return url if url.startswith(("http://", "https://")) else ""
+
+
+def phone_game_url(game: dict | None) -> str | None:
+    """The page players open on their phones for this game, if the host
+    turned the site button on for it."""
+    return (game or {}).get("phoneUrl") or None
 
 
 def resolve_settings(game: dict, players: int) -> dict:

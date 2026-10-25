@@ -17,6 +17,8 @@ class ServerOptionsPopup extends StatefulWidget {
   final ValueChanged<bool>? onConsoleModeChanged;
   final ValueChanged<String>? onLobbyStartRuleChanged;
   final ValueChanged<String>? onMousePasswordChanged;
+  /// Console mode has no layout picker in the lobby; this opens the editor.
+  final VoidCallback? onOpenLayouts;
   /// Join rule for the local network; the online one lives in "Play online".
 
   const ServerOptionsPopup({
@@ -31,6 +33,7 @@ class ServerOptionsPopup extends StatefulWidget {
     this.onConsoleModeChanged,
     this.onLobbyStartRuleChanged,
     this.onMousePasswordChanged,
+    this.onOpenLayouts,
   });
 
   @override
@@ -360,6 +363,63 @@ class _ServerOptionsPopupState extends State<ServerOptionsPopup> {
                     });
                     widget.onConsoleModeChanged!(value);
                   },
+                ),
+              ],
+            ),
+          ],
+          if (widget.onOpenLayouts != null && _consoleMode) ...[
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.l10n.settings.layoutsTitle,
+                        style: const TextStyle(
+                          fontFamily: 'momo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        context.l10n.settings.layoutsHint,
+                        style: TextStyle(
+                          fontFamily: 'momo',
+                          fontSize: 12,
+                          color: AppColors.textPrimary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                JuicyButton(
+                  onPressed: widget.onOpenLayouts,
+                  backgroundColor: AppColors.highlightColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.gamepad_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        context.l10n.settings.layoutsOpen,
+                        style: const TextStyle(
+                          fontFamily: 'momo',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

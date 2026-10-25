@@ -22,7 +22,7 @@ from enum import Enum
 import psutil
 
 from src.core.slot_handler import reset_slot_gamepad
-from src.core.game_library import resolve_settings
+from src.core.game_library import phone_game_url, resolve_settings
 from src.core import lineup as lineup_rules
 from src.core.lineup import Lineup
 from src.core.tournament import (
@@ -1467,6 +1467,9 @@ class SessionState:
             "lobbyCountdownEndsAt": self.lobby_countdown_ends_at,
             "lobbyRequest": self._lobby_request_payload(device_id),
             "consoleMode": self.console,
+            # While a phone game runs (Jackbox) the pad offers its page.
+            "phoneGameUrl": phone_game_url(getattr(self.running, "game", None))
+            if self.phase == SessionPhase.IN_GAME else None,
             "checkedIn": device_id in self.ready,
             "inPlayZone": device_id in self.play_zone,
             "benched": bool(device_id) and device_id in self.present_ids()

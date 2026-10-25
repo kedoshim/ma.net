@@ -18,6 +18,7 @@ class OptionsPopup extends StatefulWidget {
   final ValueChanged<ColorTheme> onThemeChanged;
   final VoidCallback? onDisconnectRequested;
   final VoidCallback? onRumbleTest;
+  final VoidCallback? onOpenPhoneGame;
 
   const OptionsPopup({
     super.key,
@@ -27,6 +28,7 @@ class OptionsPopup extends StatefulWidget {
     required this.onThemeChanged,
     this.onDisconnectRequested,
     this.onRumbleTest,
+    this.onOpenPhoneGame,
   });
 
   @override
@@ -296,6 +298,17 @@ class _OptionsPopupState extends State<OptionsPopup>
                                       widget.onEnterMouseMode();
                                     },
                                   ),
+                                  if (widget.onOpenPhoneGame != null) ...[
+                                    const SizedBox(width: 12),
+                                    _OptionButton(
+                                      icon: Icons.phone_android_rounded,
+                                      label: context.l10n.phoneGame.openOption,
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        widget.onOpenPhoneGame!();
+                                      },
+                                    ),
+                                  ],
                                   if (!kIsWeb) const SizedBox(width: 12),
                                   if (!kIsWeb)
                                     _OptionButton(

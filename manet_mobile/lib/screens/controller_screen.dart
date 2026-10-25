@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../models/controller_layout_preset.dart';
 import '../models/controller_left_zone.dart';
 import '../models/controller_branding.dart';
+import '../models/phone_game.dart';
 import '../models/player_face.dart';
 import '../services/controller_connection_manager.dart';
 import '../services/haptics_manager.dart';
@@ -17,6 +18,8 @@ import '../services/preferences_service.dart';
 import '../services/websocket_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/options_popup.dart';
+import '../widgets/phone_game/phone_game_controls.dart';
+import '../widgets/phone_game/phone_game_frame.dart';
 import '../widgets/player_face_indicator.dart';
 import '../widgets/right_stick_controls.dart';
 import 'controller_screen/controller_default_view.dart';
@@ -97,6 +100,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   Map<String, int> _buttonSizes = const {};
   List<String> _leftButtons = const [];
   List<String> _aimButtons = const [];
+  List<String> _releaseAimButtons = const [];
 
   WebSocketService? ws;
   final GlobalKey<NavigatorState> _controllerNavigatorKey =
@@ -166,6 +170,16 @@ class _ControllerScreenState extends State<ControllerScreen>
   // (opens the in-game overlay on the PC).
   bool _gameRunning = false;
   bool _overlayOpen = false;
+  // A game played in the phone's browser (Jackbox) runs in a frame over the
+  // pad instead of replacing the page, so the phone never drops its seat.
+  // The pad stays mounted under it and comes back from the Home menu.
+  String? _phoneGameUrl;
+  // Sent by the server while a phone game (Jackbox) runs: the pad then
+  // offers it with a big button.
+  String? _runningPhoneGameUrl;
+  bool _phoneGameFromServer = false;
+  bool _phoneGamePadShown = false;
+  bool _phoneGameMenuOpen = false;
   // The server tells each phone when its input drives MaNet's menus; the
   // phone then shows menu controls (Select / Back / Avatar) instead of the
   // game layout.
@@ -251,6 +265,13 @@ class _ControllerScreenState extends State<ControllerScreen>
     _discoveryService = NetworkDiscoveryService();
 
     WidgetsBinding.instance.addObserver(this);
+    // Prototype entry: `?phonegame=jackbox.tv` opens a phone game right away.
+    final phoneGame = Uri.base.queryParameters['phonegame'];
+    if (kIsWeb && isPhoneGameSupported && phoneGame != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openPhoneGame(phoneGame);
+      });
+    }
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeRight,
       DeviceOrientation.landscapeLeft,
@@ -270,6 +291,7 @@ class _ControllerScreenState extends State<ControllerScreen>
 
   @override
   void dispose() {
+    stopWatchingPhoneGameBack();
     _backgroundReconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _pingTimer?.cancel();
@@ -1025,6 +1047,8 @@ class _ControllerScreenState extends State<ControllerScreen>
             _me = data['me'] as String?;
             _ready = data['ready'] == true;
             _consoleMode = data['consoleMode'] == true;
+            _runningPhoneGameUrl =
+                normalizePhoneGameUrl(data['phoneGameUrl'] as String?);
             _checkedIn = data['checkedIn'] == true;
             _inPlayZone = data['inPlayZone'] == true;
             _benched = data['benched'] == true;
@@ -1039,6 +1063,12 @@ class _ControllerScreenState extends State<ControllerScreen>
             if (_readingId == null) _details = null;
           });
           _syncLobbyDialog();
+          // The game closed on the PC: its page goes with it.
+          if (_phoneGameFromServer &&
+              _phoneGameUrl != null &&
+              _runningPhoneGameUrl == null) {
+            _leavePhoneGame();
+          }
           break;
         case 'game_details':
           final game = data['game'] as Map<String, dynamic>?;
@@ -1190,6 +1220,7 @@ class _ControllerScreenState extends State<ControllerScreen>
       _buttonSizes = Map<String, int>.from(preset.buttonSizes);
       _leftButtons = preset.leftButtons;
       _aimButtons = preset.aimButtons;
+      _releaseAimButtons = preset.releaseAimButtons;
       for (final id in _leftButtons) {
         visibleButtons[id] = true;
       }
@@ -1205,6 +1236,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setButtonSizes(_buttonSizes);
     PreferencesService.instance.setLeftButtons(_leftButtons);
     PreferencesService.instance.setAimButtons(_aimButtons);
+    PreferencesService.instance.setReleaseAimButtons(_releaseAimButtons);
   }
 
   void _clearPlayerSlot() {
@@ -1841,6 +1873,44 @@ class _ControllerScreenState extends State<ControllerScreen>
     }
   }
 
+  void _openPhoneGame(String url, {bool fromServer = false}) {
+    final normalized = normalizePhoneGameUrl(url);
+    if (normalized == null) return;
+    setState(() {
+      _phoneGameUrl = normalized;
+      _phoneGameFromServer = fromServer;
+      _phoneGamePadShown = false;
+      _phoneGameMenuOpen = false;
+    });
+    watchPhoneGameBack(_phoneGameBack);
+  }
+
+  /// Back over a phone game closes the menu, takes the pad away, or opens
+  /// the menu: it never leaves the game.
+  void _phoneGameBack() {
+    if (!mounted || _phoneGameUrl == null) return;
+    _setPhoneGameView(
+      padShown: false,
+      menuOpen: !_phoneGamePadShown && !_phoneGameMenuOpen,
+    );
+  }
+
+  void _setPhoneGameView({required bool padShown, required bool menuOpen}) {
+    setState(() {
+      _phoneGamePadShown = padShown;
+      _phoneGameMenuOpen = menuOpen;
+    });
+  }
+
+  void _leavePhoneGame() {
+    stopWatchingPhoneGameBack();
+    setState(() {
+      _phoneGameUrl = null;
+      _phoneGamePadShown = false;
+      _phoneGameMenuOpen = false;
+    });
+  }
+
   void _showOptionsDialog() {
     final dialogContext = _controllerNavigatorKey.currentContext ?? context;
 
@@ -1857,6 +1927,9 @@ class _ControllerScreenState extends State<ControllerScreen>
           onThemeChanged: _onThemeChanged,
           onDisconnectRequested: _resetConnection,
           onRumbleTest: _onRumbleTest,
+          onOpenPhoneGame: isPhoneGameSupported
+              ? () => _openPhoneGame(jackboxUrl)
+              : null,
         );
       },
     ).then((_) {
@@ -1899,8 +1972,20 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _setAimButtons(List<String> buttons) {
-    setState(() => _aimButtons = normalizeAimButtons(buttons));
+    setState(() {
+      _aimButtons = normalizeAimButtons(buttons);
+      _releaseAimButtons =
+          normalizeReleaseAimButtons(_releaseAimButtons, _aimButtons);
+    });
     PreferencesService.instance.setAimButtons(_aimButtons);
+    PreferencesService.instance.setReleaseAimButtons(_releaseAimButtons);
+  }
+
+  void _setReleaseAimButtons(List<String> buttons) {
+    setState(() {
+      _releaseAimButtons = normalizeReleaseAimButtons(buttons, _aimButtons);
+    });
+    PreferencesService.instance.setReleaseAimButtons(_releaseAimButtons);
   }
 
   void _setButtonOrder(List<String> order) {
@@ -1945,6 +2030,10 @@ class _ControllerScreenState extends State<ControllerScreen>
       _rightLayoutMode = await prefs.getRightLayoutMode();
       _leftButtons = normalizeLeftButtons(await prefs.getLeftButtons());
       _aimButtons = normalizeAimButtons(await prefs.getAimButtons());
+      _releaseAimButtons = normalizeReleaseAimButtons(
+        await prefs.getReleaseAimButtons(),
+        _aimButtons,
+      );
       tapHapticsEnabled = await prefs.getTapHapticsEnabled();
 
       leftStickSensitivity = await prefs.getLeftStickSensitivity();
@@ -2077,6 +2166,8 @@ class _ControllerScreenState extends State<ControllerScreen>
           onLeftButtonsChanged: _setLeftButtons,
           aimButtons: _aimButtons,
           onAimButtonsChanged: _setAimButtons,
+          releaseAimButtons: _releaseAimButtons,
+          onReleaseAimButtonsChanged: _setReleaseAimButtons,
           onButtonOrderChanged: _setButtonOrder,
           onButtonSizesChanged: _setButtonSizes,
           onRightLayoutModeChanged: (mode) {
@@ -2192,6 +2283,11 @@ class _ControllerScreenState extends State<ControllerScreen>
           onOpenFaceEditor: _gameRunning ? _pressHome : _enterFaceMode,
           showHomeButton: _gameRunning,
           overlayOpen: _overlayOpen,
+          onJoinPhoneGame: isPhoneGameSupported &&
+                  _gameRunning &&
+                  _runningPhoneGameUrl != null
+              ? () => _openPhoneGame(_runningPhoneGameUrl!, fromServer: true)
+              : null,
           onOpenEditControls: _enterEditMode,
           onRetryConnection: _retryConnection,
           onOpenQrScanner: kIsWeb ? null : _openQRScanner,
@@ -2242,6 +2338,8 @@ class _ControllerScreenState extends State<ControllerScreen>
           onLeftButtonsChanged: _setLeftButtons,
           aimButtons: _aimButtons,
           onAimButtonsChanged: _setAimButtons,
+          releaseAimButtons: _releaseAimButtons,
+          onReleaseAimButtonsChanged: _setReleaseAimButtons,
           onButtonOrderChanged: _setButtonOrder,
           onButtonSizesChanged: _setButtonSizes,
           onRightLayoutModeChanged: (mode) {
@@ -2375,11 +2473,16 @@ class _ControllerScreenState extends State<ControllerScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
+    final phoneGameOpen = _phoneGameUrl != null;
     return PopScope(
-      canPop: _activeMode == ControllerScreenMode.gameplay && !_isPanelExpanded,
+      canPop: _activeMode == ControllerScreenMode.gameplay &&
+          !_isPanelExpanded &&
+          !phoneGameOpen,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (_isPanelExpanded) {
+        if (phoneGameOpen && _activeMode == ControllerScreenMode.gameplay) {
+          _phoneGameBack();
+        } else if (_isPanelExpanded) {
           setState(() {
             _isPanelExpanded = false;
           });
@@ -2406,7 +2509,48 @@ class _ControllerScreenState extends State<ControllerScreen>
           ),
           child: Stack(
             children: [
-              _buildResponsiveControllerFrame(),
+              // Keyed so opening the game (a child before the pad) keeps
+              // the pad's state instead of rebuilding it.
+              if (phoneGameOpen)
+                Positioned.fill(
+                  key: const ValueKey('phone-game-frame'),
+                  child: buildPhoneGameFrame(_phoneGameUrl!),
+                ),
+              // Hidden, not Offstage: the pad is what gives this Stack its
+              // size, and an Offstage pad shrank it (and the game) to nothing.
+              Visibility(
+                key: const ValueKey('controller-frame'),
+                visible: !phoneGameOpen || _phoneGamePadShown,
+                maintainState: true,
+                maintainAnimation: true,
+                maintainSize: true,
+                // Over a game the screen's own background is under the
+                // iframe, so the pad brings one.
+                child: phoneGameOpen
+                    ? phoneGameTouchShield(
+                        ColoredBox(
+                          color: AppColors.screenBackground,
+                          child: _buildResponsiveControllerFrame(),
+                        ),
+                      )
+                    : _buildResponsiveControllerFrame(),
+              ),
+              if (phoneGameOpen)
+                Positioned.fill(
+                  key: const ValueKey('phone-game-controls'),
+                  child: PhoneGameControls(
+                    playerFace: _playerFace,
+                    padShown: _phoneGamePadShown,
+                    menuOpen: _phoneGameMenuOpen,
+                    onMenuOpenChanged: (open) =>
+                        _setPhoneGameView(padShown: false, menuOpen: open),
+                    onShowPad: () =>
+                        _setPhoneGameView(padShown: true, menuOpen: false),
+                    onBackToGame: () =>
+                        _setPhoneGameView(padShown: false, menuOpen: false),
+                    onLeave: _leavePhoneGame,
+                  ),
+                ),
               if (_accessStage != null && _accessStage != AccessGateStage.name)
                 AccessGateView(
                   stage: _accessStage!,

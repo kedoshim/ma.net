@@ -170,155 +170,6 @@ class StructuredLayoutPreview extends StatelessWidget {
   }
 }
 
-class ReorderLayoutPreview extends StatelessWidget {
-  const ReorderLayoutPreview({
-    super.key,
-    required this.brandingMode,
-    required this.layout,
-    this.onReorder,
-  });
-
-  final ControllerBrandingMode brandingMode;
-  final ControllerPresetLayout layout;
-  final void Function(String, String)? onReorder;
-
-  List<List<String>> _splitIntoColumns(List<String> buttons) {
-    final left = <String>[];
-    final right = <String>[];
-
-    for (final button in buttons) {
-      if (left.length <= right.length) {
-        left.add(button);
-      } else {
-        right.add(button);
-      }
-    }
-
-    if (left.length > right.length) {
-      return [right, left];
-    }
-
-    return [left, right];
-  }
-
-  List<List<String>> _splitIntoRows(List<String> buttons) {
-    final top = <String>[];
-    final bottom = <String>[];
-
-    for (final button in buttons) {
-      if (top.length <= bottom.length) {
-        top.add(button);
-      } else {
-        bottom.add(button);
-      }
-    }
-
-    if (top.length < bottom.length) {
-      return [bottom, top];
-    }
-
-    return [top, bottom];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final Color surface = AppColors.backgroundColor;
-
-    final visible = layout.rightButtons;
-
-    final bool isRows = layout.rightLayoutMode == 'rows';
-    final groups = isRows ? _splitIntoRows(visible) : _splitIntoColumns(visible);
-
-    return Center(
-      child: AspectRatio(
-        aspectRatio: 2.2 / 1.0,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: AppColors.textPrimary, width: 5),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                flex: 3,
-                child: PreviewLeftSide(
-                  brandingMode: brandingMode,
-                  buttons: layout.shownLeftButtons,
-                  movement: (layout.movementMode == 'dpad'
-                          ? const PreviewDpad()
-                          : PreviewStick(
-                              floating:
-                                  layout.movementMode == 'floatingJoystick',
-                            ))
-                      .scale(1.15),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: Center(
-                  child: Text(
-                    'ma•net',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'momo',
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: isRows
-                    ? Column(
-                        children: [
-                          PreviewColumn(
-                            brandingMode: brandingMode,
-                            buttons: groups[0],
-                            buttonSizes: layout.buttonSizes,
-                            onReorder: onReorder,
-                            isHorizontal: true,
-                          ),
-                          const SizedBox(height: 6),
-                          PreviewColumn(
-                            brandingMode: brandingMode,
-                            buttons: groups[1],
-                            buttonSizes: layout.buttonSizes,
-                            onReorder: onReorder,
-                            isHorizontal: true,
-                          ),
-                        ],
-                      ).scale(1.15)
-                    : Row(
-                        children: [
-                          PreviewColumn(
-                            brandingMode: brandingMode,
-                            buttons: groups[0],
-                            buttonSizes: layout.buttonSizes,
-                            onReorder: onReorder,
-                          ),
-                          const SizedBox(width: 6),
-                          PreviewColumn(
-                            brandingMode: brandingMode,
-                            buttons: groups[1],
-                            buttonSizes: layout.buttonSizes,
-                            onReorder: onReorder,
-                          ),
-                        ],
-                      ).scale(1.15),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Movement, with the optional row of buttons on top (see controller_left_zone).
 class PreviewLeftSide extends StatelessWidget {
   const PreviewLeftSide({
@@ -447,13 +298,11 @@ class PreviewColumn extends StatelessWidget {
     required this.brandingMode,
     required this.buttons,
     this.buttonSizes = const {},
-    this.onReorder,
     this.isHorizontal = false,
   });
   final ControllerBrandingMode brandingMode;
   final List<String> buttons;
   final Map<String, int> buttonSizes;
-  final void Function(String, String)? onReorder;
   final bool isHorizontal;
 
   @override
@@ -495,27 +344,7 @@ class PreviewColumn extends StatelessWidget {
       }
 
       final content = Padding(padding: const EdgeInsets.all(2), child: box);
-      if (onReorder == null) return Expanded(flex: flex, child: content);
-
-      return Expanded(
-        flex: flex,
-        child: DragTarget<String>(
-          onWillAcceptWithDetails: (details) => details.data != buttonId,
-          onAcceptWithDetails: (details) =>
-              onReorder!(details.data, buttonId),
-          builder: (context, candidateData, rejectedData) {
-            return Draggable<String>(
-              data: buttonId,
-              feedback: Material(
-                color: Colors.transparent,
-                child: SizedBox(width: 60, height: 30, child: box),
-              ),
-              childWhenDragging: Opacity(opacity: 0.3, child: content),
-              child: content,
-            );
-          },
-        ),
-      );
+      return Expanded(flex: flex, child: content);
     }).toList();
 
     return Expanded(

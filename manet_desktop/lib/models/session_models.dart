@@ -421,6 +421,9 @@ class GameEntry {
   final double lastPlayedAt;
   /// Image URLs shown on a player's phone with the details.
   final List<String> screenshots;
+  /// Games played in the phone's browser (Jackbox): while the game runs the
+  /// pad shows a button that opens this page. Empty: no button.
+  final String phoneUrl;
 
   const GameEntry({
     this.id = '',
@@ -442,6 +445,7 @@ class GameEntry {
     this.addedAt = 0,
     this.lastPlayedAt = 0,
     this.screenshots = const [],
+    this.phoneUrl = '',
   });
 
   /// Console mode: games with fewer seats than players fit too, a lineup
@@ -480,6 +484,7 @@ class GameEntry {
       for (final url in json['screenshots'] as List<dynamic>? ?? const [])
         url.toString(),
     ],
+    phoneUrl: json['phoneUrl'] as String? ?? '',
   );
 
   Map<String, dynamic> toJson() => {
@@ -501,6 +506,7 @@ class GameEntry {
     if (addedAt > 0) 'addedAt': addedAt,
     if (lastPlayedAt > 0) 'lastPlayedAt': lastPlayedAt,
     'screenshots': screenshots,
+    'phoneUrl': phoneUrl,
   };
 }
 

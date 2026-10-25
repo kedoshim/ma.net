@@ -267,6 +267,8 @@ class ControllerPresetLayout {
   final String rightStickFireButton;
   /// Right-side buttons that also aim with the right stick when dragged.
   final List<String> aimButtons;
+  /// Aim buttons that press only when the finger lifts.
+  final List<String> releaseAimButtons;
 
   ControllerPresetLayout({
     required this.movementMode,
@@ -278,6 +280,7 @@ class ControllerPresetLayout {
     this.rightStickFire = 'off',
     this.rightStickFireButton = 'RT',
     this.aimButtons = const [],
+    this.releaseAimButtons = const [],
   });
 
   factory ControllerPresetLayout.fromJson(Map<String, dynamic> json) {
@@ -295,6 +298,10 @@ class ControllerPresetLayout {
       }
     });
 
+    final aimButtons = normalizeAimButtons(
+      json['aimButtons'] as List<dynamic>? ?? const [],
+    );
+
     return ControllerPresetLayout(
       movementMode: json['movementMode'] as String? ?? 'floatingJoystick',
       visibleButtons: ControllerBranding.normalizeVisibility(rawVisibility),
@@ -308,8 +315,10 @@ class ControllerPresetLayout {
       ),
       rightStickFire: json['rightStickFire'] as String? ?? 'off',
       rightStickFireButton: json['rightStickFireButton'] as String? ?? 'RT',
-      aimButtons: normalizeAimButtons(
-        json['aimButtons'] as List<dynamic>? ?? const [],
+      aimButtons: aimButtons,
+      releaseAimButtons: normalizeReleaseAimButtons(
+        json['releaseAimButtons'] as List<dynamic>? ?? const [],
+        aimButtons,
       ),
     );
   }
@@ -333,6 +342,7 @@ class ControllerPresetLayout {
       'rightStickFire': rightStickFire,
       'rightStickFireButton': rightStickFireButton,
       'aimButtons': aimButtons,
+      'releaseAimButtons': releaseAimButtons,
     };
   }
 }

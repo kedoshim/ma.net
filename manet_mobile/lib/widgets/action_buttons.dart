@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -38,6 +39,8 @@ class ActionButtons extends StatefulWidget {
   final String rightStickFireButton;
   /// Buttons that also aim with the right stick when dragged.
   final List<String> aimButtons;
+  /// Aim buttons that press only when the finger lifts.
+  final List<String> releaseAimButtons;
 
   const ActionButtons({
     super.key,
@@ -64,6 +67,7 @@ class ActionButtons extends StatefulWidget {
     this.rightStickFire = kFireOff,
     this.rightStickFireButton = 'RT',
     this.aimButtons = const [],
+    this.releaseAimButtons = const [],
   });
 
   @override
@@ -304,6 +308,7 @@ class _ActionButtonsState extends State<ActionButtons> {
           antiDeadzone: widget.rightStickAntiDeadzone,
           responseCurve: widget.rightStickResponseCurve,
         ),
+        firesOnRelease: widget.releaseAimButtons.contains(btnId),
       );
     }
 
@@ -537,8 +542,11 @@ ButtonConfig getButtonConfig(String btnId) {
 }
 
 /// A button that is also the right stick: a tap is just the button; once the
-/// finger drags past [kAimDragSlop] the button stays held and the drag aims,
-/// with a floating stick appearing where the touch started.
+/// finger drags past [kAimDragSlop] the drag aims, with a floating stick
+/// appearing where the touch started. Normally the button is held from the
+/// touch on; with [firesOnRelease] nothing is pressed until the finger lifts,
+/// and then the button is tapped with the aim still held (aim, then let go to
+/// shoot).
 class AimButton extends StatefulWidget {
   final String label;
   final Widget? labelWidget;
@@ -546,6 +554,7 @@ class AimButton extends StatefulWidget {
   final ValueChanged<bool>? onPressedChanged;
   final bool tapHapticsEnabled;
   final RightStickConfig stickConfig;
+  final bool firesOnRelease;
 
   const AimButton({
     super.key,
@@ -555,6 +564,7 @@ class AimButton extends StatefulWidget {
     this.onPressedChanged,
     this.tapHapticsEnabled = false,
     required this.stickConfig,
+    this.firesOnRelease = false,
   });
 
   @override
@@ -564,6 +574,10 @@ class AimButton extends StatefulWidget {
 class _AimButtonState extends State<AimButton> {
   static const double _baseSize = 150.0;
   static const double _knobSize = 50.0;
+  // Fire on release: how long the button is tapped, and how long the aim
+  // stays held after the lift so the game reads the shot's direction.
+  static const Duration _releaseTap = Duration(milliseconds: 60);
+  static const Duration _aimHoldAfterLift = Duration(milliseconds: 100);
 
   final ValueNotifier<Offset> _visualOffset = ValueNotifier(Offset.zero);
   final ValueNotifier<bool> _active = ValueNotifier(false);
@@ -573,9 +587,14 @@ class _AimButtonState extends State<AimButton> {
   int? _pointer;
   Offset _start = Offset.zero;
   bool _aiming = false;
+  Timer? _tapUpTimer;
+  Timer? _aimReleaseTimer;
 
   @override
   void dispose() {
+    if (_tapUpTimer?.isActive ?? false) widget.onStateChange('up');
+    _tapUpTimer?.cancel();
+    _aimReleaseTimer?.cancel();
     GamepadInputEngine.instance.releaseRightIfMatched(identityHashCode(this));
     _visualOffset.dispose();
     _active.dispose();
@@ -622,8 +641,26 @@ class _AimButtonState extends State<AimButton> {
 
   void _onEnd(PointerEvent event) {
     if (event.pointer != _pointer) return;
+    if (widget.firesOnRelease && event is PointerUpEvent) _fireOnLift();
     _pointer = null;
     _aiming = false;
+  }
+
+  /// Runs before the engine sees this "up", so the stick can be kept where
+  /// it aimed while the button is tapped.
+  void _fireOnLift() {
+    final id = identityHashCode(this);
+    if (_aiming) {
+      GamepadInputEngine.instance.keepRightAfterLift(id);
+      _aimReleaseTimer?.cancel();
+      _aimReleaseTimer = Timer(
+        _aimHoldAfterLift,
+        () => GamepadInputEngine.instance.releaseRightIfMatched(id),
+      );
+    }
+    _tapUpTimer?.cancel();
+    widget.onStateChange('down');
+    _tapUpTimer = Timer(_releaseTap, () => widget.onStateChange('up'));
   }
 
   Widget _buildStickOverlay() {
@@ -709,7 +746,9 @@ class _AimButtonState extends State<AimButton> {
           GameButton(
             label: widget.label,
             labelWidget: widget.labelWidget,
-            onStateChange: widget.onStateChange,
+            // Fire on release presses on lift (see _fireOnLift); the button
+            // still looks pressed while held.
+            onStateChange: widget.firesOnRelease ? (_) {} : widget.onStateChange,
             onPressedChanged: widget.onPressedChanged,
             tapHapticsEnabled: widget.tapHapticsEnabled,
             keepPressedWhenDragged: true,
@@ -720,7 +759,9 @@ class _AimButtonState extends State<AimButton> {
             right: 6,
             child: IgnorePointer(
               child: Icon(
-                Icons.my_location_rounded,
+                widget.firesOnRelease
+                    ? Icons.near_me_rounded
+                    : Icons.my_location_rounded,
                 size: 16,
                 color: AppColors.textPrimary.withValues(alpha: 0.6),
               ),

@@ -166,6 +166,17 @@ class GamepadInputEngine {
     }
   }
 
+  /// Stops following the right stick's finger but keeps its last aim held,
+  /// so a button pressed as the finger lifts still fires where it pointed.
+  /// The caller lets go later with [releaseRightIfMatched].
+  void keepRightAfterLift(int controlHashCode) {
+    final active = _activeRight;
+    if (active == null || active.controlHashCode != controlHashCode) return;
+    try {
+      GestureBinding.instance.pointerRouter.removeRoute(active.pointerId, _rightPointerRoute);
+    } catch (_) {}
+  }
+
   void releaseRightIfMatched(int controlHashCode) {
     if (_activeRight != null && _activeRight!.controlHashCode == controlHashCode) {
       if (kDebugMode) debugPrint('[INPUT ENGINE] Widget dispose matched active right pointer. Releasing.');

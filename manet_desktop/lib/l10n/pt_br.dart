@@ -259,6 +259,10 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get createLayout => 'Criar layout novo';
   @override
+  String get editLayout => 'Editar este layout';
+  @override
+  String get keepLayoutHint => 'Os celulares ficam com o layout que já estiver na tela.';
+  @override
   String get rulesTitle => 'Por número de jogadores';
   @override
   String get rulesHint =>
@@ -282,6 +286,14 @@ class PtBrSessionStrings implements SessionStrings {
   String get fullscreenGame => 'Abrir em tela cheia';
   @override
   String get fullscreenGameHint => 'Se o jogo abrir em janela, o ma•net estica ela na tela inteira, sem bordas.';
+  @override
+  String get phoneSiteButton => 'Botão de site no celular';
+  @override
+  String get phoneSiteButtonHint => 'Pra jogos que se jogam pelo celular, tipo Jackbox: o controle mostra um botão que abre o site do jogo, sem sair do ma•net.';
+  @override
+  String get phoneSiteAddress => 'Site do jogo';
+  @override
+  String get phoneSiteJackboxTip => 'Parece um Jackbox! Ligue isso pra galera entrar no jackbox.tv pelo controle.';
   @override
   String get overlayHint => '↑ ↓ escolhe · A confirma · B volta · Home fecha';
   @override
@@ -800,6 +812,12 @@ class PtBrSettingsStrings implements SettingsStrings {
   String get consoleModeTitle => 'Modo console';
   @override
   String get consoleModeHint => 'Ligado: as pessoas só entram e os controles são criados quando um jogo abre. Desligado: modo ferramenta, com o lobby técnico de slots, x/d•input e layout.';
+  @override
+  String get layoutsTitle => 'Layouts de controle';
+  @override
+  String get layoutsHint => 'Crie e ajuste os controles dos celulares. Cada jogo escolhe o seu na biblioteca.';
+  @override
+  String get layoutsOpen => 'Abrir';
 }
 
 class PtBrSlotsStrings implements SlotsStrings {
@@ -833,6 +851,8 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   String get resetButton => 'Restaurar Padrão';
   @override
   String get browserTitle => 'Layouts Disponíveis';
+  @override
+  String get manageHint => 'Clique num layout seu pra editar. Quem escolhe o layout de cada jogo é a biblioteca.';
   @override
   String get noLayouts => 'Nenhum layout personalizado encontrado.';
   @override
@@ -897,10 +917,6 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   String get floatingJoystickDesc => 'O joystick aparece onde você toca.';
   
   @override
-  String get visibleButtonsTitle => 'BOTÕES VISÍVEIS';
-  @override
-  String get visibleButtonsTip => 'Toque nos botões para ativar ou desativar no seu layout.';
-  @override
   String get rightSticksTitle => 'ANALÓGICOS DIREITOS';
   @override
   String get rightStickFixedLabel => 'Analógico direito fixo';
@@ -909,10 +925,11 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightStickSwipeLabel => 'Touchpad';
   @override
-  String get aimButtonsTitle => 'BOTÕES DE MIRA';
-  @override
   String get aimButtonsTip =>
       'Botões do lado direito que também miram. Tocar é só o botão; arrastar segura o botão e mexe o analógico direito, para mirar e atirar com o mesmo dedo.';
+  @override
+  String get releaseAimButtonsTip =>
+      'Atira ao soltar: estes só apertam quando o dedo sai, na direção em que mirou (um toque rápido atira na hora).';
   @override
   String get rightStickFireTitle => 'ATIRAR COM O ANALÓGICO DIREITO';
   @override
@@ -927,13 +944,45 @@ class PtBrLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightLayoutTitle => 'ARRANJO DOS BOTÕES';
   @override
-  String get leftRowTitle => 'LADO ESQUERDO';
-  @override
   String get leftRowTip => 'Até 2 botões numa linha acima do analógico, para jogos que usam os dois analógicos.';
   @override
   String get rightLayoutColumnsLabel => 'Colunas';
   @override
   String get rightLayoutRowsLabel => 'Linhas';
+  @override
+  String get trayTitle => 'TODOS OS BOTÕES';
+  @override
+  String get dragToLeftHint => 'Clique num botão pra mexer nele. Arraste pra cima do movimento pra levar ele pro lado esquerdo, ou em cima de outro pra trocar de lugar.';
+  @override
+  String get trayHint => 'Arraste pro controle pra mostrar, ou de volta pra cá pra esconder.';
+  @override
+  String get inspectorEmptyTitle => 'Escolha um botão';
+  @override
+  String get inspectorEmptyHint => 'Clique num botão da prévia pra mexer nele.';
+  @override
+  String get onScreenLabel => 'Na tela';
+  @override
+  String get hiddenHint => 'Escondido. Ligue "Na tela" ou arraste ele pro controle.';
+  @override
+  String get sideLeft => 'Lado esquerdo, acima do movimento';
+  @override
+  String get sideRight => 'Lado direito';
+  @override
+  String get aimLabel => 'Mira ao arrastar';
+  @override
+  String get aimLeftDisabled => 'A mira só funciona do lado direito.';
+  @override
+  String get releaseAimLabel => 'Atira ao soltar';
+  @override
+  String get stickSizeLabel => 'Tamanho';
+  @override
+  String get sizeSmall => 'Pequeno';
+  @override
+  String get sizeBig => 'Grande';
+  @override
+  String get fireButtonLabel => 'Botão que ele aperta';
+  @override
+  String get fireSharedHint => 'Vale pra todos os analógicos direitos deste layout.';
   @override
   String get duplicateNameError => 'Já existe um layout com este nome';
   @override

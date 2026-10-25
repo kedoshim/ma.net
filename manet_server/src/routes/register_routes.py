@@ -12,8 +12,18 @@ def register_all_routes(app, server_routes, http_routes, websocket_routes, file_
     register_file_routes(app, file_routes)
 
 
+async def revalidate_web_files(request, response):
+    """Phones must pick up a rebuilt controller. With no Cache-Control the
+    browser may keep an old main.dart.js for hours, even across reloads;
+    no-cache still lets it reuse its copy after a quick 304 check."""
+    if request.path.startswith(("/api/", "/ws")) or "Cache-Control" in response.headers:
+        return
+    response.headers["Cache-Control"] = "no-cache"
+
+
 def register_server_routes(app, server_routes):
     app.router.add_get("/", server_routes.index)
+    app.on_response_prepare.append(revalidate_web_files)
     
     # Ensure wasm and js have the correct MIME types, which is essential for offline CanvasKit/Skwasm on Windows
     import mimetypes

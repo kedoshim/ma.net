@@ -38,3 +38,11 @@ List<String> normalizeAimButtons(Iterable<dynamic> raw) {
   }
   return result;
 }
+
+/// Aim buttons that press only when the finger lifts (aim, then let go to
+/// shoot). Always a subset of [aimButtons].
+List<String> normalizeReleaseAimButtons(
+  Iterable<dynamic> raw,
+  List<String> aimButtons,
+) =>
+    normalizeAimButtons(raw).where(aimButtons.contains).toList();

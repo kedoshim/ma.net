@@ -14,6 +14,16 @@ abstract class AppStrings {
   MenuStrings get menu;
   RelayStrings get relay;
   AccessStrings get access;
+  PhoneGameStrings get phoneGame;
+}
+
+/// Games played in the phone's browser (Jackbox), shown inside the pad page.
+abstract class PhoneGameStrings {
+  String get join;
+  String get openOption;
+  String get showPad;
+  String get backToGame;
+  String get leave;
 }
 
 /// Joining a room with a password or the host's approval.
@@ -154,6 +164,8 @@ abstract class OptionsStrings {
   String get fireButton;
   String get aimButtons;
   String get aimButtonsHint;
+  String get releaseAimButtons;
+  String get releaseAimButtonsHint;
   String get secondaryButtonsTitle;
   String get movementTitle;
   String get rightStickTitle;

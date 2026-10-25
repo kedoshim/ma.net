@@ -18,12 +18,17 @@ class LayoutBrowserDialog extends StatefulWidget {
     required this.initialCatalog,
     required this.brandingModeListenable,
     required this.onRecordRecent,
+    this.manageOnly = false,
   });
 
   final HostApiService api;
   final PresetCatalog initialCatalog;
   final ValueListenable<ControllerBrandingMode> brandingModeListenable;
   final Future<void> Function(String presetId) onRecordRecent;
+
+  /// Console mode: each game picks its layout, so cards edit instead of
+  /// switching the active one.
+  final bool manageOnly;
 
   @override
   State<LayoutBrowserDialog> createState() => _LayoutBrowserDialogState();
@@ -102,6 +107,9 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
     });
     return layouts;
   }
+
+  /// In console mode the active layout is just whatever game ran last.
+  String get _shownActiveId => widget.manageOnly ? '' : _catalog.activePresetId;
 
   List<String> get _allPresetNames {
     return [
@@ -233,9 +241,25 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: Text(
-                                        context.l10n.layoutEditor.browserTitle,
-                                        style: const TextStyle(fontFamily: 'momo', fontSize: 28, color: AppColors.textPrimary),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            context.l10n.layoutEditor.browserTitle,
+                                            style: const TextStyle(fontFamily: 'momo', fontSize: 28, color: AppColors.textPrimary),
+                                          ),
+                                          if (widget.manageOnly)
+                                            Text(
+                                              context.l10n.layoutEditor.manageHint,
+                                              style: TextStyle(
+                                                fontFamily: 'momo',
+                                                fontSize: 13,
+                                                color: AppColors.textPrimary
+                                                    .withValues(alpha: 0.7),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                     ElevatedButton.icon(
@@ -285,9 +309,9 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                                 (p) => LayoutCard(
                                                   brandingMode: brandingMode,
                                                   preset: p,
-                                                  activePresetId:
-                                                      _catalog.activePresetId,
-                                                  onSelect: _saving
+                                                  activePresetId: _shownActiveId,
+                                                  onSelect: _saving ||
+                                                          widget.manageOnly
                                                       ? null
                                                       : () => _selectLayout(p),
                                                 ),
@@ -307,13 +331,16 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                                 (p) => LayoutCard(
                                                   brandingMode: brandingMode,
                                                   preset: p,
-                                                  activePresetId:
-                                                      _catalog.activePresetId,
+                                                  activePresetId: _shownActiveId,
                                                   badgeLabel: p.isBuiltIn
                                                       ? context.l10n.layoutEditor.badgeGame
                                                       : context.l10n.layoutEditor.badgeCustom,
                                                   onSelect: _saving
                                                       ? null
+                                                      : widget.manageOnly
+                                                      ? (p.isBuiltIn
+                                                            ? null
+                                                            : () => _openEditor(preset: p))
                                                       : () => _selectLayout(p),
                                                   footer: p.isBuiltIn
                                                       ? null
@@ -367,7 +394,8 @@ class _LayoutBrowserDialogState extends State<LayoutBrowserDialog> {
                                 () => _currentView = _LayoutDialogView.list,
                               ),
                               onSaved: (createdPreset) async {
-                                if (createdPreset != null) {
+                                if (createdPreset != null &&
+                                    !widget.manageOnly) {
                                   await _selectLayout(createdPreset);
                                 } else {
                                   await _load();

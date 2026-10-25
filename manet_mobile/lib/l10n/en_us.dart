@@ -8,6 +8,9 @@ class EnUsStrings implements AppStrings {
   final options = EnUsOptionsStrings();
 
   @override
+  final phoneGame = EnUsPhoneGameStrings();
+
+  @override
   final quickActions = EnUsQuickActionsStrings();
 
   @override
@@ -286,6 +289,11 @@ class EnUsOptionsStrings implements OptionsStrings {
   String get aimButtonsHint =>
       'Tap: just the button. Drag: holds it and aims with the right stick.';
   @override
+  String get releaseAimButtons => 'Fire on release';
+  @override
+  String get releaseAimButtonsHint =>
+      'Pressed only when you lift the finger, at the spot you aimed. A tap still shoots straight away.';
+  @override
   String get fireButton => 'Button';
   @override
   String get secondaryButtonsTitle => 'Secondary Buttons';
@@ -544,4 +552,17 @@ class EnUsAccessStrings implements AccessStrings {
   };
   @override
   String get tryAgain => 'Try again';
+}
+
+class EnUsPhoneGameStrings implements PhoneGameStrings {
+  @override
+  String get join => 'Join the game';
+  @override
+  String get openOption => 'Phone game';
+  @override
+  String get showPad => 'Show pad';
+  @override
+  String get backToGame => 'Back to game';
+  @override
+  String get leave => 'Leave game';
 }

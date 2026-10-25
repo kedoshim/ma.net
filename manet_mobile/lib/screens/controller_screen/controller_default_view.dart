@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/controller_branding.dart';
 import '../../models/controller_left_zone.dart';
 import '../../models/player_face.dart';
+import '../../widgets/phone_game/phone_game_controls.dart';
 import '../../widgets/player_face_indicator.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/action_buttons.dart';
@@ -32,6 +33,7 @@ class ControllerDefaultView extends StatefulWidget {
     required this.onOpenFaceEditor,
     this.showHomeButton = false,
     this.overlayOpen = false,
+    this.onJoinPhoneGame,
     required this.onOpenEditControls,
     required this.onRetryConnection,
     required this.onOpenQrScanner,
@@ -71,6 +73,8 @@ class ControllerDefaultView extends StatefulWidget {
     this.onLeftButtonsChanged,
     this.aimButtons = const [],
     this.onAimButtonsChanged,
+    this.releaseAimButtons = const [],
+    this.onReleaseAimButtonsChanged,
     required this.onButtonOrderChanged,
     required this.onButtonSizesChanged,
     required this.onRightLayoutModeChanged,
@@ -90,6 +94,8 @@ class ControllerDefaultView extends StatefulWidget {
   final ValueChanged<List<String>>? onLeftButtonsChanged;
   final List<String> aimButtons;
   final ValueChanged<List<String>>? onAimButtonsChanged;
+  final List<String> releaseAimButtons;
+  final ValueChanged<List<String>>? onReleaseAimButtonsChanged;
   final void Function(List<String>) onButtonOrderChanged;
   final void Function(Map<String, int>) onButtonSizesChanged;
   final ValueChanged<String> onRightLayoutModeChanged;
@@ -123,6 +129,9 @@ class ControllerDefaultView extends StatefulWidget {
   final VoidCallback onOpenFaceEditor;
   final bool showHomeButton;
   final bool overlayOpen;
+  /// Set while a phone game (Jackbox) runs: the status gives way to a big
+  /// button that opens it.
+  final VoidCallback? onJoinPhoneGame;
   final VoidCallback onOpenEditControls;
   final VoidCallback onRetryConnection;
   final VoidCallback? onOpenQrScanner;
@@ -381,12 +390,15 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                ControllerCenterStatus(
-                                  connectionState: widget.connectionState,
-                                  status: widget.status,
-                                  playerFace: widget.playerFace,
-                                  playerColor: null,
-                                ),
+                                if (widget.onJoinPhoneGame != null)
+                                  JoinPhoneGameButton(onTap: widget.onJoinPhoneGame!)
+                                else
+                                  ControllerCenterStatus(
+                                    connectionState: widget.connectionState,
+                                    status: widget.status,
+                                    playerFace: widget.playerFace,
+                                    playerColor: null,
+                                  ),
                                 const SizedBox(height: 8),
                                 if (widget.connectionState ==
                                     ControllerConnectionState.disconnected)
@@ -668,6 +680,7 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
         rightStickFire: widget.rightStickFire,
         rightStickFireButton: widget.rightStickFireButton,
         aimButtons: widget.aimButtons,
+        releaseAimButtons: widget.releaseAimButtons,
       );
     }
   }
@@ -1002,6 +1015,8 @@ class _ControllerDefaultViewState extends State<ControllerDefaultView>
           .toList(),
       aimButtons: widget.aimButtons,
       onAimButtonsChanged: widget.onAimButtonsChanged,
+      releaseAimButtons: widget.releaseAimButtons,
+      onReleaseAimButtonsChanged: widget.onReleaseAimButtonsChanged,
       onButtonDropped: (buttonKey) =>
           widget.onSetButtonVisibility(buttonKey, false),
       onDragStarted: () => setState(() => _isDragging = true),
@@ -1982,6 +1997,8 @@ class _AvailableButtonsPanel extends StatelessWidget {
     this.aimCandidates = const [],
     this.aimButtons = const [],
     this.onAimButtonsChanged,
+    this.releaseAimButtons = const [],
+    this.onReleaseAimButtonsChanged,
   });
 
   final ControllerBrandingMode brandingMode;
@@ -1993,6 +2010,8 @@ class _AvailableButtonsPanel extends StatelessWidget {
   final List<String> aimCandidates;
   final List<String> aimButtons;
   final ValueChanged<List<String>>? onAimButtonsChanged;
+  final List<String> releaseAimButtons;
+  final ValueChanged<List<String>>? onReleaseAimButtonsChanged;
   final List<String> buttons;
   final List<String> rightStickControls;
   final ValueChanged<String> onButtonDropped;
@@ -2142,6 +2161,8 @@ class _AvailableButtonsPanel extends StatelessWidget {
                           candidates: aimCandidates,
                           selected: aimButtons,
                           onChanged: onAimButtonsChanged!,
+                          releaseSelected: releaseAimButtons,
+                          onReleaseChanged: onReleaseAimButtonsChanged,
                         ),
                       ],
                       if (onFireChanged != null) ...[
@@ -2175,12 +2196,42 @@ class _AimButtonsSection extends StatelessWidget {
     required this.candidates,
     required this.selected,
     required this.onChanged,
+    this.releaseSelected = const [],
+    this.onReleaseChanged,
   });
 
   final ControllerBrandingMode brandingMode;
   final List<String> candidates;
   final List<String> selected;
   final ValueChanged<List<String>> onChanged;
+  final List<String> releaseSelected;
+  final ValueChanged<List<String>>? onReleaseChanged;
+
+  Widget _chip({
+    required String id,
+    required IconData icon,
+    required bool isSelected,
+    required ValueChanged<bool> onSelected,
+  }) {
+    return FilterChip(
+      avatar: Icon(icon, size: 16, color: AppColors.textPrimary),
+      label: Text(
+        ControllerBranding.presentationFor(id, brandingMode).shortLabel,
+        style: const TextStyle(
+          fontFamily: 'momo',
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: AppColors.highlightColor,
+      backgroundColor: AppColors.backgroundColor.withValues(alpha: 0.2),
+      side: const BorderSide(color: AppColors.textPrimary, width: 2),
+      showCheckmark: false,
+      onSelected: onSelected,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2211,32 +2262,54 @@ class _AimButtonsSection extends StatelessWidget {
           runSpacing: 8,
           children: [
             for (final id in candidates)
-              FilterChip(
-                avatar: const Icon(
-                  Icons.my_location_rounded,
-                  size: 16,
-                  color: AppColors.textPrimary,
-                ),
-                label: Text(
-                  ControllerBranding.presentationFor(id, brandingMode).shortLabel,
-                  style: const TextStyle(
-                    fontFamily: 'momo',
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                selected: selected.contains(id),
-                selectedColor: AppColors.highlightColor,
-                backgroundColor: AppColors.backgroundColor.withValues(alpha: 0.2),
-                side: const BorderSide(color: AppColors.textPrimary, width: 2),
-                showCheckmark: false,
+              _chip(
+                id: id,
+                icon: Icons.my_location_rounded,
+                isSelected: selected.contains(id),
                 onSelected: (on) => onChanged(
                   on ? [...selected, id] : selected.where((b) => b != id).toList(),
                 ),
               ),
           ],
         ),
+        if (onReleaseChanged != null && selected.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            o.releaseAimButtons,
+            style: TextStyle(
+              fontFamily: 'momo',
+              fontSize: 14,
+              color: AppColors.textPrimary.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            o.releaseAimButtonsHint,
+            style: TextStyle(
+              fontFamily: 'momo',
+              fontSize: 12,
+              color: AppColors.textPrimary.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final id in selected)
+                _chip(
+                  id: id,
+                  icon: Icons.near_me_rounded,
+                  isSelected: releaseSelected.contains(id),
+                  onSelected: (on) => onReleaseChanged!(
+                    on
+                        ? [...releaseSelected, id]
+                        : releaseSelected.where((b) => b != id).toList(),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }

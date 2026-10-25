@@ -8,6 +8,9 @@ class PtBrStrings implements AppStrings {
   final options = PtBrOptionsStrings();
 
   @override
+  final phoneGame = PtBrPhoneGameStrings();
+
+  @override
   final quickActions = PtBrQuickActionsStrings();
 
   @override
@@ -286,6 +289,11 @@ class PtBrOptionsStrings implements OptionsStrings {
   String get aimButtonsHint =>
       'Tocar: só o botão. Arrastar: segura o botão e mira com o analógico direito.';
   @override
+  String get releaseAimButtons => 'Atira ao soltar';
+  @override
+  String get releaseAimButtonsHint =>
+      'Só aperta quando você tira o dedo, na direção em que mirou. Um toque rápido atira na hora.';
+  @override
   String get fireButton => 'Botão';
   @override
   String get secondaryButtonsTitle => 'Botões Secundários';
@@ -544,4 +552,17 @@ class PtBrAccessStrings implements AccessStrings {
   };
   @override
   String get tryAgain => 'Tentar de novo';
+}
+
+class PtBrPhoneGameStrings implements PhoneGameStrings {
+  @override
+  String get join => 'Entrar no jogo';
+  @override
+  String get openOption => 'Jogo de celular';
+  @override
+  String get showPad => 'Ver controle';
+  @override
+  String get backToGame => 'Voltar pro jogo';
+  @override
+  String get leave => 'Sair do jogo';
 }

@@ -470,6 +470,15 @@ class HTTPRoutes:
                 status=400,
             )
 
+        # Phones already showing this layout get the new version right away;
+        # otherwise they kept the old one until another layout was picked.
+        if preset_id == self.manager.preset_store.get_active_preset()["id"]:
+            self.manager.broadcast_active_layout()
+        else:
+            self.admin_panel.broadcast_event({
+                "type": "preset_update",
+                "catalog": self.manager.preset_store.list_payload(),
+            })
         return web.json_response({"success": True, "preset": preset})
 
     async def delete_preset_handler(self, request):

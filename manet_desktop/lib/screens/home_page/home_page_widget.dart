@@ -22,6 +22,7 @@ import '../start_page/start_page_widget.dart';
 import '../start_page/mode_selection_dialog.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/server_options_popup.dart';
+import '../../widgets/layout_browser_dialog.dart';
 import '../../widgets/controllers_panel_dialog.dart';
 import '../library/manage_games_dialog.dart';
 import '../../widgets/app_error_widget.dart';
@@ -307,6 +308,28 @@ class _HomePageWidgetState extends State<HomePageWidget> {
           onRetry: _loadPresets,
         ),
       );
+    }
+  }
+
+  /// Console mode's way into the layout editor (the lobby shows no picker).
+  Future<void> _openLayoutManager() async {
+    try {
+      final catalog = _presetCatalog ?? await _api.fetchPresets();
+      if (!mounted) return;
+      await showDialog<PresetCatalog>(
+        context: context,
+        builder: (context) => LayoutBrowserDialog(
+          api: _api,
+          initialCatalog: catalog,
+          brandingModeListenable: _brandingModeNotifier,
+          onRecordRecent: (_) async {},
+          manageOnly: true,
+        ),
+      );
+      final updated = await _api.fetchPresets();
+      if (mounted) setState(() => _presetCatalog = updated);
+    } catch (e) {
+      debugPrint('Failed to open the layout manager: $e');
     }
   }
 
@@ -800,7 +823,9 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         presetCatalog: _presetCatalog,
                                       ),
                                     ),
-                                  );
+                                    // Layouts may have been made or edited
+                                    // from a game's editor in there.
+                                  ).then((_) => _loadPresets());
                                 },
                               ),
                             ),
@@ -827,6 +852,7 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                                         _session.setLobbyStartRule(rule),
                                     onMousePasswordChanged: (password) =>
                                         _session.setMousePassword(password),
+                                    onOpenLayouts: _openLayoutManager,
                                     onConsoleModeChanged: (enabled) async {
                                       setState(() => _consoleMode = enabled);
                                       await _session.setConsoleMode(enabled);

@@ -68,6 +68,12 @@ def _normalize_aim_buttons(raw):
     return result
 
 
+def _normalize_release_aim_buttons(raw, aim_buttons):
+    """Aim buttons that press only when the finger lifts."""
+    aim = _normalize_aim_buttons(aim_buttons)
+    return [b for b in _normalize_aim_buttons(raw) if b in aim]
+
+
 def _normalize_right_stick_fire_button(value):
     canonical = _canonical_button_id(value) if isinstance(value, str) else None
     return canonical if canonical in RIGHT_STICK_FIRE_BUTTONS else "RT"
@@ -110,6 +116,7 @@ def _preset(
     right_stick_fire="off",
     right_stick_fire_button="RT",
     aim_buttons=None,
+    release_aim_buttons=None,
 ):
     left = _normalize_left_buttons(left_buttons)
     raw_order = []
@@ -136,6 +143,9 @@ def _preset(
                 right_stick_fire_button
             ),
             "aimButtons": _normalize_aim_buttons(aim_buttons),
+            "releaseAimButtons": _normalize_release_aim_buttons(
+                release_aim_buttons, aim_buttons
+            ),
         },
     }
 
@@ -409,6 +419,9 @@ class ControllerPresetStore:
                 layout.get("rightStickFireButton")
             ),
             "aimButtons": _normalize_aim_buttons(layout.get("aimButtons")),
+            "releaseAimButtons": _normalize_release_aim_buttons(
+                layout.get("releaseAimButtons"), layout.get("aimButtons")
+            ),
         }
 
     def _normalize_custom_preset(self, payload):

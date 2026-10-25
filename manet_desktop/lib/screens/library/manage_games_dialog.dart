@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/app_preferences.dart';
 import '../../widgets/juicy_widgets.dart';
 import '../../widgets/layout_editor_view.dart';
+import '../../widgets/layout_preview_widgets.dart';
 import '../../models/controller_branding.dart';
 import 'cover_search_dialog.dart';
 import 'game_media_widgets.dart';
@@ -160,12 +161,14 @@ class _ManageGamesDialogState extends State<ManageGamesDialog> {
         ),
       );
     }
+    final sorted = [...games]
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 360),
       child: SingleChildScrollView(
         child: Column(
           children: [
-            for (final game in games)
+            for (final game in sorted)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(
@@ -450,6 +453,9 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
   late List<GameRule> _rules;
   int? _display;
   late bool _fullscreen;
+  // The pad's website button (Jackbox): on/off plus the page it opens.
+  late bool _phoneSite;
+  late final TextEditingController _phoneUrl;
   List<DisplayInfo> _displays = const [];
   late List<ControllerPreset> _presets;
   bool _saving = false;
@@ -474,6 +480,11 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _rules = [...?game?.rules];
     _display = game?.display;
     _fullscreen = game?.fullscreen ?? true;
+    _phoneSite = (game?.phoneUrl ?? '').isNotEmpty;
+    _phoneUrl = TextEditingController(
+      text: _phoneSite ? game!.phoneUrl : _jackboxUrl,
+    );
+    _name.addListener(_onNameChanged);
     final catalog = widget.presetCatalog;
     _presets = [
       if (catalog != null) ...[
@@ -483,6 +494,9 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
       ],
     ];
     _loadDisplays();
+    // The catalog handed in is a snapshot from when the games screen
+    // opened: layouts made or edited since then would be missing or old.
+    _reloadPresets();
   }
 
   Future<void> _loadDisplays() async {
@@ -503,7 +517,26 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     _description.dispose();
     _tags.dispose();
     _trailer.dispose();
+    _phoneUrl.dispose();
     super.dispose();
+  }
+
+  static const _jackboxUrl = 'https://jackbox.tv';
+
+  // The Jackbox tip shows while the name looks like one.
+  void _onNameChanged() => setState(() {});
+
+  bool get _looksLikeJackbox =>
+      _name.text.toLowerCase().contains('jackbox') ||
+      _path.text.toLowerCase().contains('jackbox');
+
+  /// What gets saved: a bare host gets https, anything else is dropped (the
+  /// server keeps only web pages).
+  String get _phoneUrlToSave {
+    if (!_phoneSite) return '';
+    final text = _phoneUrl.text.trim();
+    if (text.isEmpty) return '';
+    return text.contains('://') ? text : 'https://$text';
   }
 
   Future<void> _pickExecutable() async {
@@ -604,8 +637,12 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
     );
   }
 
-  /// Opens the controller layout creator; the new layout gets selected.
-  Future<void> _createLayout(ValueChanged<String> select) async {
+  /// Opens the controller layout editor: a new layout gets selected, an
+  /// edited one is reloaded so the preview shows the change.
+  Future<void> _openLayoutEditor(
+    ValueChanged<String> select, {
+    ControllerPreset? preset,
+  }) async {
     final api = context.read<SessionController>().api;
     final branding = ValueNotifier(
       ControllerBranding.modeFromWire(_controllerMode ?? 'x360'),
@@ -628,19 +665,83 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
             child: LayoutEditorView(
               api: api,
               brandingModeListenable: branding,
-              existingNames: [for (final preset in _presets) preset.name],
+              preset: preset,
+              existingNames: [for (final p in _presets) p.name],
               onCancel: () => Navigator.of(dialogContext).pop(),
-              onSaved: (preset) => Navigator.of(dialogContext).pop(preset),
+              onSaved: (saved) => Navigator.of(dialogContext).pop(saved),
             ),
           ),
         ),
       ),
     );
     branding.dispose();
-    if (created != null && mounted) {
+    if (!mounted) return;
+    // However the editor closed, the list comes back from the server, so a
+    // new layout shows up and an edited one shows its changes.
+    await _reloadPresets();
+    if (!mounted || created == null) return;
+    if (!_presets.any((p) => p.id == created.id)) {
       setState(() => _presets = [..._presets, created]);
-      select(created.id);
     }
+    select(created.id);
+  }
+
+  Future<void> _reloadPresets() async {
+    try {
+      final catalog = await context.read<SessionController>().api.fetchPresets();
+      if (!mounted) return;
+      setState(() => _presets = [
+        ...catalog.builtInPresets,
+        ...catalog.gamePresets,
+        ...catalog.customPresets,
+      ]);
+    } catch (_) {}
+  }
+
+  ControllerPreset? _presetById(String? id) {
+    for (final preset in _presets) {
+      if (preset.id == id) return preset;
+    }
+    return null;
+  }
+
+  /// What the chosen layout looks like, so it isn't picked by name alone.
+  Widget _layoutPreview() {
+    final preset = _presetById(_presetId);
+    return Container(
+      height: 150,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.backgroundColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.textPrimary, width: 3),
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutBack,
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: Tween(begin: 0.92, end: 1.0).animate(animation),
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: preset == null
+            ? Text(
+                context.l10n.session.keepLayoutHint,
+                key: const ValueKey('none'),
+                textAlign: TextAlign.center,
+                style: _captionStyle,
+              )
+            : StructuredLayoutPreview(
+                key: ValueKey(preset),
+                brandingMode: ControllerBranding.modeFromWire(
+                  _controllerMode ?? 'x360',
+                ),
+                layout: preset.layout,
+                compact: true,
+              ),
+      ),
+    );
   }
 
   void _suggestXinputRule() {
@@ -680,6 +781,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
       addedAt: widget.game?.addedAt ?? 0,
       lastPlayedAt: widget.game?.lastPlayedAt ?? 0,
       screenshots: _screenshots,
+      phoneUrl: _phoneUrlToSave,
     );
     try {
       await context.read<SessionController>().saveGame(game);
@@ -883,6 +985,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
               ),
             ],
           ),
+          _layoutPreview(),
           _label(strings.rulesTitle),
           Text(strings.rulesHint, style: _captionStyle),
           const SizedBox(height: 8),
@@ -945,6 +1048,53 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
                 onChanged: (v) => setState(() => _fullscreen = v),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      strings.phoneSiteButton,
+                      style: _bodyStyle.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(strings.phoneSiteButtonHint, style: _captionStyle),
+                  ],
+                ),
+              ),
+              JuicyToggle(
+                value: _phoneSite,
+                onChanged: (v) => setState(() {
+                  _phoneSite = v;
+                  if (v && _phoneUrl.text.trim().isEmpty) {
+                    _phoneUrl.text = _jackboxUrl;
+                  }
+                }),
+              ),
+            ],
+          ),
+          if (!_phoneSite && _looksLikeJackbox) ...[
+            const SizedBox(height: 8),
+            Text(
+              '^-^  ${strings.phoneSiteJackboxTip}',
+              style: _captionStyle.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ],
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutBack,
+            alignment: Alignment.topCenter,
+            child: _phoneSite
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label(strings.phoneSiteAddress),
+                      _field(_phoneUrl, hint: _jackboxUrl),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
@@ -1035,6 +1185,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
 
   /// Layout dropdown with a "+" that opens the layout creator.
   Widget _layoutPicker(String? value, ValueChanged<String?> onChanged) {
+    final chosen = _presetById(value);
     return Row(
       children: [
         Expanded(
@@ -1047,6 +1198,21 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
             onChanged: onChanged,
           ),
         ),
+        if (chosen != null && !chosen.isBuiltIn) ...[
+          const SizedBox(width: 6),
+          Tooltip(
+            message: context.l10n.session.editLayout,
+            child: JuicyIconButton(
+              size: 36,
+              borderRadius: 10,
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              onTap: () => _openLayoutEditor(
+                (id) => onChanged(id),
+                preset: chosen,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(width: 6),
         Tooltip(
           message: context.l10n.session.createLayout,
@@ -1054,7 +1220,7 @@ class _GameEditorDialogState extends State<GameEditorDialog> {
             size: 36,
             borderRadius: 10,
             icon: const Icon(Icons.add_rounded, size: 20),
-            onTap: () => _createLayout((id) => onChanged(id)),
+            onTap: () => _openLayoutEditor((id) => onChanged(id)),
           ),
         ),
       ],

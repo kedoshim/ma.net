@@ -233,6 +233,12 @@ class PreferencesService {
   Future<List<String>> getAimButtons() async =>
       (await _getInstance).getStringList('aimButtons') ?? const [];
 
+  Future<void> setReleaseAimButtons(List<String> buttons) async =>
+      (await _getInstance).setStringList('releaseAimButtons', buttons);
+
+  Future<List<String>> getReleaseAimButtons() async =>
+      (await _getInstance).getStringList('releaseAimButtons') ?? const [];
+
   // --- Sensitivity Settings ---
   Future<void> setLeftStickSensitivity(double value) async =>
       (await _getInstance).setDouble('leftStickSensitivity', value);

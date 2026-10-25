@@ -257,6 +257,10 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get createLayout => 'Create a new layout';
   @override
+  String get editLayout => 'Edit this layout';
+  @override
+  String get keepLayoutHint => 'Phones keep whatever layout they already show.';
+  @override
   String get rulesTitle => 'By player count';
   @override
   String get rulesHint =>
@@ -280,6 +284,14 @@ class EnUsSessionStrings implements SessionStrings {
   String get fullscreenGame => 'Open full screen';
   @override
   String get fullscreenGameHint => 'If the game opens in a window, ma•net stretches it over the whole screen, borderless.';
+  @override
+  String get phoneSiteButton => 'Website button on phones';
+  @override
+  String get phoneSiteButtonHint => 'For games played on the phone, like Jackbox: the pad shows a button that opens the game website, without leaving ma•net.';
+  @override
+  String get phoneSiteAddress => 'Game website';
+  @override
+  String get phoneSiteJackboxTip => 'Looks like Jackbox! Turn this on so everyone can join jackbox.tv from the pad.';
   @override
   String get overlayHint => '↑ ↓ choose · A confirm · B back · Home closes';
   @override
@@ -798,6 +810,12 @@ class EnUsSettingsStrings implements SettingsStrings {
   String get consoleModeTitle => 'Console mode';
   @override
   String get consoleModeHint => 'On: players just join and controllers are created when a game starts. Off: tool mode, the technical lobby with slots, x/d•input and layout.';
+  @override
+  String get layoutsTitle => 'Controller layouts';
+  @override
+  String get layoutsHint => 'Create and tweak the phone controllers. Each game picks its own in the library.';
+  @override
+  String get layoutsOpen => 'Open';
 }
 
 
@@ -833,6 +851,8 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   String get resetButton => 'Reset to Default';
   @override
   String get browserTitle => 'Available Layouts';
+  @override
+  String get manageHint => 'Click one of your layouts to edit it. The library picks the layout for each game.';
   @override
   String get noLayouts => 'No custom layouts found.';
   @override
@@ -897,10 +917,6 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   String get floatingJoystickDesc => 'Joystick appears wherever you touch.';
   
   @override
-  String get visibleButtonsTitle => 'VISIBLE BUTTONS';
-  @override
-  String get visibleButtonsTip => 'Tap buttons to show or hide them in your layout.';
-  @override
   String get rightSticksTitle => 'RIGHT STICKS';
   @override
   String get rightStickFixedLabel => 'Fixed Right Stick';
@@ -909,10 +925,11 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightStickSwipeLabel => 'Touchpad';
   @override
-  String get aimButtonsTitle => 'AIM BUTTONS';
-  @override
   String get aimButtonsTip =>
       'Right-side buttons that also aim. A tap is just the button; dragging holds it and moves the right stick, for shooting and aiming with one thumb.';
+  @override
+  String get releaseAimButtonsTip =>
+      'Fire on release: these press only when the finger lifts, at the spot it aimed (a quick tap still shoots).';
   @override
   String get rightStickFireTitle => 'FIRE WITH THE RIGHT STICK';
   @override
@@ -927,13 +944,45 @@ class EnUsLayoutEditorStrings implements LayoutEditorStrings {
   @override
   String get rightLayoutTitle => 'BUTTON LAYOUT';
   @override
-  String get leftRowTitle => 'LEFT SIDE';
-  @override
   String get leftRowTip => 'Up to 2 buttons in a row above the stick, for games that use both sticks.';
   @override
   String get rightLayoutColumnsLabel => 'Columns';
   @override
   String get rightLayoutRowsLabel => 'Rows';
+  @override
+  String get trayTitle => 'ALL BUTTONS';
+  @override
+  String get dragToLeftHint => 'Click a button to tweak it. Drag it above the movement to put it on the left side, or onto another one to swap places.';
+  @override
+  String get trayHint => 'Drag onto the pad to show, or back here to hide.';
+  @override
+  String get inspectorEmptyTitle => 'Pick a button';
+  @override
+  String get inspectorEmptyHint => 'Click a button in the preview to tweak it.';
+  @override
+  String get onScreenLabel => 'On screen';
+  @override
+  String get hiddenHint => 'Hidden. Turn on "On screen" or drag it onto the pad.';
+  @override
+  String get sideLeft => 'Left side, above movement';
+  @override
+  String get sideRight => 'Right side';
+  @override
+  String get aimLabel => 'Aims when dragged';
+  @override
+  String get aimLeftDisabled => 'Aiming only works on the right side.';
+  @override
+  String get releaseAimLabel => 'Fires on release';
+  @override
+  String get stickSizeLabel => 'Size';
+  @override
+  String get sizeSmall => 'Small';
+  @override
+  String get sizeBig => 'Big';
+  @override
+  String get fireButtonLabel => 'Button it presses';
+  @override
+  String get fireSharedHint => 'Applies to every right stick in this layout.';
   @override
   String get duplicateNameError => 'A layout with this name already exists';
   @override

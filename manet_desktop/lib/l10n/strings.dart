@@ -191,6 +191,8 @@ abstract class SessionStrings {
   String get coverPasteLink;
   String get coverUseLink;
   String get createLayout;
+  String get editLayout;
+  String get keepLayoutHint;
   String get rulesTitle;
   String get rulesHint;
   String get addRule;
@@ -202,6 +204,10 @@ abstract class SessionStrings {
   String displayLabel(int number, bool primary, int width, int height);
   String get fullscreenGame;
   String get fullscreenGameHint;
+  String get phoneSiteButton;
+  String get phoneSiteButtonHint;
+  String get phoneSiteAddress;
+  String get phoneSiteJackboxTip;
   String get overlayHint;
   String get overlayResume;
   String get awayTitle;
@@ -394,6 +400,9 @@ abstract class SettingsStrings {
   String get freeModeHint;
   String get consoleModeTitle;
   String get consoleModeHint;
+  String get layoutsTitle;
+  String get layoutsHint;
+  String get layoutsOpen;
 }
 
 abstract class SlotsStrings {
@@ -415,6 +424,7 @@ abstract class LayoutEditorStrings {
   String get saveButton;
   String get resetButton;
   String get browserTitle;
+  String get manageHint;
   String get noLayouts;
   String get importButton;
   String get exportButton;
@@ -450,8 +460,6 @@ abstract class LayoutEditorStrings {
   String get floatingJoystickHeadline;
   String get floatingJoystickDesc;
   
-  String get visibleButtonsTitle;
-  String get visibleButtonsTip;
   String get rightSticksTitle;
   String get rightStickFixedLabel;
   String get rightStickFloatingLabel;
@@ -463,12 +471,28 @@ abstract class LayoutEditorStrings {
   String get rightStickFireRing;
 
   String get rightLayoutTitle;
-  String get leftRowTitle;
-  String get aimButtonsTitle;
   String get aimButtonsTip;
+  String get releaseAimButtonsTip;
   String get leftRowTip;
   String get rightLayoutColumnsLabel;
   String get rightLayoutRowsLabel;
+  String get trayTitle;
+  String get dragToLeftHint;
+  String get trayHint;
+  String get inspectorEmptyTitle;
+  String get inspectorEmptyHint;
+  String get onScreenLabel;
+  String get hiddenHint;
+  String get sideLeft;
+  String get sideRight;
+  String get aimLabel;
+  String get aimLeftDisabled;
+  String get releaseAimLabel;
+  String get stickSizeLabel;
+  String get sizeSmall;
+  String get sizeBig;
+  String get fireButtonLabel;
+  String get fireSharedHint;
 
   String get duplicateNameError;
   String get nameEmptyError;

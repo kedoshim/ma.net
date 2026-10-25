@@ -57,3 +57,12 @@ def test_aim_buttons_deduped_and_never_sticks(tmp_path):
     })
     assert layout["aimButtons"] == ["RT", "A"]
     assert _store(tmp_path)._normalize_layout({})["aimButtons"] == []
+
+
+def test_release_aim_buttons_only_among_aim_buttons(tmp_path):
+    layout = _store(tmp_path)._normalize_layout({
+        "aimButtons": ["RT", "A"],
+        "releaseAimButtons": ["A", "B", "RS_BUTTON"],
+    })
+    assert layout["releaseAimButtons"] == ["A"]
+    assert _store(tmp_path)._normalize_layout({})["releaseAimButtons"] == []
