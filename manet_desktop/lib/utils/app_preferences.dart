@@ -26,13 +26,15 @@ class AppPreferences {
 
   static final ValueNotifier<String> cardStyleNotifier = ValueNotifier<String>('cover_only');
   static final ValueNotifier<int> gridRowsNotifier = ValueNotifier<int>(2);
-  static final ValueNotifier<String> sortOrderNotifier = ValueNotifier<String>('recent');
+  static final ValueNotifier<String> sortOrderNotifier = ValueNotifier<String>('favorites');
 
   static Future<void> initLauncherPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     cardStyleNotifier.value = prefs.getString(_launcherCardStyleKey) ?? 'cover_only';
     gridRowsNotifier.value = (prefs.getInt(_launcherGridRowsKey) ?? 2).clamp(1, 3);
-    sortOrderNotifier.value = prefs.getString(_launcherSortOrderKey) ?? 'recent';
+    final sort = prefs.getString(_launcherSortOrderKey);
+    // "recent" became "favorites" (ordered by what the couch plays).
+    sortOrderNotifier.value = sort == null || sort == 'recent' ? 'favorites' : sort;
   }
 
   static Future<void> setCardStyle(String style) async {

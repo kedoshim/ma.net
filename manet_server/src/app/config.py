@@ -46,13 +46,16 @@ class ServerConfig:
     ]
 
 
+def user_data_dir() -> Path:
+    """Where the host's own data lives (games, layouts, settings). The
+    installed app and a dev checkout share it, so a game added in one shows
+    up in the other. MANET_DATA_DIR points somewhere else (tests do)."""
+    override = os.environ.get("MANET_DATA_DIR")
+    return Path(override) if override else Path.home() / ".manet"
+
+
 def get_settings_path() -> Path:
-    import sys
-    is_frozen = getattr(sys, 'frozen', False)
-    if is_frozen:
-        return Path.home() / ".manet" / "settings.json"
-    else:
-        return Path(__file__).resolve().parents[2] / "data" / "settings.json"
+    return user_data_dir() / "settings.json"
 
 
 def load_settings() -> dict:

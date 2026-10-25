@@ -136,6 +136,9 @@ class SessionState:
         self.countdown_ends_at: float | None = None
         self._countdown_task: asyncio.Task | None = None
         self.running: RunningGame | None = None
+        # (game id, start time, players) of the game being played, for the
+        # play history.
+        self._play: tuple[str, float, int] | None = None
         self._watch_task: asyncio.Task | None = None
         self._placement_task: asyncio.Task | None = None
         self.last_error: str | None = None
@@ -1259,6 +1262,7 @@ class SessionState:
 
         self.library.touch(game_id)
         self.admin_panel.broadcast_event({"type": "games_update", "games": self.library.list()})
+        self._play = (game_id, time.time(), min(len(self.player_ids()), game["maxPlayers"]))
         self.running = running
         self.votes.clear()
         self.game_ready = False
@@ -1354,6 +1358,11 @@ class SessionState:
 
     def return_from_game(self):
         self._end_away()
+        if self._play is not None and self.library is not None:
+            game_id, started_at, players = self._play
+            self.library.record_play(game_id, started_at, time.time() - started_at, players)
+            self.admin_panel.broadcast_event({"type": "games_update", "games": self.library.list()})
+        self._play = None
         for task in (self._watch_task, self._placement_task, self._guard_task, self._ready_task):
             if task is not None:
                 task.cancel()

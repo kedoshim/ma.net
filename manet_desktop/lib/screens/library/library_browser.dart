@@ -15,7 +15,17 @@ import '../../widgets/player_face_indicator.dart';
 /// player cursors can press gets a [GlobalKey] from the library so it can be
 /// hit-tested against the cursors, and a list of who is hovering it.
 
-enum LibrarySort { alphabetical, recent, players }
+enum LibrarySort { alphabetical, favorites, players }
+
+/// Where a game stands for the players connected now: everyone plays,
+/// it takes fewer than are here, or it needs more than are here.
+enum PlayerFit { everyone, fewer, needsMore }
+
+PlayerFit playerFit(GameEntry game, int players) {
+  if (players < game.minPlayers) return PlayerFit.needsMore;
+  if (players > game.maxPlayers) return PlayerFit.fewer;
+  return PlayerFit.everyone;
+}
 
 class LibraryFilter {
   final bool fitsOnly;
@@ -25,19 +35,32 @@ class LibraryFilter {
   const LibraryFilter({
     this.fitsOnly = false,
     this.tags = const {},
-    this.sort = LibrarySort.recent,
+    this.sort = LibrarySort.favorites,
   });
+
+  /// Decides ties and the order of little-played games. Drawn once per run
+  /// of the app, so the order holds still while people pick and changes
+  /// from one game night to the next; no game wins by its first letter.
+  static int sessionSeed = math.Random().nextInt(1 << 30);
+
+  /// Every Nth card in "favorites" is a game little played lately, so new
+  /// and forgotten games keep getting a turn next to the favorites.
+  static const int discoveryEvery = 4;
+
+  /// About one real play in the last two months: below this a game counts
+  /// as little played.
+  static const double favoriteScore = 1.0;
 
   static LibrarySort parseSort(String value) => switch (value) {
     'alphabetical' => LibrarySort.alphabetical,
     'players' => LibrarySort.players,
-    _ => LibrarySort.recent,
+    _ => LibrarySort.favorites,
   };
 
   static String serializeSort(LibrarySort sort) => switch (sort) {
     LibrarySort.alphabetical => 'alphabetical',
     LibrarySort.players => 'players',
-    LibrarySort.recent => 'recent',
+    LibrarySort.favorites => 'favorites',
   };
 
   bool get isFiltering => fitsOnly || tags.isNotEmpty;
@@ -62,8 +85,9 @@ class LibraryFilter {
     sort: LibrarySort.values[(sort.index + 1) % LibrarySort.values.length],
   );
 
-  /// Games to show, in order. Games that fit the session always come first
-  /// (the others are dimmed). Tags combine with "any of".
+  /// Games to show, in order. Games everyone can play come first, then the
+  /// ones that take fewer players (those letting more people in first),
+  /// then the ones that need more players. Tags combine with "any of".
   List<GameEntry> apply(List<GameEntry> games, int players) {
     final shown = [
       for (final game in games)
@@ -72,32 +96,58 @@ class LibraryFilter {
                 game.tags.any((t) => tags.contains(t.toLowerCase()))))
           game,
     ];
-    int byName(GameEntry a, GameEntry b) =>
-        a.name.toLowerCase().compareTo(b.name.toLowerCase());
-    shown.sort((a, b) {
-      final fit = (a.fits(players) ? 0 : 1) - (b.fits(players) ? 0 : 1);
-      if (fit != 0) return fit;
-      return switch (sort) {
-        LibrarySort.alphabetical => byName(a, b),
-        LibrarySort.recent => _byRecent(a, b, byName),
-        LibrarySort.players =>
-          b.maxPlayers != a.maxPlayers
-              ? b.maxPlayers - a.maxPlayers
-              : byName(a, b),
-      };
+    final ordered = switch (sort) {
+      LibrarySort.alphabetical => [...shown]..sort(_byName),
+      LibrarySort.favorites => favoritesOrder(shown),
+      LibrarySort.players => [...shown]..sort((a, b) {
+        final c = b.maxPlayers - a.maxPlayers;
+        return c != 0 ? c : _byName(a, b);
+      }),
+    };
+    final rank = Map<GameEntry, int>.identity()
+      ..addAll({for (var i = 0; i < ordered.length; i++) ordered[i]: i});
+    return ordered..sort((a, b) {
+      final fa = playerFit(a, players), fb = playerFit(b, players);
+      if (fa != fb) return fa.index - fb.index;
+      if (fa == PlayerFit.fewer && a.maxPlayers != b.maxPlayers) {
+        return b.maxPlayers - a.maxPlayers;
+      }
+      return rank[a]! - rank[b]!;
     });
-    return shown;
   }
 
-  static int _byRecent(
-    GameEntry a,
-    GameEntry b,
-    int Function(GameEntry, GameEntry) byName,
-  ) {
-    final played = b.lastPlayedAt.compareTo(a.lastPlayedAt);
-    if (played != 0) return played;
-    final added = b.addedAt.compareTo(a.addedAt);
-    return added != 0 ? added : byName(a, b);
+  static int _byName(GameEntry a, GameEntry b) =>
+      a.name.toLowerCase().compareTo(b.name.toLowerCase());
+
+  static int _draw(GameEntry game) =>
+      Object.hash(sessionSeed, game.id, game.name);
+
+  /// Favorites by score, with a little-played game every [discoveryEvery]
+  /// cards. Ties and the little-played games follow this run's draw.
+  static List<GameEntry> favoritesOrder(List<GameEntry> games) {
+    int byDraw(GameEntry a, GameEntry b) => _draw(a).compareTo(_draw(b));
+    final loved = [
+      for (final g in games)
+        if (g.score >= favoriteScore) g,
+    ]..sort((a, b) {
+        final c = b.score.compareTo(a.score);
+        return c != 0 ? c : byDraw(a, b);
+      });
+    final others = [
+      for (final g in games)
+        if (g.score < favoriteScore) g,
+    ]..sort(byDraw);
+    final out = <GameEntry>[];
+    var l = 0, o = 0;
+    while (l < loved.length || o < others.length) {
+      final discoveryTurn = (out.length + 1) % discoveryEvery == 0;
+      if (o < others.length && (discoveryTurn || l >= loved.length)) {
+        out.add(others[o++]);
+      } else {
+        out.add(loved[l++]);
+      }
+    }
+    return out;
   }
 
   /// The library's most used tags (lower-cased key -> label as written).
@@ -380,6 +430,7 @@ class LibraryGameCard extends StatelessWidget {
   static const double borderWidth = 4;
   static const double radius = 18;
   static const double nameHeight = 40;
+  static const double onlyForHeight = 30;
 
   final GameEntry game;
   final int playerCount;
@@ -412,6 +463,10 @@ class LibraryGameCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = context.l10n.session;
     final fits = game.fits(playerCount);
+    final fit = playerFit(game, playerCount);
+    // Takes fewer players than are here: a bar says so, which is also why
+    // these games sit at the end of the library.
+    final onlyFor = fit == PlayerFit.fewer;
     final highlighted = hoveredBy.isNotEmpty || isCountdownTarget;
     final borderColor = highlighted
         ? AppColors.highlightColor
@@ -488,12 +543,36 @@ class LibraryGameCard extends StatelessWidget {
         ),
         child: ColoredBox(
           color: AppColors.lightColor,
-          child: innerContent,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              innerContent,
+              if (onlyFor)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: coverOnly ? 0 : nameHeight + borderWidth,
+                  height: onlyForHeight,
+                  child: ColoredBox(
+                    color: borderColor,
+                    child: Center(
+                      child: Text(
+                        strings.onlyForPlayers(game.maxPlayers),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _onlyForStyle,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
 
-    if (!fits) {
+    // Needs more players than are here (rare): dimmed.
+    if (fit == PlayerFit.needsMore) {
       const grayscaleMatrix = <double>[
         0.2126, 0.7152, 0.0722, 0, 0,
         0.2126, 0.7152, 0.0722, 0, 0,
@@ -536,7 +615,8 @@ class LibraryGameCard extends StatelessWidget {
                   Positioned(
                     left: 10,
                     right: 10,
-                    bottom: coverOnly ? 8 : nameHeight + borderWidth + 8,
+                    bottom: (coverOnly ? 8 : nameHeight + borderWidth + 8) +
+                        (onlyFor ? onlyForHeight : 0),
                     child: Wrap(
                       spacing: -sticker * 0.25,
                       runSpacing: -sticker * 0.3,
@@ -1075,6 +1155,13 @@ const TextStyle _titleStyle = TextStyle(
   fontWeight: FontWeight.bold,
   fontSize: 24,
   color: AppColors.textPrimary,
+);
+
+const TextStyle _onlyForStyle = TextStyle(
+  fontFamily: 'momo',
+  fontWeight: FontWeight.bold,
+  fontSize: 15,
+  color: AppColors.lightColor,
 );
 
 const TextStyle _cardTitleStyle = TextStyle(

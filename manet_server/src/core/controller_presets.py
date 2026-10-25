@@ -1,8 +1,9 @@
 import json
 import logging
-import sys
 from copy import deepcopy
 from pathlib import Path
+
+from src.app.config import user_data_dir
 
 LOGGER = logging.getLogger(__name__)
 
@@ -308,16 +309,11 @@ GAME_PRESETS = [
 class ControllerPresetStore:
     def __init__(self, storage_path=None):
         root = Path(__file__).resolve().parents[2]
-        is_frozen = getattr(sys, 'frozen', False)
-
         if storage_path:
             self.storage_path = Path(storage_path)
-        elif is_frozen:
-            # Under frozen mode (installer), save custom presets to user's home folder
-            # to avoid write permission errors in C:\Program Files
-            self.storage_path = Path.home() / ".manet" / "controller_presets.json"
         else:
-            self.storage_path = root / "data" / "controller_presets.json"
+            # Shared by the installed app and a dev checkout.
+            self.storage_path = user_data_dir() / "controller_presets.json"
 
         self._builtins = {
             preset["id"]: deepcopy(preset)

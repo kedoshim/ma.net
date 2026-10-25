@@ -6,13 +6,20 @@ import json
 import time
 import logging
 import os
-import sys
 import uuid
 from pathlib import Path
+
+from src.app.config import user_data_dir
 
 LOGGER = logging.getLogger(__name__)
 
 MAX_PLAYERS_LIMIT = 16
+# A game closed sooner than this was opened by mistake or didn't work: it
+# goes in the history but doesn't count as played.
+MIN_PLAY_SECONDS = 120
+# A play counts half as much after this long: a favorite the couch dropped
+# slowly leaves the top of the library.
+SCORE_HALF_LIFE_DAYS = 60
 
 
 class GameValidationError(ValueError):
@@ -23,10 +30,7 @@ def _default_storage_path() -> Path:
     override = os.environ.get("MANET_GAMES_FILE")
     if override:
         return Path(override)
-    if getattr(sys, "frozen", False):
-        # Installed under Program Files: keep user data in the home folder.
-        return Path.home() / ".manet" / "games.json"
-    return Path(__file__).resolve().parents[2] / "data" / "games.json"
+    return user_data_dir() / "games.json"
 
 
 def normalize_game(data: dict, game_id: str | None = None) -> dict:
@@ -87,6 +91,12 @@ def normalize_game(data: dict, game_id: str | None = None) -> dict:
     except (TypeError, ValueError):
         last_played_at = 0.0
 
+    try:
+        plays = max(0, int(data.get("plays") or 0))
+        play_seconds = max(0.0, float(data.get("playSeconds") or 0))
+    except (TypeError, ValueError):
+        plays, play_seconds = 0, 0.0
+
     screenshots = []
     for url in data.get("screenshots") or []:
         url = str(url).strip()
@@ -123,6 +133,10 @@ def normalize_game(data: dict, game_id: str | None = None) -> dict:
         # When MaNet last launched it: the library starts centered on the
         # most recently played games.
         "lastPlayedAt": last_played_at,
+        # How often and how long it was really played (see record_play): the
+        # couch's favorites, for ordering the library.
+        "plays": plays,
+        "playSeconds": play_seconds,
         # Image URLs shown on a player's phone with the game details.
         "screenshots": screenshots[:8],
         # Games played in the phone's browser (Jackbox): while the game runs
@@ -159,6 +173,8 @@ class GameLibraryStore:
     def __init__(self, storage_path: Path | None = None):
         self.storage_path = Path(storage_path) if storage_path else _default_storage_path()
         self._games: list[dict] = self._load()
+        # (game id, start time) of every play that counted, for the scores.
+        self._plays: list[tuple[str, float]] = self._load_plays()
 
     def _load(self) -> list[dict]:
         try:
@@ -185,8 +201,35 @@ class GameLibraryStore:
         tmp.write_text(json.dumps({"games": self._games}, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(self.storage_path)
 
+    def _load_plays(self) -> list[tuple[str, float]]:
+        plays = []
+        try:
+            if self.history_path.exists():
+                for line in self.history_path.read_text(encoding="utf-8").splitlines():
+                    try:
+                        entry = json.loads(line)
+                        if float(entry.get("seconds") or 0) >= MIN_PLAY_SECONDS:
+                            plays.append((str(entry["gameId"]), float(entry["startedAt"])))
+                    except (ValueError, KeyError, TypeError):
+                        continue
+        except Exception:
+            LOGGER.exception("Failed to read the play history")
+        return plays
+
+    def scores(self, now: float | None = None) -> dict[str, float]:
+        """How much the couch likes each game lately: every play is worth 1,
+        halving every SCORE_HALF_LIFE_DAYS."""
+        now = time.time() if now is None else now
+        half_life = SCORE_HALF_LIFE_DAYS * 86400
+        scores: dict[str, float] = {}
+        for game_id, started_at in self._plays:
+            age = max(0.0, now - started_at)
+            scores[game_id] = scores.get(game_id, 0.0) + 0.5 ** (age / half_life)
+        return scores
+
     def list(self) -> list[dict]:
-        return [dict(game) for game in self._games]
+        scores = self.scores()
+        return [{**game, "score": round(scores.get(game["id"], 0.0), 3)} for game in self._games]
 
     def get(self, game_id: str) -> dict | None:
         return next((dict(g) for g in self._games if g["id"] == game_id), None)
@@ -201,7 +244,7 @@ class GameLibraryStore:
         for index, existing in enumerate(self._games):
             if existing["id"] == game_id:
                 if isinstance(data, dict):
-                    for key in ("addedAt", "lastPlayedAt"):
+                    for key in ("addedAt", "lastPlayedAt", "plays", "playSeconds"):
                         if not data.get(key):
                             data = {**data, key: existing.get(key)}
                 game = normalize_game(data, game_id)
@@ -209,6 +252,35 @@ class GameLibraryStore:
                 self._save()
                 return dict(game)
         return None
+
+    @property
+    def history_path(self) -> Path:
+        return self.storage_path.with_name("play_history.jsonl")
+
+    def record_play(self, game_id: str, started_at: float, seconds: float, players: int):
+        """Notes a finished session: one line per play in the history (kept
+        for later questions) and the totals on the game."""
+        game = next((g for g in self._games if g["id"] == game_id), None)
+        if game is None:
+            return
+        seconds = max(0.0, round(seconds, 1))
+        entry = {"gameId": game_id, "name": game["name"], "startedAt": round(started_at, 1),
+                 "seconds": seconds, "players": players}
+        try:
+            self.history_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.history_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            LOGGER.exception("Failed to write the play history")
+        if seconds < MIN_PLAY_SECONDS:
+            return
+        self._plays.append((game_id, started_at))
+        game["plays"] = game.get("plays", 0) + 1
+        game["playSeconds"] = game.get("playSeconds", 0.0) + seconds
+        try:
+            self._save()
+        except Exception:
+            LOGGER.exception("Failed to save the game library")
 
     def touch(self, game_id: str):
         """Remember that the game was just played."""

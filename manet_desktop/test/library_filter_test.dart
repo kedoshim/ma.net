@@ -12,15 +12,19 @@ void main() {
   ];
   List<String> names(List<GameEntry> list) => [for (final g in list) g.name];
 
-  test('games that fit come first, then the chosen order', () {
+  test('everyone plays first, then fewer seats, then needs more', () {
+    const az = LibrarySort.alphabetical;
     expect(
-      names(const LibraryFilter(sort: LibrarySort.alphabetical).apply(games, 3)),
+      names(const LibraryFilter(sort: az).apply(games, 3)),
       ['Festa', 'Zebra Kart', 'Aventura'],
     );
-    expect(
-      names(const LibraryFilter(sort: LibrarySort.recent).apply(games, 3)),
-      ['Zebra Kart', 'Festa', 'Aventura'],
-    );
+    // 5 players: Festa fits everyone; Zebra Kart (4) lets more in than
+    // Aventura (1); nothing needs more.
+    expect(names(const LibraryFilter(sort: az).apply(games, 5)), ['Festa', 'Zebra Kart', 'Aventura']);
+    // 1 player: Festa needs 2 and goes last.
+    expect(names(const LibraryFilter(sort: az).apply(games, 1)), ['Aventura', 'Zebra Kart', 'Festa']);
+    expect(playerFit(games[0], 5), PlayerFit.fewer);
+    expect(playerFit(games[2], 1), PlayerFit.needsMore);
     expect(
       names(const LibraryFilter(sort: LibrarySort.players).apply(games, 3)),
       ['Festa', 'Zebra Kart', 'Aventura'],
@@ -37,13 +41,48 @@ void main() {
     );
   });
 
-  test('recent: last played first, then last added', () {
-    const played = [
-      GameEntry(id: 'old', name: 'Old', path: 'o', addedAt: 9),
-      GameEntry(id: 'played', name: 'Played', path: 'p', addedAt: 1, lastPlayedAt: 100),
-      GameEntry(id: 'new', name: 'New', path: 'n', addedAt: 10),
+  test('favorites: by score, a little-played game every 4th card', () {
+    final list = [
+      for (var i = 0; i < 6; i++)
+        GameEntry(id: 'fav$i', name: 'Fav $i', path: 'f$i', score: 10.0 - i),
+      for (var i = 0; i < 3; i++)
+        GameEntry(id: 'new$i', name: 'New $i', path: 'n$i', score: 0.2),
     ];
-    expect(names(const LibraryFilter().apply(played, 1)), ['Played', 'New', 'Old']);
+    final order = LibraryFilter.favoritesOrder(list);
+    final kinds = [for (final g in order) g.id.substring(0, 3)];
+    expect(kinds, ['fav', 'fav', 'fav', 'new', 'fav', 'fav', 'fav', 'new', 'new']);
+    expect(
+      [for (final g in order) if (g.score >= 1) g.id],
+      ['fav0', 'fav1', 'fav2', 'fav3', 'fav4', 'fav5'],
+    );
+  });
+
+  test('no game wins by its name: unplayed games follow the night draw', () {
+    final list = [
+      for (var i = 0; i < 12; i++)
+        GameEntry(id: 'g$i', name: String.fromCharCode(65 + i), path: '$i'),
+    ];
+    final previous = LibraryFilter.sessionSeed;
+    try {
+      LibraryFilter.sessionSeed = 1;
+      final first = names(LibraryFilter.favoritesOrder(list));
+      expect(names(LibraryFilter.favoritesOrder(list)), first); // holds still
+      final orders = {
+        for (var seed = 1; seed <= 6; seed++)
+          (() {
+            LibraryFilter.sessionSeed = seed;
+            return names(LibraryFilter.favoritesOrder(list)).join();
+          })(),
+      };
+      expect(orders.length, greaterThan(1)); // changes between nights
+    } finally {
+      LibraryFilter.sessionSeed = previous;
+    }
+  });
+
+  test('the old "recent" order reads as favorites', () {
+    expect(LibraryFilter.parseSort('recent'), LibrarySort.favorites);
+    expect(LibraryFilter.parseSort('alphabetical'), LibrarySort.alphabetical);
   });
 
   test('columns start in the middle and alternate right/left', () {

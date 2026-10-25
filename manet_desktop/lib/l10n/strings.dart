@@ -154,7 +154,7 @@ abstract class SessionStrings {
   String get gridRows2;
   String get gridRows3;
   String get sortOrderLabel;
-  String get sortRecent;
+  String get sortFavorites;
   String get sortAlphabetical;
   String get sortPlayers;
   String get manageGamesAndLauncher;
@@ -238,6 +238,7 @@ abstract class SessionStrings {
   /// 0 = A–Z, 1 = recent, 2 = most players (LibrarySort order).
   String sortLabel(int sort);
   String fitsOnly(int players);
+  String onlyForPlayers(int max);
   String get clearFilters;
   String get noGamesMatch;
   String playersShort(int min, int max);

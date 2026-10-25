@@ -183,7 +183,7 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get sortOrderLabel => 'Sorting';
   @override
-  String get sortRecent => 'Most Recent';
+  String get sortFavorites => 'Couch favorites';
   @override
   String get sortAlphabetical => 'Alphabetical (A–Z)';
   @override
@@ -351,12 +351,15 @@ class EnUsSessionStrings implements SessionStrings {
       count == 1 ? '1 player in the session' : '$count players in the session';
   @override
   String sortLabel(int sort) => switch (sort) {
-    1 => 'Recent',
+    1 => 'Favorites',
     2 => 'Most players',
     _ => 'A–Z',
   };
   @override
   String fitsOnly(int players) => 'Fits $players';
+  @override
+  String onlyForPlayers(int max) =>
+      'Only for $max ${max == 1 ? 'player' : 'players'}';
   @override
   String get clearFilters => 'Clear';
   @override

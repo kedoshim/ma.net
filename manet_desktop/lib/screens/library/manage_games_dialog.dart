@@ -333,9 +333,9 @@ class _ManageGamesDialogState extends State<ManageGamesDialog> {
               current: sortOrder,
               options: [
                 (
-                  value: 'recent',
-                  title: strings.sortRecent,
-                  icon: Icons.history_rounded,
+                  value: 'favorites',
+                  title: strings.sortFavorites,
+                  icon: Icons.favorite_rounded,
                 ),
                 (
                   value: 'alphabetical',

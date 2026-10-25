@@ -419,6 +419,9 @@ class GameEntry {
   final double addedAt;
   /// When MaNet last launched it (seconds since epoch, 0: never).
   final double lastPlayedAt;
+  /// How much the couch likes it lately, from the server's play history:
+  /// each real play is worth 1, halving every two months. Read-only here.
+  final double score;
   /// Image URLs shown on a player's phone with the details.
   final List<String> screenshots;
   /// Games played in the phone's browser (Jackbox): while the game runs the
@@ -444,6 +447,7 @@ class GameEntry {
     this.trailerUrl = '',
     this.addedAt = 0,
     this.lastPlayedAt = 0,
+    this.score = 0,
     this.screenshots = const [],
     this.phoneUrl = '',
   });
@@ -480,6 +484,7 @@ class GameEntry {
     trailerUrl: json['trailerUrl'] as String? ?? '',
     addedAt: (json['addedAt'] as num?)?.toDouble() ?? 0,
     lastPlayedAt: (json['lastPlayedAt'] as num?)?.toDouble() ?? 0,
+    score: (json['score'] as num?)?.toDouble() ?? 0,
     screenshots: [
       for (final url in json['screenshots'] as List<dynamic>? ?? const [])
         url.toString(),

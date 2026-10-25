@@ -185,7 +185,7 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get sortOrderLabel => 'Ordenação';
   @override
-  String get sortRecent => 'Mais Recentes';
+  String get sortFavorites => 'Favoritos da galera';
   @override
   String get sortAlphabetical => 'Alfabética (A–Z)';
   @override
@@ -353,12 +353,15 @@ class PtBrSessionStrings implements SessionStrings {
       count == 1 ? '1 jogador na sessão' : '$count jogadores na sessão';
   @override
   String sortLabel(int sort) => switch (sort) {
-    1 => 'Recentes',
+    1 => 'Favoritos',
     2 => 'Mais jogadores',
     _ => 'A–Z',
   };
   @override
   String fitsOnly(int players) => 'Cabem $players';
+  @override
+  String onlyForPlayers(int max) =>
+      'Só para $max ${max == 1 ? 'jogador' : 'jogadores'}';
   @override
   String get clearFilters => 'Limpar';
   @override
