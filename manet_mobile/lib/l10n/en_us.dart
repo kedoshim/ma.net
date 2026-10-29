@@ -558,13 +558,7 @@ class EnUsAccessStrings implements AccessStrings {
 
 class EnUsPhoneGameStrings implements PhoneGameStrings {
   @override
-  String get join => 'Join the game';
+  String get join => 'Open site';
   @override
-  String get openOption => 'Phone game';
-  @override
-  String get showPad => 'Show pad';
-  @override
-  String get backToGame => 'Back to game';
-  @override
-  String get leave => 'Leave game';
+  String get closeOption => 'Close site';
 }

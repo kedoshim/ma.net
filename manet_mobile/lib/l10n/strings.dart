@@ -17,13 +17,10 @@ abstract class AppStrings {
   PhoneGameStrings get phoneGame;
 }
 
-/// Games played in the phone's browser (Jackbox), shown inside the pad page.
+/// A game's site (Jackbox, a manual), shown inside the pad page.
 abstract class PhoneGameStrings {
   String get join;
-  String get openOption;
-  String get showPad;
-  String get backToGame;
-  String get leave;
+  String get closeOption;
 }
 
 /// Joining a room with a password or the host's approval.

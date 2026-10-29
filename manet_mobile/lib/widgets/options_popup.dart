@@ -18,7 +18,8 @@ class OptionsPopup extends StatefulWidget {
   final ValueChanged<ColorTheme> onThemeChanged;
   final VoidCallback? onDisconnectRequested;
   final VoidCallback? onRumbleTest;
-  final VoidCallback? onOpenPhoneGame;
+  /// Set while a game's site is open over the pad.
+  final VoidCallback? onClosePhoneGame;
 
   const OptionsPopup({
     super.key,
@@ -28,7 +29,7 @@ class OptionsPopup extends StatefulWidget {
     required this.onThemeChanged,
     this.onDisconnectRequested,
     this.onRumbleTest,
-    this.onOpenPhoneGame,
+    this.onClosePhoneGame,
   });
 
   @override
@@ -298,14 +299,14 @@ class _OptionsPopupState extends State<OptionsPopup>
                                       widget.onEnterMouseMode();
                                     },
                                   ),
-                                  if (widget.onOpenPhoneGame != null) ...[
+                                  if (widget.onClosePhoneGame != null) ...[
                                     const SizedBox(width: 12),
                                     _OptionButton(
-                                      icon: Icons.phone_android_rounded,
-                                      label: context.l10n.phoneGame.openOption,
+                                      icon: Icons.web_asset_off_rounded,
+                                      label: context.l10n.phoneGame.closeOption,
                                       onTap: () {
                                         Navigator.of(context).pop();
-                                        widget.onOpenPhoneGame!();
+                                        widget.onClosePhoneGame!();
                                       },
                                     ),
                                   ],

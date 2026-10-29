@@ -287,7 +287,7 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get phoneSiteButton => 'Website button on phones';
   @override
-  String get phoneSiteButtonHint => 'For games played on the phone, like Jackbox: the pad shows a button that opens the game website, without leaving ma•net.';
+  String get phoneSiteButtonHint => 'For games played on the phone, like Jackbox, or to keep a manual at hand: the pad shows a button that opens the site, without leaving ma•net.';
   @override
   String get phoneSiteAddress => 'Game website';
   @override

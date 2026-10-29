@@ -289,7 +289,7 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get phoneSiteButton => 'Botão de site no celular';
   @override
-  String get phoneSiteButtonHint => 'Pra jogos que se jogam pelo celular, tipo Jackbox: o controle mostra um botão que abre o site do jogo, sem sair do ma•net.';
+  String get phoneSiteButtonHint => 'Pra jogos que usam o celular, tipo Jackbox, ou pra ter um manual à mão: o controle mostra um botão que abre o site, sem sair do ma•net.';
   @override
   String get phoneSiteAddress => 'Site do jogo';
   @override

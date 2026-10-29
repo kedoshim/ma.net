@@ -179,7 +179,6 @@ class _ControllerScreenState extends State<ControllerScreen>
   String? _runningPhoneGameUrl;
   bool _phoneGameFromServer = false;
   bool _phoneGamePadShown = false;
-  bool _phoneGameMenuOpen = false;
   // The server tells each phone when its input drives MaNet's menus; the
   // phone then shows menu controls (Select / Back / Avatar) instead of the
   // game layout.
@@ -1880,26 +1879,29 @@ class _ControllerScreenState extends State<ControllerScreen>
       _phoneGameUrl = normalized;
       _phoneGameFromServer = fromServer;
       _phoneGamePadShown = false;
-      _phoneGameMenuOpen = false;
     });
     watchPhoneGameBack(_phoneGameBack);
   }
 
-  /// Back over a phone game closes the menu, takes the pad away, or opens
-  /// the menu: it never leaves the game.
+  /// Back switches between the site and the pad: it never leaves the page.
   void _phoneGameBack() {
     if (!mounted || _phoneGameUrl == null) return;
-    _setPhoneGameView(
-      padShown: false,
-      menuOpen: !_phoneGamePadShown && !_phoneGameMenuOpen,
-    );
+    _showPhoneGamePad(!_phoneGamePadShown);
   }
 
-  void _setPhoneGameView({required bool padShown, required bool menuOpen}) {
-    setState(() {
-      _phoneGamePadShown = padShown;
-      _phoneGameMenuOpen = menuOpen;
-    });
+  void _showPhoneGamePad(bool shown) {
+    setState(() => _phoneGamePadShown = shown);
+  }
+
+  /// The pad's site button: back to the open site, or open the one set for
+  /// the running game.
+  VoidCallback? get _phoneGameButtonAction {
+    if (!isPhoneGameSupported) return null;
+    if (_phoneGameUrl != null) return () => _showPhoneGamePad(false);
+    if (_gameRunning && _runningPhoneGameUrl != null) {
+      return () => _openPhoneGame(_runningPhoneGameUrl!, fromServer: true);
+    }
+    return null;
   }
 
   void _leavePhoneGame() {
@@ -1907,7 +1909,6 @@ class _ControllerScreenState extends State<ControllerScreen>
     setState(() {
       _phoneGameUrl = null;
       _phoneGamePadShown = false;
-      _phoneGameMenuOpen = false;
     });
   }
 
@@ -1927,9 +1928,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onThemeChanged: _onThemeChanged,
           onDisconnectRequested: _resetConnection,
           onRumbleTest: _onRumbleTest,
-          onOpenPhoneGame: isPhoneGameSupported
-              ? () => _openPhoneGame(jackboxUrl)
-              : null,
+          onClosePhoneGame: _phoneGameUrl != null ? _leavePhoneGame : null,
         );
       },
     ).then((_) {
@@ -2283,11 +2282,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onOpenFaceEditor: _gameRunning ? _pressHome : _enterFaceMode,
           showHomeButton: _gameRunning,
           overlayOpen: _overlayOpen,
-          onJoinPhoneGame: isPhoneGameSupported &&
-                  _gameRunning &&
-                  _runningPhoneGameUrl != null
-              ? () => _openPhoneGame(_runningPhoneGameUrl!, fromServer: true)
-              : null,
+          onJoinPhoneGame: _phoneGameButtonAction,
           onOpenEditControls: _enterEditMode,
           onRetryConnection: _retryConnection,
           onOpenQrScanner: kIsWeb ? null : _openQRScanner,
@@ -2541,14 +2536,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                   child: PhoneGameControls(
                     playerFace: _playerFace,
                     padShown: _phoneGamePadShown,
-                    menuOpen: _phoneGameMenuOpen,
-                    onMenuOpenChanged: (open) =>
-                        _setPhoneGameView(padShown: false, menuOpen: open),
-                    onShowPad: () =>
-                        _setPhoneGameView(padShown: true, menuOpen: false),
-                    onBackToGame: () =>
-                        _setPhoneGameView(padShown: false, menuOpen: false),
-                    onLeave: _leavePhoneGame,
+                    onShowPad: () => _showPhoneGamePad(true),
                   ),
                 ),
               if (_accessStage != null && _accessStage != AccessGateStage.name)

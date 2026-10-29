@@ -1,7 +1,6 @@
-/// Games the players run in the phone's own browser (Jackbox: jackbox.tv).
-/// The page is shown inside the pad page instead of replacing it, so the
-/// phone keeps its seat and can still reach the pad and the Home overlay.
-const String jackboxUrl = 'https://jackbox.tv';
+// A game's site (Jackbox's jackbox.tv, a manual) is shown inside the pad
+// page instead of replacing it, so the phone keeps its seat and can still
+// reach the pad and the Home overlay.
 
 /// The address to show, or null when it can't be shown in a frame
 /// (anything but a web page, like `javascript:`). A bare host gets https.

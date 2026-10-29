@@ -558,13 +558,7 @@ class PtBrAccessStrings implements AccessStrings {
 
 class PtBrPhoneGameStrings implements PhoneGameStrings {
   @override
-  String get join => 'Entrar no jogo';
+  String get join => 'Abrir site';
   @override
-  String get openOption => 'Jogo de celular';
-  @override
-  String get showPad => 'Ver controle';
-  @override
-  String get backToGame => 'Voltar pro jogo';
-  @override
-  String get leave => 'Sair do jogo';
+  String get closeOption => 'Fechar site';
 }
