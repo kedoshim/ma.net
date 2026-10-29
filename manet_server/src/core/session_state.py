@@ -1248,7 +1248,8 @@ class SessionState:
                 # seat from the overlay.
                 self._fix_seats(game["maxPlayers"])
                 seats = min(16, game["maxPlayers"])
-                if await self.manager.ensure_pads(min_seats=seats, pad_first=seats, reorder=True):
+                self._pack_seats(seats)
+                if await self.manager.fit_pads_to_game(seats):
                     await asyncio.sleep(0.5)  # let Windows finish plugging them
                 self.admin_panel.broadcast_update()
             windows_before = set(await asyncio.to_thread(visible_windows))
@@ -1571,6 +1572,27 @@ class SessionState:
         })
         self.admin_panel.broadcast_update()
         return True
+
+    def _pack_seats(self, seats: int):
+        """Entering a game: players sitting past its last seat move into its
+        empty seats (pads past it get unplugged). Whoever is away goes to
+        the bench."""
+        present = self.present_ids()
+        for slot in self.manager.slots[seats:]:
+            device_id = slot.assigned_device_id
+            if device_id is None:
+                continue
+            name = slot.player_name
+            reset_slot_gamepad(slot)
+            self.manager.unassign_slot(slot.slot_id)
+            if device_id not in present:
+                continue
+            free = next(
+                (s for s in self.manager.slots[:seats] if s.assigned_device_id is None),
+                None,
+            )
+            if free is not None:
+                self.manager.assign_to_slot(device_id, free.slot_id, name)
 
     def _fix_seats(self, limit: int):
         """Console mode, entering a game: seats are fixed from now on."""

@@ -4,7 +4,12 @@ from src.models.models import PlayerSlot
 from src.core.gamepad_factory import create_gamepad, NullGamepad, retire_gamepad
 from src.core.player_identity import normalize_identity
 from src.core.controller_presets import ControllerPresetStore
-from src.services.controller_inventory import vigem_serial
+from src.services.controller_inventory import (
+    XINPUT_MAX_USERS,
+    probe_xinput_indices,
+    vigem_serial,
+    xinput_connected_indices,
+)
 from src.services.dinput_order import dinput_serial_order
 
 import logging
@@ -201,6 +206,59 @@ class ControllerManager:
         LOGGER.info("[LIFECYCLE] Plugged %s gamepad into seat %d", gp_type, slot.slot_id)
         return True
 
+    async def _xinput_count_before_plug(self) -> int | None:
+        if self.config.controller_type == "ds4":
+            return None
+        return len(await asyncio.to_thread(xinput_connected_indices))
+
+    async def _wait_until_plugged(self, gamepad, xinput_before: int | None, timeout: float = 1.5):
+        """Wait for Windows to finish plugging a new X360 pad before the next
+        one goes in. Plugged in a burst they finish in any order, and the
+        XInput slots (and the order games list pads in) follow whoever
+        finished first: P2 ended up as the game's fifth controller."""
+        serial = vigem_serial(gamepad)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if xinput_before is not None and xinput_before < XINPUT_MAX_USERS:
+                if len(await asyncio.to_thread(xinput_connected_indices)) > xinput_before:
+                    return
+            elif serial is None or serial in await asyncio.to_thread(dinput_serial_order):
+                return
+            await asyncio.sleep(0.03)
+        LOGGER.warning("Windows took over %.1fs to plug in an X360 pad (serial %s)", timeout, serial)
+
+    async def _attach_pad_in_order(self, slot) -> bool:
+        xinput_before = await self._xinput_count_before_plug()
+        if not self._attach_pad(slot):
+            return False
+        if slot.controller_type == "x360":
+            await self._wait_until_plugged(slot.gamepad, xinput_before)
+        return True
+
+    async def fit_pads_to_game(self, seats: int) -> bool:
+        """Console mode, before a game starts: the first `seats` seats have a
+        pad and no other seat does, numbered the way games number them.
+        Pads left over from a bigger game would take XInput slots from the
+        players (P5 answering as P2). Seats past `seats` must be empty.
+        Returns whether pads were plugged in, unplugged or moved."""
+        unplugged = 0
+        async with self._slot_lock:
+            for slot in self.slots[seats:]:
+                if slot.gamepad is None:
+                    continue
+                try:
+                    retire_gamepad(slot.gamepad)
+                except Exception:
+                    LOGGER.exception("Failed to retire gamepad for seat %d", slot.slot_id)
+                slot.gamepad = None
+                unplugged += 1
+        if unplugged:
+            LOGGER.info("Unplugged %d pads the game has no seats for", unplugged)
+        created = await self.ensure_pads(min_seats=seats, pad_first=seats)
+        async with self._slot_lock:
+            changed = await self.order_pads_for_games()
+        return bool(unplugged or created or changed)
+
     async def ensure_pads(self, min_seats: int = 0, every_seat: bool = False, pad_first: int = 0, reorder: bool = False) -> int:
         """Plug virtual pads into the seats with a player, the first
         `pad_first` seats, or every seat, in seat order so the XInput order
@@ -218,7 +276,7 @@ class ControllerManager:
                 if not (every_seat or slot.assigned_device_id or slot.slot_id < pad_first):
                     continue
                 await asyncio.sleep(0)
-                if not self._attach_pad(slot):
+                if not await self._attach_pad_in_order(slot):
                     self._broadcast_limit_reached(sum(1 for s in self.slots if s.gamepad is not None))
                     break
                 created += 1
@@ -233,32 +291,16 @@ class ControllerManager:
                     })
         return created
 
-    async def order_pads_for_games(self, timeout: float = 3.0):
-        """Hand the DS4 pads to the seats in the order games list them, so
-        P1 is the game's first DualShock, P2 the second... Windows lists
-        DInput pads in a fixed shuffle of their serials, not in the order
-        they were plugged in (see dinput_order). Only call when no game is
-        relying on the current pads (it moves pads between seats). Call
-        with _slot_lock held."""
-        slots = [s for s in self.slots if s.gamepad is not None and s.controller_type == "ds4"]
-        serial_of = {id(s.gamepad): vigem_serial(s.gamepad) for s in slots}
-        wanted = {serial for serial in serial_of.values() if serial is not None}
-        if len(slots) < 2 or len(wanted) != len(slots):
-            return
+    async def order_pads_for_games(self, timeout: float = 3.0) -> int:
+        """Hand the pads to the seats in the order games number them, so P1
+        is the game's first controller, P2 the second... Only call when no
+        game is relying on the current pads (it moves pads between seats).
+        Call with _slot_lock held. Returns how many pads changed seats or
+        were plugged in again."""
+        return await self._order_dinput_pads(timeout) + await self._order_xinput_pads()
 
-        # New pads take a moment to show up in DirectInput.
-        deadline = time.monotonic() + timeout
-        while True:
-            order = await asyncio.to_thread(dinput_serial_order)
-            if wanted <= set(order) or time.monotonic() >= deadline:
-                break
-            await asyncio.sleep(0.25)
-        rank = {serial: index for index, serial in enumerate(order)}
-        if not wanted <= set(rank):
-            LOGGER.warning("DirectInput does not list every DS4 pad yet; seats keep their pads")
-            return
-
-        pads = sorted((s.gamepad for s in slots), key=lambda pad: rank[serial_of[id(pad)]])
+    def _hand_pads(self, slots, pads) -> int:
+        """Give pads[i] to slots[i]; returns how many seats got another pad."""
         moved = 0
         for slot, pad in zip(slots, pads):
             if slot.gamepad is pad:
@@ -270,11 +312,87 @@ class ControllerManager:
             if state is not None:
                 state["slot_index"] = slot.slot_id
             moved += 1
+        return moved
+
+    async def _order_dinput_pads(self, timeout: float) -> int:
+        """DS4: Windows lists DInput pads in a fixed shuffle of their
+        serials, not in the order they were plugged in (see dinput_order)."""
+        slots = [s for s in self.slots if s.gamepad is not None and s.controller_type == "ds4"]
+        serial_of = {id(s.gamepad): vigem_serial(s.gamepad) for s in slots}
+        wanted = {serial for serial in serial_of.values() if serial is not None}
+        if len(slots) < 2 or len(wanted) != len(slots):
+            return 0
+
+        # New pads take a moment to show up in DirectInput.
+        deadline = time.monotonic() + timeout
+        while True:
+            order = await asyncio.to_thread(dinput_serial_order)
+            if wanted <= set(order) or time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(0.25)
+        rank = {serial: index for index, serial in enumerate(order)}
+        if not wanted <= set(rank):
+            LOGGER.warning("DirectInput does not list every DS4 pad yet; seats keep their pads")
+            return 0
+
+        pads = sorted((s.gamepad for s in slots), key=lambda pad: rank[serial_of[id(pad)]])
+        moved = self._hand_pads(slots, pads)
         if moved:
             LOGGER.info(
                 "Seats now follow the DirectInput order: %s",
                 ", ".join(f"P{s.slot_id + 1}=serial {serial_of[id(s.gamepad)]}" for s in slots),
             )
+        return moved
+
+    async def _order_xinput_pads(self) -> int:
+        """X360: XInput games number players by XInput slot (0-3), so the
+        first seats get the slots in order and pads past the fourth follow
+        in the order they were plugged in. A seat whose pad got no slot
+        while one is free (its pad came in while leftover pads held them
+        all) gets its pad plugged in again."""
+        changed = 0
+        for attempt in range(2):
+            slots = [s for s in self.slots if s.gamepad is not None and s.controller_type == "x360"]
+            states = {
+                id(s.gamepad): s.gamepad._manet_callback_state
+                for s in slots if getattr(s.gamepad, "_manet_callback_state", None) is not None
+            }
+            if not slots or len(states) != len(slots):
+                return changed
+            connected = await asyncio.to_thread(xinput_connected_indices)
+            slot_of_pad = await asyncio.to_thread(probe_xinput_indices, states, connected)
+            if connected and not slot_of_pad:
+                LOGGER.warning("Could not tell which XInput slot each pad has; seats keep their pads")
+                return changed
+
+            pads = sorted(
+                (s.gamepad for s in slots),
+                key=lambda pad: (slot_of_pad.get(id(pad), XINPUT_MAX_USERS), vigem_serial(pad) or 0),
+            )
+            changed += self._hand_pads(slots, pads)
+            with_slot = len(slot_of_pad)
+            free = XINPUT_MAX_USERS - len(connected)
+            stranded = slots[with_slot:with_slot + free]
+            if attempt or not stranded:
+                break
+            LOGGER.info("Plugging in again %d pads that got no XInput slot", len(stranded))
+            for slot in stranded:
+                try:
+                    retire_gamepad(slot.gamepad)
+                except Exception:
+                    LOGGER.exception("Failed to retire gamepad for seat %d", slot.slot_id)
+                slot.gamepad = None
+                if not await self._attach_pad_in_order(slot):
+                    self._broadcast_limit_reached(sum(1 for s in self.slots if s.gamepad is not None))
+                    break
+                changed += 1
+        LOGGER.info(
+            "XInput slots: %s",
+            ", ".join(
+                f"P{s.slot_id + 1}={slot_of_pad.get(id(s.gamepad), '-')}" for s in slots
+            ),
+        )
+        return changed
 
     def needs_pads(self) -> bool:
         return any(slot.gamepad is None and slot.assigned_device_id for slot in self.slots)
@@ -368,8 +486,10 @@ class ControllerManager:
         # (access violation) when targets are created from worker threads
         # and later torn down from this one. With the DS4 probe cached it
         # takes ~20ms per pad, so we just yield to the loop between pads.
-        await asyncio.sleep(0)
+        xinput_before = await self._xinput_count_before_plug()
         slot = self._create_empty_slot(index)
+        if slot is not None and slot.controller_type == "x360":
+            await self._wait_until_plugged(slot.gamepad, xinput_before)
         await asyncio.sleep(0)
         return slot
 
@@ -965,7 +1085,7 @@ class ControllerManager:
                 await asyncio.sleep(0.35)  # same pacing as a full recreate
             else:
                 await asyncio.sleep(0)
-            if not self._attach_pad(slot):
+            if not await self._attach_pad_in_order(slot):
                 self._broadcast_limit_reached(index)
                 break
         await self.order_pads_for_games()
