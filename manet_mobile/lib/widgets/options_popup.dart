@@ -215,6 +215,14 @@ class _OptionsPopupState extends State<OptionsPopup>
                           backgroundColor: AppColors.highlightColor.withValues(
                             alpha: 0.2,
                           ),
+                          // Same thick outline as the ping chip beside it.
+                          side: const BorderSide(
+                            color: AppColors.textPrimary,
+                            width: 2.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 8,

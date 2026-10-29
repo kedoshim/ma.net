@@ -852,9 +852,11 @@ class _ReadyPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A bit wider than shown: the right side (and its border) stays off
-    // screen, so the pill looks stuck to the edge.
-    const hidden = 12.0;
+    // Wider than shown: the right side (and its border) stays off screen,
+    // so the pill looks stuck to the edge. The slide-in overshoots about a
+    // tenth of the width to the left, so the hidden part must outgrow that
+    // (a fixed 12 px let the right border peek in during the entrance).
+    final hidden = height * 0.5;
     final width = height * 1.65 + hidden;
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 300),
@@ -877,7 +879,7 @@ class _ReadyPill extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.all(height * 0.08),
             decoration: BoxDecoration(
-              color: AppColors.screenBackground,
+              color: Colors.white,
               borderRadius: BorderRadius.horizontal(
                 left: Radius.circular(height / 2),
               ),
