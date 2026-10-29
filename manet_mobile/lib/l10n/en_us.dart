@@ -145,9 +145,11 @@ class EnUsMenuStrings implements MenuStrings {
   @override
   String get jump => 'Jump';
   @override
-  String get loadingHint => 'The game is opening... jump around meanwhile!';
+  String get loadingHint => 'The game is opening... fill the TV box with faces!';
   @override
   String get showGame => "It's open";
+  @override
+  String youTossed(int count) => 'You tossed $count';
   @override
   String get seat => 'Seat';
   @override

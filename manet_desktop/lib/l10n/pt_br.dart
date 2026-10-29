@@ -443,6 +443,16 @@ class PtBrSessionStrings implements SessionStrings {
   @override
   String get loadingShowGame => 'Mostrar o jogo';
   @override
+  String get aquariumHint => 'Aperta A no celular e joga seu rostinho na caixa!';
+  @override
+  String aquariumFaces(int count) => count == 1 ? 'rostinho' : 'rostinhos';
+  @override
+  String aquariumRecord(int record) => 'Recorde: $record';
+  @override
+  String get aquariumNewRecord => 'Recorde novo!';
+  @override
+  String get aquariumOverflow => 'Encheu!';
+  @override
   String get tournamentTitle => 'Torneio!';
   @override
   String tournamentIntro(int games) =>

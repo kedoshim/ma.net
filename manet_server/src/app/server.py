@@ -1,3 +1,5 @@
+import asyncio
+
 from aiohttp import web
 import aiohttp_cors
 import threading
@@ -20,6 +22,29 @@ from src.app.security import admin_auth_middleware, load_admin_token, requires_a
 import logging
 
 LOG = logging.getLogger("piko-proto") 
+
+
+def _is_reset_on_close(context) -> bool:
+    """A phone that dropped off abruptly (screen locked, left the Wi-Fi):
+    on Windows, asyncio then fails to shut down the already-reset socket and
+    logs a scary traceback for a connection that is simply gone."""
+    return (
+        isinstance(context.get("exception"), ConnectionResetError)
+        and "_call_connection_lost" in repr(context.get("handle"))
+    )
+
+
+def _quiet_loop_errors(loop):
+    def handler(loop, context):
+        if _is_reset_on_close(context):
+            return
+        loop.default_exception_handler(context)
+
+    loop.set_exception_handler(handler)
+
+
+async def _install_quiet_loop_errors(app):
+    _quiet_loop_errors(asyncio.get_running_loop())
 
 
 def create_app(config):
@@ -47,6 +72,7 @@ def create_app(config):
 
     LOG.info("Creating aiohttp web application...")
     app = web.Application(middlewares=[admin_auth_middleware(load_admin_token())])
+    app.on_startup.append(_install_quiet_loop_errors)
 
     cors = aiohttp_cors.setup(app, defaults={
         "*": aiohttp_cors.ResourceOptions(

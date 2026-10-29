@@ -969,14 +969,15 @@ class _HomePageWidgetState extends State<HomePageWidget> {
                               builder: (context, child) {
                                 // The game selection takes the whole
                                 // window; the lobby keeps its margins.
-                                // The console lobby is one edge-to-edge
-                                // scene.
+                                // The console lobby and the loading
+                                // screen's box are edge-to-edge scenes.
                                 final lobby =
                                     (_session.snapshot.phase ==
                                             SessionPhase.lobby &&
                                         !_consoleMode) ||
-                                    _session.snapshot.phase ==
-                                        SessionPhase.inGame;
+                                    (_session.snapshot.phase ==
+                                            SessionPhase.inGame &&
+                                        _session.snapshot.gameReady);
                                 return AnimatedPadding(
                                   duration: const Duration(milliseconds: 300),
                                   curve: Curves.easeOutCubic,

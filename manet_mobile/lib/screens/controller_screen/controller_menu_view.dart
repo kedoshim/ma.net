@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -31,7 +32,7 @@ enum MenuContext {
   checkIn,
   /// Console mode: deciding who plays first (sides, then a minigame).
   lineup,
-  /// A launched game is still opening: jump around, or show it (START).
+  /// A launched game is still opening: toss faces into the TV's box (A), or show the game (START).
   loading,
 }
 
@@ -129,6 +130,9 @@ class ControllerMenuView extends StatefulWidget {
 
 class _ControllerMenuViewState extends State<ControllerMenuView> {
   late MovementMode _movementMode;
+  /// Loading screen: faces this phone tossed, counted here (the TV counts
+  /// everyone's).
+  int _tossed = 0;
 
   MovementMode get _defaultMode => widget.menuContext == MenuContext.overlay
       ? MovementMode.dpad
@@ -149,6 +153,10 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
       }
     } else if (widget.menuContext != oldWidget.menuContext) {
       _movementMode = _defaultMode;
+    }
+    if (widget.menuContext == MenuContext.loading &&
+        oldWidget.menuContext != MenuContext.loading) {
+      _tossed = 0;
     }
   }
 
@@ -265,6 +273,9 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
     if (widget.menuContext == MenuContext.lobby || widget.menuContext == MenuContext.library) {
       return _buildLobby(context, strings);
     }
+    if (widget.menuContext == MenuContext.loading) {
+      return _buildLoading(strings);
+    }
     final reading = widget.menuContext == MenuContext.library && widget.details != null;
     final left = reading
         ? GameInfoPanel(game: widget.details!, serverBase: widget.serverBase)
@@ -363,19 +374,8 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
             _EmoteButton(face: widget.playerFace, onDown: () => _press('Y'), onUp: () => _release('Y')),
           ],
         );
-      case MenuContext.checkIn || MenuContext.lineup:
+      case MenuContext.checkIn || MenuContext.lineup || MenuContext.loading:
         return const SizedBox.shrink(); // full-screen layouts, built in build()
-      case MenuContext.loading:
-        return _Column(
-          hint: _Hint(strings.loadingHint),
-          children: [
-            _pair(
-              _pad('START', strings.showGame, Icons.tv_rounded),
-              _pad('A', strings.jump, Icons.keyboard_double_arrow_up_rounded, large: true),
-            ),
-            faceButton,
-          ],
-        );
       case MenuContext.overlay || MenuContext.playground:
         final playground = widget.menuContext == MenuContext.playground;
         return _Column(
@@ -564,6 +564,63 @@ class _ControllerMenuViewState extends State<ControllerMenuView> {
           child: Center(child: _AppTag()),
         ),
       ],
+    );
+  }
+
+  /// While the game opens: one huge button, just your face, that tosses it
+  /// into the TV's box, your own count, and "it's open" (START) on the side.
+  Widget _buildLoading(MenuStrings strings) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 44, 12, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 4,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _Hint(strings.loadingHint),
+                    const SizedBox(height: 12),
+                    _TossCount(count: _tossed, label: strings.youTossed(_tossed)),
+                    const SizedBox(height: 14),
+                    _OptionButton(
+                      onTap: widget.onOpenAvatar,
+                      label: strings.face,
+                      leading: PlayerFaceIndicator(
+                        face: widget.playerFace,
+                        size: 34,
+                        roundedSquare: true,
+                        borderColor: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _pad('START', strings.showGame, Icons.tv_rounded),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 5,
+              child: _TossButton(
+                key: const ValueKey('toss_button'),
+                face: widget.playerFace,
+                onToss: () {
+                  // A full press per finger, sent at once: mashing with
+                  // two thumbs counts every tap.
+                  _press('A');
+                  _release('A');
+                  setState(() => _tossed++);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1130,6 +1187,111 @@ class _PadButtonState extends State<PadButton> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The loading screen's toss button. Every finger that touches it is a
+/// toss right away (a tap recognizer would wait for the finger to lift and
+/// ignore a second thumb), and the face on it squashes and springs back.
+class _TossButton extends StatefulWidget {
+  final PlayerFaceData face;
+  final VoidCallback onToss;
+
+  const _TossButton({super.key, required this.face, required this.onToss});
+
+  @override
+  State<_TossButton> createState() => _TossButtonState();
+}
+
+class _TossButtonState extends State<_TossButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _boing = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+  int _fingers = 0;
+
+  @override
+  void dispose() {
+    _boing.dispose();
+    super.dispose();
+  }
+
+  void _down(PointerDownEvent _) {
+    setState(() => _fingers++);
+    _boing.forward(from: 0);
+    widget.onToss();
+  }
+
+  void _up(PointerEvent _) {
+    if (_fingers > 0) setState(() => _fingers--);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pressed = _fingers > 0;
+    return Listener(
+      onPointerDown: _down,
+      onPointerUp: _up,
+      onPointerCancel: _up,
+      child: AnimatedScale(
+        scale: pressed ? 0.95 : 1,
+        duration: const Duration(milliseconds: 70),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 70),
+          decoration: BoxDecoration(
+            color: pressed ? AppColors.highlightColor : AppColors.lightColor,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: AppColors.textPrimary, width: 4),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = (constraints.biggest.shortestSide * 0.62).clamp(48.0, 190.0);
+              return Center(
+                child: AnimatedBuilder(
+                  animation: _boing,
+                  builder: (context, child) {
+                    // Squash on the tap, then a springy stretch back.
+                    final t = _boing.value;
+                    final squash = math.sin(t * math.pi * 3) * math.exp(-t * 4) * 0.28;
+                    return Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.diagonal3Values(1 + squash, 1 - squash, 1),
+                      child: child,
+                    );
+                  },
+                  child: PlayerFaceIndicator(
+                    face: widget.face,
+                    size: size,
+                    roundedSquare: true,
+                    borderColor: AppColors.textPrimary,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "You tossed 12", hopping each time it goes up.
+class _TossCount extends StatelessWidget {
+  final int count;
+  final String label;
+
+  const _TossCount({required this.count, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(count),
+      tween: Tween(begin: count == 0 ? 1 : 1.25, end: 1),
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      child: Text(label, style: _bold.copyWith(fontSize: 22)),
     );
   }
 }

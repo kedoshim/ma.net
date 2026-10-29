@@ -441,6 +441,16 @@ class EnUsSessionStrings implements SessionStrings {
   @override
   String get loadingShowGame => 'Show the game';
   @override
+  String get aquariumHint => 'Press A on your phone to toss your face in the box!';
+  @override
+  String aquariumFaces(int count) => count == 1 ? 'face' : 'faces';
+  @override
+  String aquariumRecord(int record) => 'Record: $record';
+  @override
+  String get aquariumNewRecord => 'New record!';
+  @override
+  String get aquariumOverflow => "It's full!";
+  @override
   String get tournamentTitle => 'Tournament!';
   @override
   String tournamentIntro(int games) =>

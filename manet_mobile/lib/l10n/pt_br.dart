@@ -145,9 +145,11 @@ class PtBrMenuStrings implements MenuStrings {
   @override
   String get jump => 'Pular';
   @override
-  String get loadingHint => 'O jogo está abrindo... pula aí enquanto isso!';
+  String get loadingHint => 'O jogo está abrindo... enche a caixa da TV de rostinhos!';
   @override
   String get showGame => 'Já abriu';
+  @override
+  String youTossed(int count) => 'Você jogou $count';
   @override
   String get seat => 'Lugar';
   @override

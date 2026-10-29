@@ -92,6 +92,7 @@ abstract class MenuStrings {
   String get jump;
   String get loadingHint;
   String get showGame;
+  String youTossed(int count);
   String get seat;
   String get seatsTitle;
   String get seatsHint;

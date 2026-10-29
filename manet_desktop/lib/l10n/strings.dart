@@ -138,6 +138,11 @@ abstract class SessionStrings {
   String loadingElapsed(int seconds);
   String get loadingSlowHint;
   String get loadingShowGame;
+  String get aquariumHint;
+  String aquariumFaces(int count);
+  String aquariumRecord(int record);
+  String get aquariumNewRecord;
+  String get aquariumOverflow;
   String get playingHint;
   String get untrackedHint;
   String get closeGame;
