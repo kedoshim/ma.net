@@ -242,18 +242,8 @@ abstract class JoystickStrings {
 }
 
 abstract class DisconnectStrings {
-  String get title;
-  String get subtitle;
-  String get hostOffline;
-  String wifiChanged(String expected);
-  String get noWifi;
-  String get noInternet;
-  String get unknown;
-  String currentNetwork(String current);
-  String expectedNetwork(String expected);
-  String get tryAgain;
-  String get reconnect;
-  String get diagnosing;
+  String get reconnecting;
+  String get stillTrying;
 }
 
 abstract class AndroidOnboardingStrings {

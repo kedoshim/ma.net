@@ -34,7 +34,7 @@ import '../services/gamepad_input_engine.dart';
 import '../services/physical_gamepad/physical_gamepad_relay.dart';
 import '../widgets/physical_pad_widgets.dart';
 import '../services/connection_diagnostics_service.dart';
-import '../widgets/disconnect_dialog.dart';
+import '../widgets/reconnecting_banner.dart';
 import '../utils/platform_detector.dart';
 import '../widgets/android_onboarding_dialog.dart';
 
@@ -219,10 +219,17 @@ class _ControllerScreenState extends State<ControllerScreen>
   Offset? _lastSentLeftStick;
   Offset? _lastSentRightStick;
 
-  bool _isDisconnectModalOpen = false;
-  BuildContext? _disconnectDialogContext;
   bool _intentionalDisconnect = false;
-  Timer? _backgroundReconnectTimer;
+  // After a working connection drops (MaNet restarted on the PC, the phone
+  // slept, the Wi-Fi blinked) the phone keeps knocking until the host
+  // answers, with a small banner instead of a blocking dialog. A modal here
+  // used to outlive the reconnection and leave buttons that did nothing.
+  bool _reconnecting = false;
+  DateTime? _reconnectingSince;
+  int _reconnectAttempts = 0;
+  Timer? _reconnectTimer;
+  // The tips dialog, closed by its own route so it never pops another one.
+  Route<void>? _tipsDialogRoute;
   // Fails the attempt if the host accepts the socket but never says hello.
   Timer? _handshakeTimer;
   // Completes with whether the current attempt reached the host.
@@ -291,7 +298,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   @override
   void dispose() {
     stopWatchingPhoneGameBack();
-    _backgroundReconnectTimer?.cancel();
+    _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _pingTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -310,6 +317,11 @@ class _ControllerScreenState extends State<ControllerScreen>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.detached) {
       ControllerConnectionManager.instance.disconnect();
+    }
+    // Background tabs and sleeping apps get their timers throttled, so the
+    // next knock could be a minute away: try right when the player is back.
+    if (state == AppLifecycleState.resumed && _reconnecting) {
+      _reconnectNow();
     }
   }
 
@@ -398,87 +410,46 @@ class _ControllerScreenState extends State<ControllerScreen>
     } catch (_) {}
   }
 
-  void _startBackgroundReconnection() {
-    _backgroundReconnectTimer?.cancel();
-    _backgroundReconnectTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
-      if (_connectionState == ControllerConnectionState.connected ||
-          ws != null ||
-          _listenerAttached) {
-        return;
-      }
-
-      final prefs = PreferencesService.instance;
-      final host = await prefs.getServerHost();
-      if (host != null) {
-        await _connectWebSocket();
-      } else {
-        _retryConnection();
-      }
+  void _startReconnecting() {
+    if (!_reconnecting) _reconnectAttempts = 0;
+    setState(() {
+      // "Searching" between knocks too, so the status doesn't blink
+      // between searching and disconnected every few seconds.
+      _connectionState = ControllerConnectionState.searching;
+      _reconnectingSince ??= DateTime.now();
+      _reconnecting = true;
     });
+    _scheduleReconnect();
   }
 
-  void _stopBackgroundReconnection() {
-    _backgroundReconnectTimer?.cancel();
-    _backgroundReconnectTimer = null;
-  }
-
-  Future<void> _showDisconnectDialog() async {
-    if (_isDisconnectModalOpen) return;
-    _isDisconnectModalOpen = true;
-
-    final prefs = PreferencesService.instance;
-    final lastHost = await prefs.getLastKnownHostIp() ?? await prefs.getServerHost();
-    final lastPort = await prefs.getServerPort();
-    final expectedSsid = await prefs.getLastKnownSsid();
-    final isHttps = await prefs.getServerHttps() ?? (Uri.base.scheme == 'https');
-
-    final dialogContext = _controllerNavigatorKey.currentContext ?? context;
-    if (!dialogContext.mounted) {
-      _isDisconnectModalOpen = false;
-      return;
+  void _stopReconnecting() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempts = 0;
+    if (_reconnecting && mounted) {
+      setState(() {
+        _reconnecting = false;
+        _reconnectingSince = null;
+      });
     }
+  }
 
-    _startBackgroundReconnection();
+  /// Next knock in 1, 2, 3 then every 4 seconds: quick enough to catch a
+  /// MaNet restart, slow enough not to hammer a PC that is off.
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    final seconds = (_reconnectAttempts + 1).clamp(1, 4);
+    _reconnectAttempts++;
+    _reconnectTimer = Timer(Duration(seconds: seconds), _reconnectNow);
+  }
 
-    await showDialog(
-      context: dialogContext,
-      barrierDismissible: false,
-      useRootNavigator: false,
-      builder: (dialogContext) {
-        _disconnectDialogContext = dialogContext;
-        return DisconnectDialog(
-          hostIp: lastHost ?? Uri.base.host,
-          port: lastPort ?? Uri.base.port,
-          expectedSsid: expectedSsid,
-          isHttps: isHttps,
-          onReconnect: () {
-            if (_isDisconnectModalOpen) {
-              try {
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                }
-              } catch (_) {}
-              _isDisconnectModalOpen = false;
-              _disconnectDialogContext = null;
-            }
-            _stopBackgroundReconnection();
-            _retryConnection();
-          },
-          onClose: () {
-            if (_isDisconnectModalOpen) {
-              try {
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                }
-              } catch (_) {}
-              _isDisconnectModalOpen = false;
-              _disconnectDialogContext = null;
-            }
-            _stopBackgroundReconnection();
-          },
-        );
-      },
-    );
+  void _reconnectNow() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    if (!mounted || !_reconnecting) return;
+    // An attempt is already on its way; its own failure schedules the next.
+    if (ws != null || _listenerAttached) return;
+    unawaited(_connectWebSocket());
   }
 
   Future<void> _checkAndShowAndroidOnboarding() async {
@@ -612,6 +583,22 @@ class _ControllerScreenState extends State<ControllerScreen>
     PhysicalGamepadRelay.instance.detach();
     _clientInfoKnown = false;
 
+    // On the web the page itself came from the host, so the host is always
+    // the one to wait for, even if the very first attempt failed (a tab
+    // reopened while MaNet was closed). The app keeps waiting only for a
+    // host it was playing on; a first failure there goes to discovery.
+    final keepTrying = !_intentionalDisconnect &&
+        !turnedAway &&
+        (_reconnecting || wasConnected || (kIsWeb && failedToConnect));
+    _intentionalDisconnect = false;
+
+    if (keepTrying) {
+      // Each failed knock here is expected while the PC is off: no tips.
+      _startReconnecting();
+      return;
+    }
+    _stopReconnecting();
+
     if (failedToConnect) {
       if (shouldShowDialog) {
         _showConnectionTipsDialog();
@@ -620,11 +607,6 @@ class _ControllerScreenState extends State<ControllerScreen>
         _handleConnectionFailure();
       }
     }
-
-    if (wasConnected && !_intentionalDisconnect) {
-      unawaited(_showDisconnectDialog());
-    }
-    _intentionalDisconnect = false;
   }
 
   Future<void> _connectToHost(DiscoveredHost host) async {
@@ -648,70 +630,92 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   void _showConnectionTipsDialog() {
+    // One at a time: repeated failures used to stack them.
+    if (_tipsDialogRoute != null) return;
     final dialogContext = _controllerNavigatorKey.currentContext ?? context;
 
+    Route<void>? shown;
     showDialog(
       context: dialogContext,
       useRootNavigator: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.screenBackground,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const SizedBox(width: 8),
-            Text(
-              context.l10n.connectionTips.title,
-              style: const TextStyle(
-                fontFamily: 'momo',
-                color: AppColors.textPrimary,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.l10n.connectionTips.subtitle,
-                style: TextStyle(
-                  color: AppColors.textPrimary.withValues(alpha: 0.8),
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildTipRow(
-                Icons.wifi_rounded,
-                context.l10n.connectionTips.wifiSame,
-              ),
-              const SizedBox(height: 12),
-              _buildTipRow(
-                Icons.shield_outlined,
-                context.l10n.connectionTips.firewall,
-              ),
-              const SizedBox(height: 12),
-              _buildTipRow(
-                Icons.portable_wifi_off_outlined,
-                context.l10n.connectionTips.hotspot,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              context.l10n.connectionTips.gotIt,
-              style: TextStyle(
-                fontFamily: 'momo',
-                color: AppColors.highlightColor,
-              ),
+      builder: (context) {
+        shown ??= ModalRoute.of(context);
+        _tipsDialogRoute ??= shown;
+        return _buildConnectionTipsDialog(context);
+      },
+    ).whenComplete(() {
+      if (_tipsDialogRoute == shown) _tipsDialogRoute = null;
+    });
+  }
+
+  /// Closes the tips once the host answers. Removes that exact route:
+  /// a plain pop() would close whatever happens to be on top.
+  void _closeTipsDialog() {
+    final route = _tipsDialogRoute;
+    _tipsDialogRoute = null;
+    if (route == null || !route.isActive) return;
+    route.navigator?.removeRoute(route);
+  }
+
+  Widget _buildConnectionTipsDialog(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.screenBackground,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          const SizedBox(width: 8),
+          Text(
+            context.l10n.connectionTips.title,
+            style: const TextStyle(
+              fontFamily: 'momo',
+              color: AppColors.textPrimary,
+              fontSize: 18,
             ),
           ),
         ],
       ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.connectionTips.subtitle,
+              style: TextStyle(
+                color: AppColors.textPrimary.withValues(alpha: 0.8),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildTipRow(
+              Icons.wifi_rounded,
+              context.l10n.connectionTips.wifiSame,
+            ),
+            const SizedBox(height: 12),
+            _buildTipRow(
+              Icons.shield_outlined,
+              context.l10n.connectionTips.firewall,
+            ),
+            const SizedBox(height: 12),
+            _buildTipRow(
+              Icons.portable_wifi_off_outlined,
+              context.l10n.connectionTips.hotspot,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            context.l10n.connectionTips.gotIt,
+            style: TextStyle(
+              fontFamily: 'momo',
+              color: AppColors.highlightColor,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -732,6 +736,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   }
 
   Future<void> _resetConnection() async {
+    _stopReconnecting();
     _intentionalDisconnect = true;
     ControllerConnectionManager.instance.disconnect();
     await PreferencesService.instance.clearConnection();
@@ -835,6 +840,19 @@ class _ControllerScreenState extends State<ControllerScreen>
     }
   }
 
+  Widget _buildReconnectingBanner() {
+    final since = _reconnectingSince;
+    if (!_reconnecting || since == null) return const SizedBox.shrink();
+    return Positioned(
+      top: 4,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: ReconnectingBanner(since: since, onTapRetry: _reconnectNow),
+      ),
+    );
+  }
+
   Widget _buildPhysicalPadChip() {
     if (_connectionState != ControllerConnectionState.connected ||
         _activeMode != ControllerScreenMode.gameplay) {
@@ -856,6 +874,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     _handshakeTimer?.cancel();
     _handshakeTimer = null;
     _completeHandshake(true);
+    _stopReconnecting();
+    _closeTipsDialog();
 
     setState(() {
       _connectionState = ControllerConnectionState.connected;
@@ -927,6 +947,8 @@ class _ControllerScreenState extends State<ControllerScreen>
     _handshakeTimer?.cancel();
     _handshakeTimer = null;
     _completeHandshake(true);
+    _stopReconnecting();
+    _closeTipsDialog();
     return true;
   }
 
@@ -981,18 +1003,6 @@ class _ControllerScreenState extends State<ControllerScreen>
     PreferencesService.instance.setLastValidCommunicationTimestamp(
       DateTime.now().millisecondsSinceEpoch,
     );
-
-    if (_isDisconnectModalOpen) {
-      final dCtx = _disconnectDialogContext;
-      try {
-        if (dCtx != null && dCtx.mounted) {
-          Navigator.of(dCtx).pop();
-        }
-      } catch (_) {}
-      _isDisconnectModalOpen = false;
-      _disconnectDialogContext = null;
-      _stopBackgroundReconnection();
-    }
 
     if (message is! String) {
       return;
@@ -2392,6 +2402,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                         children: [
                           _buildControllerSurface(),
                           _buildPhysicalPadChip(),
+                          _buildReconnectingBanner(),
                           if (_connectionState ==
                               ControllerConnectionState.multipleHostsFound)
                             MultipleHostsOverlay(
@@ -2412,6 +2423,7 @@ class _ControllerScreenState extends State<ControllerScreen>
                   children: [
                     _buildControllerSurface(),
                     _buildPhysicalPadChip(),
+                    _buildReconnectingBanner(),
                     if (_connectionState ==
                         ControllerConnectionState.multipleHostsFound)
                       MultipleHostsOverlay(

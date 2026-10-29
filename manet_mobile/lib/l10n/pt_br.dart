@@ -482,29 +482,9 @@ class PtBrJoystickStrings implements JoystickStrings {
 
 class PtBrDisconnectStrings implements DisconnectStrings {
   @override
-  String get title => 'Você foi desconectado';
+  String get reconnecting => 'Reconectando...';
   @override
-  String get subtitle => 'Não foi possível continuar conectado ao MaNet.';
-  @override
-  String get hostOffline => 'O computador que estava hospedando a partida foi desligado ou encerrou o MaNet.';
-  @override
-  String wifiChanged(String expected) => 'Você mudou de rede Wi-Fi.';
-  @override
-  String get noWifi => 'Você saiu da rede Wi-Fi utilizada durante a partida.';
-  @override
-  String get noInternet => 'Seu dispositivo parece estar sem conexão no momento.';
-  @override
-  String get unknown => 'A conexão com o MaNet foi perdida. Tente fechar e abrir novamente o aplicativo ou reconectar ao Wi-Fi utilizado durante a partida.';
-  @override
-  String currentNetwork(String current) => 'Rede atual: "$current"';
-  @override
-  String expectedNetwork(String expected) => 'Rede anterior: "$expected"';
-  @override
-  String get tryAgain => 'Tentar novamente';
-  @override
-  String get reconnect => 'Reconectar';
-  @override
-  String get diagnosing => 'Analisando conexão...';
+  String get stillTrying => 'O MaNet tá aberto no PC? Seu celular tá no mesmo Wi-Fi? Toque aqui pra tentar agora.';
 }
 
 class PtBrAndroidOnboardingStrings implements AndroidOnboardingStrings {

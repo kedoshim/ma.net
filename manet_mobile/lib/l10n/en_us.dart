@@ -482,29 +482,9 @@ class EnUsJoystickStrings implements JoystickStrings {
 
 class EnUsDisconnectStrings implements DisconnectStrings {
   @override
-  String get title => 'You were disconnected';
+  String get reconnecting => 'Reconnecting...';
   @override
-  String get subtitle => 'Could not remain connected to MaNet.';
-  @override
-  String get hostOffline => 'The computer hosting the match was turned off or closed MaNet.';
-  @override
-  String wifiChanged(String expected) => 'You changed your Wi-Fi network.';
-  @override
-  String get noWifi => 'You left the Wi-Fi network used during the match.';
-  @override
-  String get noInternet => 'Your device seems to be offline at the moment.';
-  @override
-  String get unknown => 'The connection to MaNet was lost. Try closing and reopening the app or reconnecting to the Wi-Fi used during the match.';
-  @override
-  String currentNetwork(String current) => 'Current network: "$current"';
-  @override
-  String expectedNetwork(String expected) => 'Previous network: "$expected"';
-  @override
-  String get tryAgain => 'Try again';
-  @override
-  String get reconnect => 'Reconnect';
-  @override
-  String get diagnosing => 'Analyzing connection...';
+  String get stillTrying => 'Is MaNet open on the PC? Is your phone on the same Wi-Fi? Tap here to try now.';
 }
 
 class EnUsAndroidOnboardingStrings implements AndroidOnboardingStrings {
