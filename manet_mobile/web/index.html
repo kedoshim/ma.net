@@ -130,6 +130,43 @@
       }, {capture: true, passive: true});
     })();
   </script>
+  <script>
+    // The browser bar sits right where thumbs rest, and one touch on it takes
+    // the player out of the pad. Browsers only grant full screen from a touch,
+    // so every touch outside full screen asks again (the player may have left
+    // it with a swipe). iPhone Safari has no full screen for pages and skips
+    // this. Plain http is fine: full screen needs no secure context.
+    (function () {
+      var root = document.documentElement;
+      var request = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (!request) return;
+
+      function fullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement;
+      }
+
+      function enter(e) {
+        if (e.pointerType && e.pointerType !== 'touch') return;
+        if (fullscreenElement()) return;
+        try {
+          var result = request.call(root, {navigationUI: 'hide'});
+          if (result && result.then) {
+            result.then(function () {
+              // Only allowed in full screen; keeps the pad sideways.
+              if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(function () {});
+              }
+            }).catch(function () {});
+          }
+        } catch (err) {}
+      }
+
+      // pointerup and touchend count as a user gesture; pointerdown on touch
+      // does not.
+      window.addEventListener('pointerup', enter, true);
+      window.addEventListener('touchend', enter, {capture: true, passive: true});
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
