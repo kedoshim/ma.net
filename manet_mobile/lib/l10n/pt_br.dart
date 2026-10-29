@@ -243,6 +243,10 @@ class PtBrOptionsStrings implements OptionsStrings {
   @override
   String get exitDisconnect => 'Sair';
   @override
+  String ping(int ms) => 'ping $ms ms';
+  @override
+  String get pingMeasuring => 'medindo ping...';
+  @override
   String get themeColorsTitle => 'Cores do ma.net';
   @override
   String get languageTitle => 'Idioma';

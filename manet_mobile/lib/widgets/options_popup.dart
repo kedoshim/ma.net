@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../models/player_face.dart';
@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../l10n/app_localizations.dart';
 import 'juicy_widgets.dart';
 import 'android_onboarding_dialog.dart';
+import 'ping_chip.dart';
 
 class OptionsPopup extends StatefulWidget {
   final PlayerFaceData playerFace;
@@ -20,6 +21,8 @@ class OptionsPopup extends StatefulWidget {
   final VoidCallback? onRumbleTest;
   /// Set while a game's site is open over the pad.
   final VoidCallback? onClosePhoneGame;
+  /// Live round trip to the PC in ms; null value while not measured yet.
+  final ValueListenable<int?>? ping;
 
   const OptionsPopup({
     super.key,
@@ -30,6 +33,7 @@ class OptionsPopup extends StatefulWidget {
     this.onDisconnectRequested,
     this.onRumbleTest,
     this.onClosePhoneGame,
+    this.ping,
   });
 
   @override
@@ -192,6 +196,10 @@ class _OptionsPopupState extends State<OptionsPopup>
                       color: AppColors.textPrimary,
                     ),
                   ),
+                  if (widget.ping != null) ...[
+                    const SizedBox(width: 12),
+                    PingChip(ping: widget.ping!),
+                  ],
                   const Spacer(),
                   if (kIsWeb)
                     AnimatedBuilder(

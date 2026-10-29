@@ -247,6 +247,8 @@ class _ControllerScreenState extends State<ControllerScreen>
   Timer? _pingTimer;
   final List<int> _pings = [];
   bool _lagWarned = false;
+  // Latest round trip, for the options header; null until measured.
+  final ValueNotifier<int?> _lastPingMs = ValueNotifier(null);
 
   // Relay mode (a physical pad attached to this device plays through MaNet).
   // A browser on the MaNet PC itself also sees MaNet's own virtual pads.
@@ -301,6 +303,7 @@ class _ControllerScreenState extends State<ControllerScreen>
     _reconnectTimer?.cancel();
     _handshakeTimer?.cancel();
     _pingTimer?.cancel();
+    _lastPingMs.dispose();
     WidgetsBinding.instance.removeObserver(this);
     PhysicalGamepadRelay.instance
       ..removeListener(_onRelayChanged)
@@ -1338,6 +1341,7 @@ class _ControllerScreenState extends State<ControllerScreen>
   void _sendPing() {
     if (_connectionState != ControllerConnectionState.connected) {
       _pings.clear();
+      _lastPingMs.value = null;
       return;
     }
     _send({'type': 'ping', 't': DateTime.now().millisecondsSinceEpoch});
@@ -1346,7 +1350,9 @@ class _ControllerScreenState extends State<ControllerScreen>
   void _onPong(Map<String, dynamic> data) {
     final sent = data['t'] as num?;
     if (sent == null) return;
-    _pings.add(DateTime.now().millisecondsSinceEpoch - sent.toInt());
+    final ms = DateTime.now().millisecondsSinceEpoch - sent.toInt();
+    _lastPingMs.value = ms;
+    _pings.add(ms);
     if (_pings.length > 5) _pings.removeAt(0);
     if (_lagWarned || _pings.length < 5) return;
     final sorted = [..._pings]..sort();
@@ -1939,6 +1945,7 @@ class _ControllerScreenState extends State<ControllerScreen>
           onDisconnectRequested: _resetConnection,
           onRumbleTest: _onRumbleTest,
           onClosePhoneGame: _phoneGameUrl != null ? _leavePhoneGame : null,
+          ping: _lastPingMs,
         );
       },
     ).then((_) {

@@ -138,6 +138,9 @@ abstract class OptionsStrings {
   String get vibrationAndroidOnly;
   String get mouseMode;
   String get exitDisconnect;
+  /// Round trip to the PC, shown in the options header.
+  String ping(int ms);
+  String get pingMeasuring;
   String get themeColorsTitle;
   String get languageTitle;
   String get sensitivity;

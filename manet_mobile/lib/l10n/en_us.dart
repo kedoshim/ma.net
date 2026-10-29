@@ -243,6 +243,10 @@ class EnUsOptionsStrings implements OptionsStrings {
   @override
   String get exitDisconnect => 'Exit';
   @override
+  String ping(int ms) => 'ping $ms ms';
+  @override
+  String get pingMeasuring => 'measuring ping...';
+  @override
   String get themeColorsTitle => 'ma.net Colors';
   @override
   String get languageTitle => 'Language';
