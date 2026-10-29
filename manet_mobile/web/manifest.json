@@ -1,12 +1,12 @@
 {
-    "name": "ma-net",
-    "short_name": "ma-net",
+    "name": "MaNet",
+    "short_name": "MaNet",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#hexcode",
-    "theme_color": "#hexcode",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#E6F5FF",
+    "theme_color": "#E6F5FF",
+    "description": "Controle do MaNet",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

@@ -47,6 +47,9 @@ class GamepadInputEngine {
 
   // WebSocket sending interface
   void Function(Map<String, dynamic> payload)? _sendFn;
+  // Runs only while a stick is held or still sending its release zeros: a
+  // running Ticker makes Flutter draw a whole frame every vsync, which on a
+  // weak phone kept the page too busy to read touches in time.
   Ticker? _ticker;
   Duration _lastTickElapsed = Duration.zero;
 
@@ -130,11 +133,28 @@ class GamepadInputEngine {
   void init(void Function(Map<String, dynamic> payload) sendFn) {
     _sendFn = sendFn;
     _ticker?.dispose();
-    _lastTickElapsed = Duration.zero;
     _lastLeftSendAt = Duration.zero;
     _lastRightSendAt = Duration.zero;
     _ticker = Ticker(_onTick);
-    _ticker!.start();
+    // A stick may still be held across a reconnect.
+    _ensureTicking();
+  }
+
+  bool get _needsTick =>
+      _activeLeft != null ||
+      _activeRight != null ||
+      _lastSentLeftX != 0.0 ||
+      _lastSentLeftY != 0.0 ||
+      _lastSentRightX != 0.0 ||
+      _lastSentRightY != 0.0 ||
+      _leftZeroSendsLeft > 0 ||
+      _rightZeroSendsLeft > 0;
+
+  void _ensureTicking() {
+    final ticker = _ticker;
+    if (ticker == null || ticker.isActive || !_needsTick) return;
+    _lastTickElapsed = Duration.zero;
+    ticker.start();
   }
 
   void dispose() {
@@ -184,13 +204,23 @@ class GamepadInputEngine {
     }
   }
 
-  void _onTick(Duration elapsed) {
+  void _onTick(Duration tickerElapsed) {
+    _tick(tickerElapsed);
+    // Stops only after the release zeros went out, so the host never keeps
+    // the last aim of a stick nobody holds.
+    if (!_needsTick) _ticker?.stop();
+  }
+
+  void _tick(Duration tickerElapsed) {
     if (_sendFn == null) return;
+    // Send pacing reads the frame clock, not the Ticker's time, which
+    // restarts at zero every time the Ticker starts again.
+    final elapsed = SchedulerBinding.instance.currentSystemFrameTimeStamp;
 
     final double deltaTime = _lastTickElapsed == Duration.zero
         ? 0.016
-        : (elapsed - _lastTickElapsed).inMicroseconds / 1000000.0;
-    _lastTickElapsed = elapsed;
+        : (tickerElapsed - _lastTickElapsed).inMicroseconds / 1000000.0;
+    _lastTickElapsed = tickerElapsed;
 
     // Process Left Stick State
     if (_activeLeft != null) {
@@ -348,6 +378,7 @@ class GamepadInputEngine {
     _activeLeft!.basePos.value = _leftBaseLocal;
 
     _updateLeftStickMath();
+    _ensureTicking();
 
     if (kDebugMode) {
       debugPrint(
@@ -563,6 +594,7 @@ class GamepadInputEngine {
 
     _updateRightStickMath(isInitial: true);
     _updateFire();
+    _ensureTicking();
 
     if (kDebugMode) {
       debugPrint(
